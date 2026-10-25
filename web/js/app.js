@@ -8,7 +8,7 @@
   const JUDGE = location.pathname.startsWith("/judge");
   const MONDAY = new Date("2026-10-26T00:00:00-07:00");
   const ROLE_KEY = "tagout.as";
-  const QUICK = ["I'm sick, can't make it today", "dentist Thu 3pm", "I want more hours this week",
+  const QUICK = ["I'm sick, can't make it Monday", "dentist Thu 3pm", "I want more hours this week",
     "set up a meeting with my supervisor", "the printer at the desk is broken"];
   // every field name the closed schemas in core/wire.py allow; anything else crossing would be a leak
   const ALLOWED = new Set(["agent_id", "badges", "ballot", "case_id", "category", "deadline", "employer", "end", "from_agent",
@@ -122,6 +122,7 @@
     live = false;
     onEvent({ type: "reset", n: 0, ts: evs[0] ? evs[0].ts : new Date().toISOString() });
     for (; R.i < start; R.i++) { R.clock = evs[R.i].ts; onEvent(evs[R.i]); } // fast-forward without animation
+    await refreshRoster(); // the roster as it stood at this point of the recording
     live = true;
     if (name) tick();
     return {};
@@ -198,7 +199,7 @@
         requesters.clear();
         $("#events").innerHTML = ""; $("#logCount").textContent = "0 items";
         W.clear(); W.release(PEOPLE); if (world) PEOPLE.forEach((a) => { world.badge(a, null); world.status(a, ""); world.face(a, null); });
-        refreshRoster(); setStatus("Reset. The mascots are hanging out until Sunday's check."); setFinding(null); renderKpis(); break;
+        if (!STATIC) refreshRoster(); /* the replay loads it after its fast-forward */ setStatus("Reset. The mascots are hanging out until Sunday's check."); setFinding(null); renderKpis(); break;
       case "sunday_check":
         ev.agents.forEach((a, i) => setTimeout(() => { W.play(a, "review"); W.say(a, "Checking next week…", 2600); }, i * 180));
         setTimeout(() => { if (world) world.release(PEOPLE.filter((a) => !S.gathered.has(a) && !requesters.has(a))); }, 3400);

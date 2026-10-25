@@ -99,7 +99,8 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
                 return "Already handled."
             it["status"] = "acknowledged"
             if it["agent_id"]:
-                await app.state.net.post(f"{reg['agents'][it['agent_id']]}/issue/ack", IssueAck(issue_id=data[4:]))
+                await app.state.net.post(f"{reg['agents'][it['agent_id']]}/issue/ack",
+                                         IssueAck(issue_id=data[4:], token=it.get("token", "")))
             reply = "Acknowledged." + (f" {names[it['agent_id']]}'s mascot will let them know." if it["agent_id"] else "")
             phone_add({"kind": "reply", "text": reply, "buttons": []})
             return reply
@@ -173,8 +174,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
                              [("Ask me each time", "rule:swaps:off")], kind="info")
             state["voted"][p.txn_id] = "yes"
             return {"vote": Vote(txn_id=p.txn_id, agent_id="steward", vote="yes", ballot=p.ballot).model_dump()}
-        text = ("Trade request: " + "; ".join(lines) + ".\nChecked " + datetime.now(PHX).strftime("%a %b %d, %I:%M %p")
-                + ": each student's mascot re-checked this exact trade against " + CHECKS + ", and said eligible. "
+        text = ("Trade request: " + "; ".join(lines) + ".\nJust now, each student's mascot re-checked this exact trade against " + CHECKS + ", and said eligible. "
                 "No reasons are shared.\nIt goes through only if every student confirms and you approve. If you "
                 "don't answer in time, nothing moves and everyone keeps the shift they were scheduled for.")
         await to_manager(text, [("Approve", f"approve:{p.txn_id}"), ("Deny", f"deny:{p.txn_id}")])
@@ -283,7 +283,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     @app.post("/issue")
     async def issue(r: IssueReport) -> dict:
         state["issues"][r.issue_id] = {"category": r.category, "text": r.text, "agent_id": r.agent_id,
-                                       "status": "new"}
+                                       "status": "new", "token": r.token}
         who = names[r.agent_id] if r.agent_id else "anonymous"
         ehs = reg.get("org", {}).get("ehs")
         if r.category == "safety" and ehs:  # safety: Environmental Health and Safety gets it at once too

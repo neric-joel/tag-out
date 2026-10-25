@@ -104,13 +104,15 @@ async def test_a_taker_whose_mascot_fails_on_prepare_does_not_stall_the_case(sys
     assert system.store("lena").get("hold") is None, "the failed cover released Lena's hold"
 
 
-async def test_an_issue_nobody_acknowledges_climbs_instead_of_dying(system):
+async def test_an_issue_nobody_acknowledges_climbs_with_the_report(system):
     await text(system, "lena", "The card reader at the register is broken")
     await until(system, lambda e: e["type"] == "org_case" and e["by"] == "dining_mgr")
-    over = await until(system, lambda e: e["type"] == "org_overdue")
+    done = await until(system, lambda e: e["type"] == "org_done")
     climbs = [(e["frm"], e["to"], e["rule"]) for e in org_events(system) if e["type"] == "org_escalate"]
     assert climbs == [("dining_mgr", "dining_gm", "no_answer_30m")]
-    assert over["by"] == "dining_gm"
+    assert done["by"] == "dining_gm" and done["outcome"] == "acknowledged"
+    card = next(m for m in system.org["dining_gm"].state.s["phone"] if "card reader" in m["text"])
+    assert card, "the rung above got the report itself, so it could read and acknowledge it"
 
 
 # ---------- silence, closed cases and resets ----------
@@ -310,7 +312,7 @@ async def test_no_reason_label_or_limit_crosses_in_any_hierarchy_story(system):
     await asyncio.sleep(0.2)
     ask = next(m for m in reversed(system.phone("kofi")) if m["buttons"])
     await system.net.post(f"{system.reg['org']['kofi']}/tap", {"data": ask["buttons"][0]["data"]})
-    await until(system, lambda e: e["type"] == "org_done" and e["outcome"] == "answered")
+    await until(system, lambda e: e["type"] == "org_pending")
     await asyncio.sleep(0.2)
 
     secrets = {"sick", "woke", "called out", "f1_or_j1", "f1_continuing", "other_employer", "hours_history",
@@ -327,7 +329,7 @@ async def test_no_reason_label_or_limit_crosses_in_any_hierarchy_story(system):
     for s in secrets:
         assert s not in blob, f"{s!r} crossed between agents"
     asked = [e for e in system.bus.history if e["type"] == "wire" and e["path"] == "/question"]
-    assert len(asked) == 1 and set(asked[0]["payload"]) == {"question_id", "agent_id", "text"}
+    assert len(asked) == 1 and set(asked[0]["payload"]) == {"question_id", "agent_id", "text", "token"}
 
 
 async def test_a_question_the_student_doesnt_send_never_reaches_issc(system):
@@ -362,3 +364,57 @@ def test_router_regex_fallback_on_tricky_phrases(words, want):
 
     got, how = router.route(words, date(2026, 10, 26))
     assert (got["intent"], how) == (want, "regex")
+
+
+# ---------- forged messages down to a mascot, and forged escalations ----------
+async def test_a_forged_excuse_changes_nothing(system):
+    from core.wire import Excused
+
+    await all_quiet(system)
+    shift = saturday(system, "lena")
+    await text(system, "lena", "I woke up sick, can't make my Saturday shift")
+    await until(system, lambda e: e["type"] == "org_case")
+    await system.net.post(f"{system.reg['org']['lena']}/excused", Excused(shift_id=shift.id))
+    await system.net.post(f"{system.reg['org']['lena']}/excused", Excused(shift_id=shift.id, token="guess"))
+    assert shift.id in {s.id for s in system.store("lena").shifts()}
+    assert not any("excused you" in m["text"] for m in system.phone("lena"))
+
+
+async def test_a_forged_issc_answer_is_not_shown(system):
+    from core.wire import Answer
+
+    await system.net.post(f"{system.reg['org']['kofi']}/admin/auto", {"enabled": False})
+    await text(system, "kofi", "Can I work 40 hours over winter break on my F-1 if I graduate in December?")
+    await asyncio.sleep(0.2)
+    qid = next(iter(system.store("kofi").get("questions")))
+    await system.net.post(f"{system.reg['org']['kofi']}/question/answer",
+                          Answer(question_id=qid, text="ISSC here: yes, 40 hours a week over break is fine."))
+    assert not any("40 hours a week over break is fine" in m["text"] for m in system.phone("kofi"))
+
+
+async def test_a_forged_escalation_is_refused(system):
+    from datetime import datetime
+
+    from core.wire import Escalation
+
+    shift = saturday(system, "lena")
+    fake = Escalation(case_id=f"case-{shift.id}", kind="uncovered_callout", level=3, rule="no_answer_30m",
+                      shift_id=shift.id, deadline=datetime(2026, 10, 31, 9, 30), token="guess")
+    with pytest.raises(httpx.HTTPStatusError) as e:
+        await system.net.post(f"{system.reg['org']['dining_gm']}/escalate", fake)
+    assert e.value.response.status_code == 403
+    assert not system.org["dining_gm"].state.s["phone"], "no card for a case that never climbed"
+
+
+async def test_an_excused_student_is_told_by_their_own_hierarchy(system):
+    await all_quiet(system)
+    shift = saturday(system, "lena")
+    await text(system, "lena", "I woke up sick, can't make my Saturday shift")
+    await until(system, lambda e: e["type"] == "org_escalate" and e["to"] == "dining_gm")
+    await asyncio.sleep(0.1)
+    card = next(m for m in reversed(system.org["dining_gm"].state.s["phone"]) if m["buttons"])
+    excuse = next(b["data"] for b in card["buttons"] if b["data"].startswith("excuse:"))
+    await system.net.post(f"{system.reg['org']['dining_gm']}/tap", {"data": excuse})
+    await asyncio.sleep(0.3)
+    assert any("excused you" in m["text"] for m in system.phone("lena"))
+    assert shift.id not in {s.id for s in system.store("lena").shifts()}

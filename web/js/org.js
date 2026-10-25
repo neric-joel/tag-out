@@ -165,6 +165,13 @@
       if (ev.sim) last = { sim: new Date(ev.sim), at: performance.now(), minute: ev.minute || 0.05 };
       if (ev.minute) root.querySelector("#orgPace").textContent = `1 story minute = ${ev.minute} s here`;
       if (ev.type === "org_reset") { reset(); return; }
+      if (ev.type === "org_pending") {
+        const p = caseFor(ev.case_id);
+        Object.assign(p, { status: "pending" });
+        step(p, ev, `${name(ev.by)} sent the cited rule and flagged it for an advisor (DSO), who replies by ${clockText(new Date(ev.deadline))}. The case stays open until then.`);
+        holder(ev.by, false); status(ev.by, "advisor pending", "wait");
+        renderCases(); return;
+      }
       const c = ev.case_id ? caseFor(ev.case_id) : null;
       switch (ev.type) {
         case "org_case":
@@ -244,7 +251,7 @@
         : c.kind === "safety" ? (c.id.endsWith("-ehs") ? "Safety report, Environmental Health and Safety" : "Safety report, the manager on duty")
         : c.kind === "f1_question" ? "F-1 question for ISSC" : "Report";
       el.innerHTML = [...cases.values()].reverse().map((c) => `<article class="org-case ${c.status}">
-        <header><b>${esc(title(c))}</b><span class="pill ${c.status === "open" ? "wait" : c.status === "overdue" ? "bad" : "ok"}">${esc(c.status === "open" ? "with " + name(c.holder) : OUTCOME[c.status] || c.status)}</span></header>
+        <header><b>${esc(title(c))}</b><span class="pill ${c.status === "open" || c.status === "pending" ? "wait" : c.status === "overdue" ? "bad" : "ok"}">${esc(c.status === "open" ? "with " + name(c.holder) : c.status === "pending" ? "advisor pending" : OUTCOME[c.status] || c.status)}</span></header>
         <ol>${c.steps.map((s) => `<li><time>${clockText(s.t)}</time><span>${esc(s.text)}</span></li>`).join("")}</ol></article>`).join("");
     }
     async function inbox(id, quiet) {

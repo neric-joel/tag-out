@@ -107,7 +107,7 @@ def test_how_it_works_counts_messages_and_finds_no_leak(page, base_url):
     expect(page.locator("#lkFields")).to_have_text("0")
     expect(page.locator("#lkLabels")).to_have_text("0")
     page.locator(".tof-row").first.click()
-    expect(page.locator(".tof-json, .tof-owner-text").first).not_to_be_empty()
+    expect(page.locator(".tof-json:visible, .tof-owner-text:visible").first).not_to_be_empty()
     expect(page.locator("#ledger")).to_contain_text("tests/test_baseline.py")
     assert page.errors == []
 

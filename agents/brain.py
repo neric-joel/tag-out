@@ -6,6 +6,7 @@ Nothing in this module returns a reason to the network. Reasons go to the owner'
 from __future__ import annotations
 
 import asyncio
+import secrets
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime, timedelta
 from typing import Literal
@@ -162,7 +163,9 @@ class Brain:
         self.store.add_busy([BusyBlock(id=f"out-{shift_id}", start=s.start, end=s.end, kind="other",
                                        label="Called out", source="text")])
         await self.schedule_changed()
-        await self.send_trade(TradeRequest(agent_id=self.me, shift_id=shift_id, urgent=True))
+        token = secrets.token_hex(8)  # whoever arranges this call-out must echo it to excuse the student
+        self.store.put("callout_tokens", {**self.store.get("callout_tokens", {}), shift_id: token})
+        await self.send_trade(TradeRequest(agent_id=self.me, shift_id=shift_id, urgent=True, token=token))
         self.store.note(f"You called out of {s.label}. Asked for a round now; only the shift id left, no reason.")
         return (f"Asking your coworkers to cover your {s.label} now. You're still on the schedule until someone "
                 "confirms and your manager approves, so also follow your department's call-out rule (usually: tell "
@@ -173,7 +176,7 @@ class Brain:
     async def draft_issue(self, text: str, category: str) -> str:
         issues = self.store.get("issues", {})
         iid = f"issue-{self.me}-{len(issues) + 1}"
-        issues[iid] = {"text": text, "category": category, "status": "draft"}
+        issues[iid] = {"text": text, "category": category, "status": "draft", "token": secrets.token_hex(8)}
         self.store.put("issues", issues)
         await self.notify(explain.issue_draft(text, category),
                           [("Send with my name", f"issue:named:{iid}"), ("Send anonymously", f"issue:anon:{iid}"),
@@ -191,7 +194,7 @@ class Brain:
             return "OK, not sent."
         named = mode == "named"
         await self.to_steward("/issue", IssueReport(issue_id=iid, category=it["category"], text=it["text"],
-                                                    agent_id=self.me if named else None))
+                                                    agent_id=self.me if named else None, token=it.get("token", "")))
         it["status"] = "sent"
         self.store.put("issues", issues)
         self.store.note(f"Sent your {it['category']} report to your manager" + ("." if named else ", anonymously."))
@@ -201,7 +204,7 @@ class Brain:
     async def draft_question(self, text: str) -> str:
         qs = self.store.get("questions", {})
         qid = f"q-{self.me}-{len(qs) + 1}"
-        qs[qid] = {"text": text, "status": "draft"}
+        qs[qid] = {"text": text, "status": "draft", "token": secrets.token_hex(8)}
         self.store.put("questions", qs)
         self.store.note("You asked a visa question. I don't answer those; offered to send it to ISSC.")
         await self.notify(explain.question_draft(text), [("Send to ISSC", f"issc:yes:{qid}"),
@@ -217,27 +220,30 @@ class Brain:
             q["status"] = "dropped"
             self.store.put("questions", qs)
             return "OK, not sent."
-        await self.to_org("issc", "/question", Question(question_id=qid, agent_id=self.me, text=q["text"]))
+        await self.to_org("issc", "/question", Question(question_id=qid, agent_id=self.me, text=q["text"],
+                                                         token=q["token"]))
         q["status"] = "sent"
         self.store.put("questions", qs)
         self.store.note("Sent your question to ISSC: only your words, nothing from your week.")
         return "Sent to ISSC with your name, so an advisor can reply to you. Nothing else from your week went."
 
     async def answered(self, a: Answer) -> None:
-        if a.question_id in self.store.get("questions", {}):
+        q = self.store.get("questions", {}).get(a.question_id)
+        if q and q.get("token") and a.token == q["token"]:  # only the office the question went to can answer it
             await self.notify(a.text, kind="info")
 
-    async def issue_acked(self, iid: str, office: str = "manager") -> None:
+    async def issue_acked(self, iid: str, office: str = "manager", token: str = "") -> None:
         it = self.store.get("issues", {}).get(iid)
-        if it:
+        if it and (not it.get("token") or token == it["token"]):  # only an office that got the report
             who = "Environmental Health and Safety" if office == "ehs" else "Your manager"
             await self.notify(f"{who} saw your report: \"{it['text']}\"", kind="info")
 
-    async def excused(self, shift_id: str) -> None:
+    async def excused(self, shift_id: str, token: str = "") -> None:
         """A manager excused the student from a shift they called out of: staff covers it, nothing more to do."""
         s = self.store.shift(shift_id)
-        if s is None or shift_id not in self.store.get("called_out", []):
-            return
+        mine = self.store.get("callout_tokens", {}).get(shift_id)
+        if s is None or shift_id not in self.store.get("called_out", []) or not mine or token != mine:
+            return  # only the hierarchy that got this call-out can excuse it
         self.store.set_shifts([], [shift_id])
         self.store.bump()
         self.store.note(f"Your manager excused you from {s.label}; staff covers it.")
@@ -456,7 +462,7 @@ class Brain:
         adds, drops = self.my_moves(p.moves)
         st = self.store.student()
         text = explain.confirm(st, adds, drops, p.moves, self.names(), self.store.shifts(), self.store.busy(),
-                               approver=self.arranged_by(p.txn_id))
+                               approver=self.arranged_by(p.txn_id), called_out=set(self.store.get("called_out", [])))
         self.store.note(f"Holding {p.ring_id}: {text}")
         await self.notify(text, [("Confirm", f"confirm:{p.txn_id}"), ("Decline", f"decline:{p.txn_id}")],
                           kind="confirm")
@@ -501,7 +507,8 @@ class Brain:
                 await self.send_vote(Vote(txn_id=parts[1], agent_id=self.me, vote="no", ballot=ballot))
                 return "Declined. The trade is off, and nobody is told why."
             await self.send_vote(Vote(txn_id=parts[1], agent_id=self.me, vote=vote, ballot=ballot))
-            return ("Confirmed. Waiting for the others and your manager; I'll text you the result." if vote == "yes"
+            waiting = "the others" if self.arranged_by(parts[1]) else "the others and your manager"
+            return (f"Confirmed. Waiting for {waiting}; I'll text you the result." if vote == "yes"
                     else "Your week changed since this trade was set up, so I pulled out. Nothing moved.")
         return "?"
 

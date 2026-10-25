@@ -31,6 +31,7 @@ class TradeRequest(Wire):
     agent_id: str
     shift_id: str
     urgent: bool = False  # a same-day call-out: the broker opens a round now instead of waiting for Sunday
+    token: str = ""  # the mascot's secret for this call-out: an Excused about it must echo it
 
 
 class PickRequest(Wire):
@@ -149,12 +150,13 @@ class IssueReport(Wire):
     category: Literal["equipment", "facilities", "safety", "schedule", "other"]
     text: str
     agent_id: str | None = None  # None: anonymous
-    token: str = ""  # set only when a manager forwards a safety report up: the case's secret (see CaseUpdate)
+    token: str = ""  # the reporting mascot's secret: an IssueAck must echo it
 
 
 class IssueAck(Wire):
     issue_id: str
     office: Literal["manager", "ehs"] = "manager"  # who saw it: the manager on duty, or Environmental Health and Safety
+    token: str = ""  # echoes the report's token, so only an office that received the report can acknowledge it
 
 
 class CallOut(Wire):
@@ -201,6 +203,7 @@ class Excused(Wire):
     """Sent to a student's mascot when a manager excuses them from a call-out shift: staff covers it."""
 
     shift_id: str
+    token: str = ""  # echoes the call-out's token
 
 
 class Question(Wire):
@@ -209,11 +212,13 @@ class Question(Wire):
     question_id: str
     agent_id: str
     text: str
+    token: str = ""  # the mascot's secret: an Answer must echo it
 
 
 class Answer(Wire):
     question_id: str
     text: str
+    token: str = ""
 
 
 class PublicFace(Wire):

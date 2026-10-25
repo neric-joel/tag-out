@@ -87,7 +87,8 @@ def ask_limit(shift_label: str, hours: float, cap: float, other: dict[str, float
 
 
 def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move], names: dict[str, str],
-            shifts: list[Shift], busy: list[BusyBlock], approver: str | None = None) -> str:
+            shifts: list[Shift], busy: list[BusyBlock], approver: str | None = None,
+            called_out: set[str] | None = None) -> str:
     who = {m.shift_id: names.get(m.to_agent, m.to_agent) for m in moves}
     owner = {m.shift_id: "an extra shift your manager posted" if m.from_agent == "open"
              else f"from {names.get(m.from_agent, m.from_agent)}" for m in moves}
@@ -97,7 +98,9 @@ def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move
     for a in adds:
         lines.append(f"You get: {a.label} ({owner.get(a.id, 'from a coworker')})")
     pay = sum(a.pay for a in adds) - sum(d.pay for d in drops)
-    if adds and drops and pay == 0:
+    if drops and not adds and all(d.id in (called_out or set()) for d in drops):
+        lines.append("You won't work this shift. If you have paid sick time, ask your manager to record it.")
+    elif adds and drops and pay == 0:
         lines.append(f"Pay this week: you keep your ${drops[0].pay:.0f}.")
     elif pay > 0:
         lines.append(f"Pay this week: +${pay:.0f}.")
@@ -109,7 +112,7 @@ def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move
         other = ", ".join(f"{h:g} h at {k}" for k, h in st.limits.other_employer_hours.items())
         lines.append(f"Hours: you'd be at {week_hours(st, after, monday):g} of your {f1_cap_for(st, monday):g} hours "
                      "across all on-campus jobs" + (f", counting the {other} you told me about." if other else "."))
-    rest = (f"The {approver.lower()} arranged it, so it goes through as soon as both of you confirm."
+    rest = (f"The {approver} arranged it, so it goes through as soon as both of you confirm."
             if approver else "It goes through only if everyone in it confirms and your manager approves it (swaps "
             "can also pass on their standing rule for swaps).")
     lines += ["I checked it against your limits privately. Nobody else sees your numbers.", "",
@@ -119,7 +122,7 @@ def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move
 
 def committed(adds: list[Shift], drops: list[Shift], week: list[Shift] | None = None,
               approver: str | None = None) -> str:
-    lines = [f"Done. The cover went through: both of you confirmed, and the {approver.lower()} arranged it." if approver
+    lines = [f"Done. The cover went through: both of you confirmed, and the {approver} arranged it." if approver
              else "Done. The trade went through: everyone in it confirmed, and your manager approved it (or their "
              "standing rule for swaps did).", ""]
     lines += [f"You gave: {d.label}" for d in drops] + [f"You took: {a.label}" for a in adds]

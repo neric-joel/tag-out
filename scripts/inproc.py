@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import secrets
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -62,7 +63,7 @@ class System:
         coordinators = {f"org-{r}-": f"http://{r}.org" for r in roles}
         self.reg = {"agents": {s["id"]: f"http://{s['id']}.mascot" for s in STUDENTS},
                     "broker": "http://broker.local", "steward": "http://steward.local", "bot": "http://bot.local",
-                    "org": org, "coordinators": coordinators}
+                    "org": org, "coordinators": coordinators, "org_key": secrets.token_hex(16)}
         self.tap = Wiretap()
         self.net = Net()
         self.apps = {s["id"]: mascot_app(s["id"], self.tmp / f"{s['id']}.db", self.net, self.reg) for s in STUDENTS}

@@ -36,7 +36,8 @@ def write_registry() -> dict:
     org = {who: f"http://127.0.0.1:{p}" for who, p in ports().items()} | {"steward": "http://127.0.0.1:8701"}
     reg = {"agents": {s["id"]: f"http://127.0.0.1:{s['port']}" for s in STUDENTS},
            "broker": "http://127.0.0.1:8700", "steward": "http://127.0.0.1:8701", "bot": "http://127.0.0.1:8702",
-           "org": org, "coordinators": {f"org-{r}-": org[r] for r in ROLES if r != "steward"}}
+           "org": org, "coordinators": {f"org-{r}-": org[r] for r in ROLES if r != "steward"},
+           "org_key": secrets.token_hex(16)}  # signs the hierarchy's own messages (escalations, case updates)
     RUNTIME.mkdir(parents=True, exist_ok=True)
     (RUNTIME / "registry.json").write_text(json.dumps(reg, indent=1))
     return reg

@@ -133,7 +133,7 @@ async def snoop(s: System) -> None:
 
 # ----- the campus hierarchy (org/app.py), recorded on its own: org.json -----
 def org_done_after(s: System, n: int):
-    return lambda: any(e["type"] == "org_done" for e in s.bus.history[n:])
+    return lambda: any(e["type"] in ("org_done", "org_pending") for e in s.bus.history[n:])
 
 
 async def org_text(s: System, who: str, text: str) -> None:

@@ -112,14 +112,15 @@ async def test_f1_question_goes_to_issc_only_after_the_student_says_send(system)
     ask = next(m for m in reversed(system.phone("kofi")) if m["buttons"])
     assert [b["label"] for b in ask["buttons"]] == ["Send to ISSC", "Don't send"]
     await system.net.post(f"{system.reg['org']['kofi']}/tap", {"data": ask["buttons"][0]["data"]})
-    done = await until(system, lambda e: e["type"] == "org_done")
-    assert done["by"] == "issc" and done["outcome"] == "answered"
+    pending = await until(system, lambda e: e["type"] == "org_pending")
+    assert pending["by"] == "issc", "the cited rule goes now; an advisor still answers for Kofi's own record"
     await asyncio.sleep(0.2)
     reply = system.phone("kofi")[-1]["text"]
     assert "ISSC" in reply and "Not legal or immigration advice" in reply
     assert "keep to 20 hours" not in reply and "program completion date" in reply, "Kofi graduates in December"
     sent = [e for e in system.bus.history if e["type"] == "wire" and e["path"] == "/question"]
-    assert len(sent) == 1 and set(sent[0]["payload"]) == {"question_id", "agent_id", "text"}
+    assert len(sent) == 1 and set(sent[0]["payload"]) == {"question_id", "agent_id", "text", "token"}
+    assert sent[0]["payload"]["token"] == "•••", "the reply secret is redacted on the public stream"
 
 
 def test_router_falls_back_to_the_regex_rules_offline():

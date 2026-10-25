@@ -1,6 +1,6 @@
 # MORNING.md: Tag Out build status
 
-Updated Sun Oct 25 2026, past midnight (Arizona). Submissions close 12:00 PM.
+Updated Sun Oct 25 2026, about 1 AM (Arizona). Submissions close 12:00 PM.
 
 ## Status
 
@@ -13,9 +13,10 @@ Updated Sun Oct 25 2026, past midnight (Arizona). Submissions close 12:00 PM.
 - [x] P7 website: the mascot commons (living pets), assistant chat, roster board, round log, simulation, judge view, pet gallery
 - [ ] P8 Winter Break Handoff is in the simulator and on the site as numbers; there is no live break-week demo (cut first per the brief)
 - [x] P9 deterministic demo driver (`python -m scripts.demo --all`) + headless capture script for a draft video
+- [x] Same-day call-out (added after round 2): "I'm sick, can't make it Monday" to the mascot opens a cover round right away; the reason never leaves the mascot
 - [x] P10 README, docs/ARCHITECTURE.md, docs/PRIVACY.md, docs/SUBMISSION.md (cloud session, merged, then updated)
 
-Tests: 41 passing (`.venv\Scripts\python -m pytest`), `ruff check .` clean. CI workflow runs both on push.
+Tests: 44 passing (`.venv\Scripts\python -m pytest`), `ruff check .` clean. CI workflow runs both on push.
 
 ## Run it (one command)
 
@@ -52,14 +53,15 @@ Library-only scheduler would have put Ben at 21 of 20 F-1 hours and Dev over the
 2. Round 1: no ring. Ana's only option is Dev's Fri 10-2, her gym slot, so her mascot asks her. She taps Take it.
 3. Round 2: the ring Ana -> Dev -> Ben closes. Ben is F-1 at 17 of 20 (9 Dining hours the Library can't see); a plain cover would put him at 21.
 4. Everyone confirms on their phone, the manager approves, commit. Priya covers Zoe's Saturday. Marco's Wed 2-6 honestly has no safe trade and goes to the manager as an open shift. Result: 4 of 5 fixed, $192 of pay kept.
-5. Break it (judge view button): Dev's week changes before he confirms; stale vote, abort, nothing moved; the retry commits the chain Priya -> Ben -> Ana -> Dev.
+5. Call-out: Ben texts "I woke up sick, can't make it Monday". A cover round opens at once; Priya's mascot asks her first (she'd hit 20 of 20), Zoe takes it and gets back the $64 she gave up for the wedding.
+6. Break it (judge view button): Dev's week changes before he confirms; stale vote, abort, nothing moved; the retry commits the chain Priya -> Ben -> Ana -> Dev.
 
 ## Your to-do list this morning
 
 1. **8:30** Start it: the command above. Click through the commons and the judge view once. Drag a mascot, move the size slider, click a mascot to open its chat.
 2. **Telegram with friends (optional but strong for the video):** each friend opens @Naazhi_bot, presses Start, sends `/join ben <code>` / `/join dev <code>` with the codes `run_all` prints at startup (you are already linked as Ana; a fourth phone can be `/join manager`). Run with `--mode live`, then press Run Sunday check and Start trade rounds on the site. All phones buzz on the confirm step.
 3. **Survey:** if you have answers, tell me the numbers and the best quote; I'll put them in the README and pitch. Until then the README says survey results are pending.
-4. **Video (3 min):** follow the demo week above. A silent draft can be recorded headless: `.venv\Scripts\python -m scripts.capture video --all` (saves `recordings/demo.webm`, git-ignored). Upload it (YouTube unlisted) and put the link in the README.
+4. **Video (3 min):** shot list and narration in `docs/VIDEO.md`. A fresh silent draft is already at `recordings/demo.webm` (1:52, recorded at 12:39 AM with the call-out beat; git-ignored). Re-record headless any time: `.venv\Scripts\python -m scripts.capture video --all`. Upload it (YouTube unlisted) and put the link in the README.
 5. **Make the repo public** (it's private now, as you asked): `gh repo edit neric-joel/tag-out --visibility public --accept-visibility-change-consequences`.
 6. **Submit yourself** from `D:\Projects\Dev Hacks\cubbie-hackathon-kit\skills\cubbie-hackathon\scripts`: `python hackathon.py login --google`, then `python hackathon.py submit --track agents --team "Aju" --pitch "<line from docs/SUBMISSION.md>" --member "<Your Name> <ASU email>" --repo https://github.com/neric-joel/tag-out --video <url>` (preview first, then `--yes`).
 7. **After the event:** rotate the Anthropic key, `/revoke` the bot token in BotFather.
@@ -67,6 +69,8 @@ Library-only scheduler would have put Ben at 21 of 20 F-1 hours and Dev over the
 ## Judges (3 AI judge personas on the 10-criterion rubric, read-only on the repo)
 
 - Round 1 on the built product: ASU staff 69, Cubbie engineer 68, skeptic 65 (average 67.3).
+- Round 2: ASU staff 73, Cubbie engineer 67, skeptic 61 (average 67.0). The skeptic's main point: a group chat that swaps fixes about as many collisions, so the pitch now leads with privacy, automation and blocked limit breaks, not more fixes.
+- Fixed after round 2: F-1 40 h in break weeks only for students continuing next term (0 after program end); the honest swap baseline everywhere; same-day call-out; declines and passes anonymous on the public commons.
 - Fixed since: 25 h average now uses the measurement window; F-1 buffer (asks before going within 1 h of the limit);
   Work-Study counts the week's scheduled pay; on-campus wording; ballot-protected votes; computed KPI; pre-trade
   Library-only scheduler comparison; pairwise-swap baseline; manager CSV/ICS export; Sunday 6 PM scheduler;

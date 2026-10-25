@@ -54,7 +54,7 @@ python -m scripts.fetch_pets     # downloads the mascot art into web/pets/ (git-
 python -m scripts.run_all        # 6 mascots, the Steward, the broker, and the Telegram bot if a token is set
 ```
 
-Open http://127.0.0.1:8700 for the arena, or http://127.0.0.1:8700/judge for the judge view with the red DEBUG banner. In a second terminal with the same virtual environment:
+Open http://127.0.0.1:8700 for the dashboard (arena, roster, round log and simulator results), or http://127.0.0.1:8700/judge for the judge view, which adds the on-screen phones and the synthetic students' private numbers under a red banner. In a second terminal with the same virtual environment:
 
 ```
 python -m scripts.demo --all     # the demo week, a reset, then the break-it beat

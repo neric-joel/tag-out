@@ -11,7 +11,7 @@ Tag Out runs as nine processes that talk over HTTP and JSON on 127.0.0.1. Agents
 | Telegram bot relay | `bot/telegram_bot.py` | 8702 | chat-to-mascot links in `runtime/bot_links.json`; long-polls Telegram |
 | Mascot: Ana, Ben, Dev, Priya, Zoe, Marco | `agents/mascot.py`, `agents/brain.py` | 8711 to 8716 | one SQLite file each, `runtime/mascot_<id>.db` (tables `kv`, `shifts`, `busy`, `outbox`, `diary`) |
 
-`python -m scripts.run_all` starts the six mascots, the Steward and the broker with uvicorn, waits until each answers, then starts the bot if `TELEGRAM_BOT_TOKEN` is set. It writes every URL to `runtime/registry.json`, which `core/net.py` reads; the defaults match the ports above. Each mascot writes its owner token to `runtime/tokens/<id>.txt`, where the bot reads it.
+`python -m scripts.run_all` starts the six mascots, the Steward and the broker with uvicorn, waits until each answers, then starts the bot if `TELEGRAM_BOT_TOKEN` is set and waits up to 30 seconds for it. If the bot doesn't come up, the demo carries on with the on-screen phones. It writes every URL to `runtime/registry.json`, which `core/net.py` reads; the defaults match the ports above. Each mascot writes its owner token to `runtime/tokens/<id>.txt`, where the bot reads it.
 
 In tests and in the in-process replay, `scripts/inproc.py` mounts every app on one httpx client through ASGI transports. Each mascot keeps its own app object and its own SQLite file in a temp folder; only the transport changes. A `Wiretap` on that client records every request and response on the peer paths for the no-leak test.
 
@@ -71,7 +71,7 @@ Demo and admin: `POST /admin/reset` (reseed from `seeds/`, keep the owner token)
 | `POST /txn/prepare` | `Prepare` | `{"vote": Vote or null}` | peer-facing |
 | `POST /txn/decide` | `Decision` | `{}` | peer-facing |
 | `POST /open` | `OpenShift` | `{}` | peer-facing, from the broker after the last attempt |
-| `GET /forecast?monday=` | | per roster slot, how many staff are busy, only for slots with at least 3 | manager |
+| `GET /forecast?monday=` | | per roster slot, how many staff are busy, only for slots with at least 3 | manager; the broker relays it at its own `/forecast` |
 | `POST /tap` | `{"data": "approve:<txn>" or "deny:<txn>"}` | `{"reply": ...}` | manager channel, no token in this build |
 | `GET /phone` | | the manager's messages | manager channel, no token in this build |
 | `POST /admin/reset` | | | debug only |
@@ -86,6 +86,8 @@ Demo and admin: `POST /admin/reset` (reseed from `seeds/`, keep the owner token)
 | `GET /events` | | public: server-sent events, the whole history first, then live |
 | `GET /state` | | public: every mascot's `PublicFace`, the roster, the last summary, whether a run is going, the demo Monday, the debug flag, `seeds/pets.json` |
 | `GET /agents` | | public: the registry and student names |
+| `GET /sim` | | public: `docs/simulation.json` for the dashboard's simulator panel |
+| `GET /forecast` | | public: the Steward's crunch forecast, counts only, relayed for the dashboard |
 | `GET /`, `GET /judge`, `/web/...` | | the dashboard in `web/` |
 | `POST /demo/sunday` | | demo: send `SundayCheck` to every mascot (not gated) |
 | `POST /demo/run` | `{"wait": seconds}`, optional | demo: start a week in the background (not gated) |

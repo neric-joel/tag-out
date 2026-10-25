@@ -22,3 +22,6 @@ site/app/
 
 # agent worktrees (Claude Code)
 .claude/
+
+# personal notes kept out of the repo
+docs/DEMO_TRANSCRIPT.md

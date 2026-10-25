@@ -15,9 +15,11 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 SEED_CACHE = ROOT / "seeds" / "llm_cache"
 RUN_CACHE = ROOT / "cache" / "llm"
-SPEND = ROOT / "cache" / "spend.json"
+SPEND = Path(os.environ.get("TAGOUT_SPEND_FILE", ROOT / "cache" / "spend.json"))
 ENV_FILE = Path(os.environ.get("TAGOUT_ENV_FILE", ROOT.parent.parent / "api.env"))
-BUDGET_USD = 15.0
+# Hard stop: no call is made once this much has been spent (TAGOUT_SPEND_CAP overrides). The key has about $99:
+# up to $35 for building and test runs, $15 for recording the demo, and at least $45 kept for judges.
+BUDGET_USD = float(os.environ.get("TAGOUT_SPEND_CAP", "15"))
 PARSE_MODEL = "claude-haiku-5-5"
 EXPLAIN_MODEL = "claude-sonnet-5-5"
 # rough $ per million tokens (input, output); used only to stop well before the budget

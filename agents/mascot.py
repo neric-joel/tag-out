@@ -245,15 +245,16 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
     async def intake(body: Intake, x_owner_token: str | None = Header(None)) -> dict:
         owner(x_owner_token)
         store.send({"kind": "student", "text": body.text, "buttons": []})
-        want = text_intake.callout(body.text, planning_monday(), datetime.now(PHX).date())
-        if want is not None:
-            reply = await brain.call_out(want, planning_monday())
+        # Claude (or the regex fallback) only says what the text asks for; this mascot's code does the rest
+        r, router = text_intake.route(body.text, planning_monday(), datetime.now(PHX).date())
+        if r["intent"] == "callout":
+            reply = await brain.call_out({"weekday": r["weekday"], "hour": r["hour"]}, planning_monday())
             store.send({"kind": "reply", "text": reply, "buttons": [], "engine": "callout"})
-            return {"reply": reply, "engine": "callout", "events": 0}
-        kind = text_intake.intent(body.text)
+            return {"reply": reply, "engine": "callout", "router": router, "events": 0}
+        kind = r["intent"] if r["intent"] != "calendar" else None
         if kind is not None:
             if kind == "issue":
-                reply = await brain.draft_issue(body.text, text_intake.issue_category(body.text))
+                reply = await brain.draft_issue(body.text, r["category"] or text_intake.issue_category(body.text))
             elif kind == "visa":
                 reply = await brain.draft_question(body.text)
             elif kind == "meeting":
@@ -261,7 +262,7 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
             else:
                 reply = await brain.want_hours(planning_monday())
             store.send({"kind": "reply", "text": reply, "buttons": [], "engine": kind})
-            return {"reply": reply, "engine": kind, "events": 0}
+            return {"reply": reply, "engine": kind, "router": router, "events": 0}
         parsed, engine = text_intake.parse(body.text, planning_monday())
         blocks = text_intake.to_blocks(parsed)
         from agents.seed import merge_prefs

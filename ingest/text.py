@@ -173,6 +173,62 @@ def parse_regex(text: str, monday: date) -> dict:
     return {"events": events, "preferences": prefs}
 
 
+ROUTE_TOOL = {
+    "name": "route_text",
+    "description": "Say what a student's text to their own scheduling assistant asks for.",
+    "input_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "intent": {"type": "string", "enum": ["callout", "visa_question", "issue_report", "meeting_request",
+                                                  "more_hours", "calendar"],
+                       "description": "callout: they can't work a shift they're scheduled for (sick, emergency, "
+                                      "can't come in); visa_question: a question about F-1/J-1, OPT, CPT or work "
+                                      "authorization; issue_report: a problem at work (broken equipment, a mess, "
+                                      "something unsafe); meeting_request: they want a meeting with their "
+                                      "supervisor; more_hours: they want extra shifts; calendar: anything else "
+                                      "(events, appointments, preferences)."},
+            "weekday": {"type": ["integer", "null"], "minimum": 0, "maximum": 6,
+                        "description": "for a callout: the day they named (0=Monday), else null"},
+            "hour": {"type": ["integer", "null"], "minimum": 0, "maximum": 23,
+                     "description": "for a callout: the hour they named, 24h, else null"},
+            "category": {"type": ["string", "null"], "enum": ["equipment", "facilities", "safety", "schedule", "other",
+                                                              None],
+                         "description": "for an issue report, else null"},
+        },
+        "required": ["intent", "weekday", "hour", "category"],
+    },
+}
+ROUTE_SYSTEM = ("You route short texts a student worker sends to their own scheduling assistant. Pick the one intent "
+                "that fits best. Resolve 'today' and 'tomorrow' against the date given. You only route; the "
+                "assistant's own code checks every work rule.")
+ROUTES = {"callout": "callout", "visa_question": "visa", "issue_report": "issue", "meeting_request": "meeting",
+          "more_hours": "hours", "calendar": "calendar"}
+
+
+def route(text: str, monday: date, today: date | None = None) -> tuple[dict, str]:
+    """What a text asks for: callout, visa, issue, meeting, hours or calendar, plus the day and hour of a call-out.
+    Claude Haiku routes it when online (cached, under the spend cap); the regex rules above route it otherwise."""
+    if not llm.offline():
+        user = (f"Today is {(today or monday):%A %Y-%m-%d}. The work week starts Monday {monday.isoformat()}.\n"
+                f"Text: {text}")
+        out = llm.call_tool(llm.PARSE_MODEL, ROUTE_SYSTEM, user, ROUTE_TOOL, max_tokens=200)
+        if out and out.get("intent") in ROUTES:
+            r = {"intent": ROUTES[out["intent"]], "weekday": out.get("weekday"), "hour": out.get("hour"),
+                 "category": out.get("category")}
+            if r["intent"] == "callout" and r["weekday"] is None:  # the words may still name a day
+                r.update({k: v for k, v in (callout(text, monday, today) or {}).items() if v is not None})
+            if r["intent"] == "issue" and not r["category"]:
+                r["category"] = issue_category(text)
+            return r, "claude"
+    c = callout(text, monday, today)
+    if c is not None:
+        return {"intent": "callout", **c, "category": None}, "regex"
+    k = intent(text)
+    return {"intent": k or "calendar", "weekday": None, "hour": None,
+            "category": issue_category(text) if k == "issue" else None}, "regex"
+
+
 def parse(text: str, monday: date, seed: bool = False) -> tuple[dict, str]:
     """Return (parsed, engine). Engine is 'claude' or 'regex'."""
     user = (f"Reference week: Monday {monday.isoformat()} to Sunday {(monday + timedelta(days=6)).isoformat()}. "

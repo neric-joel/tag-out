@@ -31,7 +31,7 @@ def main() -> None:
     app = SITE / "app"
     shutil.rmtree(app, ignore_errors=True)
     skip = shutil.ignore_patterns("__pycache__", "*.db", "pets")
-    for pkg in ("agents", "broker", "core", "ingest", "rulebook", "seeds", "steward", "config"):
+    for pkg in ("agents", "broker", "core", "ingest", "org", "rulebook", "seeds", "steward", "config"):
         shutil.copytree(ROOT / pkg, app / pkg, ignore=skip)
     (app / "scripts").mkdir(parents=True)
     for f in ("__init__.py", "inproc.py", "record.py"):

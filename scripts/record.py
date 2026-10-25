@@ -14,7 +14,9 @@ import os
 import tempfile
 from pathlib import Path
 
-os.environ["TAGOUT_OFFLINE"] = "1"  # texts are parsed by the regex fallback or the committed cache, never the API
+# recordings parse texts with the regex fallback or the committed cache, never the API; the hosted /api/try may
+# turn the API on for a visitor's own text (site/api/try.py)
+os.environ.setdefault("TAGOUT_OFFLINE", "1")
 
 from broker.engine import Timing  # noqa: E402
 from scripts.inproc import System  # noqa: E402
@@ -203,6 +205,7 @@ async def try_message(who: str, text: str, tmp: Path | None = None) -> dict:
 
 
 async def main() -> None:
+    os.environ["TAGOUT_OFFLINE"] = "1"
     await record("tour", [("sunday", sunday), ("week", week), ("callout", callout), ("extra", extra),
                           ("issue", issue), ("team-meeting", team_meeting), ("supervisor-meeting", supervisor_meeting),
                           ("snoop", snoop)])

@@ -104,3 +104,18 @@ async def test_f1_question_goes_to_issc_only_after_the_student_says_send(system)
     assert "ISSC" in reply and "Not legal or immigration advice" in reply
     sent = [e for e in system.bus.history if e["type"] == "wire" and e["path"] == "/question"]
     assert len(sent) == 1 and set(sent[0]["payload"]) == {"question_id", "agent_id", "text"}
+
+
+def test_router_falls_back_to_the_regex_rules_offline():
+    """With no API (tests, recordings), routing is the regex rules: same answers as before Claude routed texts."""
+    from datetime import date
+
+    from ingest import text
+
+    monday = date(2026, 10, 26)
+    assert text.route("I woke up sick, can't make my Saturday shift", monday)[0]["intent"] == "callout"
+    assert text.route("I woke up sick, can't make my Saturday shift", monday)[0]["weekday"] == 5
+    assert text.route("Can I work 40 hours over winter break on my F-1?", monday)[0]["intent"] == "visa"
+    r, how = text.route("The fire exit by the weight room is blocked with boxes", monday)
+    assert (r["intent"], r["category"], how) == ("issue", "safety", "regex")
+    assert text.route("dentist Thu 3pm", monday)[0]["intent"] == "calendar"

@@ -123,7 +123,7 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 
 /* arena */
 .commons { display: flex; flex-direction: column; }
-.stage { position: relative; flex: 1; min-height: 500px; border-radius: var(--radius-stage); overflow: hidden; background: #f6f4f0; }
+.stage { position: relative; flex: 1; min-height: 440px; border-radius: var(--radius-stage); overflow: hidden; background: #f6f4f0; }
 .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .tools { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .size { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
@@ -573,3 +573,16 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
   .who-pill { margin-left: auto; }
   .static-banner, .debug-banner { font-size: 12px; }
 }
+
+/* the week's numbers now sit under the mascots */
+#viewCommons > .kpis { margin-top: var(--gap); }
+/* the org chart: centered in its column when it's scaled to fit the window */
+.org-stage { left: 50%; margin-left: -600px; transform-origin: 50% 0; }
+/* one screen tall: the commons and the chat, so every mascot and the whole chat stay in view during a round.
+   --screen is the window's height in the page's own pixels (app.js sets it; the demo video zooms the page). */
+@media (min-width: 1101px) {
+  #viewCommons > .grid:not(.lower) { height: clamp(520px, calc(var(--screen, 100vh) - 88px), 900px); grid-template-rows: minmax(0, 1fr); }
+  #viewCommons > .grid:not(.lower) > .panel { min-height: 0; }
+  #viewCommons .stage { min-height: 0; }
+}
+#viewCommons > .grid, .org-panel, .tof-viewport { scroll-margin: 16px; }

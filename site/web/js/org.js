@@ -71,8 +71,15 @@
       const end = () => { if (start && n.dragged) keep(); start = null; n.el.classList.remove("dragging"); setTimeout(() => { n.dragged = false; }, 0); };
       n.el.addEventListener("pointerup", end); n.el.addEventListener("pointercancel", end);
     }
-    function scale() { return Math.min(1, viewport.clientWidth / W) || 1; }
+    // fit the column's width, and the window's height under the panel's own header, so the whole chart is on
+    // screen at once (the window's height is in the page's own pixels: the demo video zooms the page)
+    function scale() {
+      const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1, panel = viewport.closest(".panel") || viewport;
+      const head = (viewport.getBoundingClientRect().top - panel.getBoundingClientRect().top) / z;
+      return Math.min(1, viewport.clientWidth / W, Math.max(0.5, (innerHeight / z - 32 - head - 24) / H)) || 1;
+    }
     function fit() { const s = scale(); stage.style.transform = `scale(${s})`; viewport.style.height = H * s + "px"; }
+    addEventListener("resize", fit);
     new ResizeObserver(fit).observe(viewport);
 
     function edge(a, b, dashed) {

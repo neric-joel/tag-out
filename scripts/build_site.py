@@ -27,7 +27,23 @@ def main() -> None:
     html = (WEB / "index.html").read_text(encoding="utf-8")
     html = html.replace('<script src="/web/js/world.js', boot + '<script src="/web/js/world.js', 1)
     (SITE / "index.html").write_text(html, encoding="utf-8")
+    # the code behind /api/try (site/api/try.py), without OR-Tools: broker/cpsat.py falls back to an exact search
+    app = SITE / "app"
+    shutil.rmtree(app, ignore_errors=True)
+    skip = shutil.ignore_patterns("__pycache__", "*.db", "pets")
+    for pkg in ("agents", "broker", "core", "ingest", "rulebook", "seeds", "steward", "config"):
+        shutil.copytree(ROOT / pkg, app / pkg, ignore=skip)
+    (app / "scripts").mkdir(parents=True)
+    for f in ("__init__.py", "inproc.py", "record.py"):
+        shutil.copy2(ROOT / "scripts" / f, app / "scripts" / f)
+    (app / "docs").mkdir()
+    for f in ("rule_quotes.json", "simulation.json", "RULES.md"):
+        shutil.copy2(ROOT / "docs" / f, app / "docs" / f)
+    reqs = ["fastapi>=0.115", "httpx>=0.27", "pydantic>=2.8", "icalendar>=6", "recurring-ical-events>=3", "pyyaml>=6",
+            "sse-starlette>=2", "tzdata"]
+    (SITE / "requirements.txt").write_text("\n".join(reqs) + "\n", encoding="utf-8")
     (SITE / "vercel.json").write_text(json.dumps({
+        "functions": {"api/try.py": {"maxDuration": 60}},
         "rewrites": [{"source": "/judge", "destination": "/index.html"}],
         "headers": [{"source": "/data/(.*)", "headers": [{"key": "Cache-Control", "value": "public, max-age=300"}]}],
     }, indent=1), encoding="utf-8")

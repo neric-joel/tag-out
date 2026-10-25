@@ -82,8 +82,23 @@
     const text = ((body && body.text) || "").toLowerCase();
     const chip = text.includes("sick") ? CHIP.sick : text.includes("printer") || text.includes("broken") ? CHIP.printer : text.includes("supervisor") ? CHIP.supervisor : null;
     if (chip) { toast(chip[3]); return play(chip[0], chip[1], chip[2]); }
-    toast("This hosted page replays a recording of the real agents. To type and tap yourself, run it locally: python -m scripts.run_all");
+    const typed = path.match(/^\/phone\/(\w+)\/text$/);
+    if (typed && text) return liveTry(typed[1], body.text);
+    toast("This hosted page replays a recording of the real agents. Type a message to a student's mascot to run them live.");
     return {};
+  }
+  // your own message: the real system runs once on the server (site/api/try.py) and the page replays what it did
+  async function liveTry(who, text) {
+    toast(`Running the real agents with your message to ${name(who)}'s mascot. This takes about 10 seconds.`);
+    let rec;
+    try {
+      const r = await fetch("/api/try", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ who, text }) });
+      if (!r.ok) throw new Error(String(r.status));
+      rec = await r.json();
+    } catch (e) { toast("Couldn't reach the live agents just now. The recorded replay still works."); return {}; }
+    R.recs.try = rec;
+    toast(`Done: the agents handled your message live (${rec.events.length} events this run). Replaying what happened.`);
+    return play("try", "week", "try");
   }
   async function play(name, from, until) {
     clearTimeout(R.timer);

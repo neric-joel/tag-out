@@ -1,4 +1,9 @@
 {
+ "functions": {
+  "api/try.py": {
+   "maxDuration": 60
+  }
+ },
  "rewrites": [
   {
    "source": "/judge",

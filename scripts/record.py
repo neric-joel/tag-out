@@ -135,6 +135,43 @@ async def break_it(s: System) -> None:
     await until(summary_after(s, n, "week"), 120)
 
 
+FAST = Timing(pick_deadline=0.05, ask_window=0.3, vote_timeout=8.0, between=0.05)
+
+
+async def try_message(who: str, text: str, tmp: Path | None = None) -> dict:
+    """The hosted page's own-message path: run the real system through the week, then send one student's mascot
+    the visitor's text and record what every agent did with it."""
+    s = System(timing=FAST, auto_delay=0.05, tmp=tmp or Path(tempfile.mkdtemp(prefix="tagout-try-")))
+    try:
+        checkpoints = [{"label": "start", "n": 0, "snap": await snapshot(s)}]
+        await s.post("/demo/sunday")
+        await asyncio.sleep(0.4)
+        await week(s)
+        checkpoints.append({"label": "week", "n": len(s.bus.history), "snap": await snapshot(s)})
+        n, before = len(s.bus.history), len(s.phone(who))
+        r = await s.net.post(f"{s.reg['agents'][who]}/intake", {"text": text})
+        kind = r.get("engine")
+        try:
+            if kind == "callout" and "Which shift" not in r.get("reply", ""):
+                await until(summary_after(s, n, "callout"), 20)
+            elif kind == "issue":
+                await until(lambda: any("Your manager saw your report" in m["text"] for m in s.phone(who)), 10)
+            elif kind == "meeting":
+                await until(manager_said(s, "booked a"), 10)
+            else:
+                await asyncio.sleep(0.5)
+        except TimeoutError:
+            pass
+        await asyncio.sleep(0.3)
+        checkpoints.append({"label": "try", "n": len(s.bus.history), "snap": await snapshot(s)})
+        phones = {p: s.store(p).outbox() for p in PEOPLE}
+        phones["manager"] = [{"n": i + 1, **m} for i, m in enumerate(s.steward.state.s["phone"])]
+        return {"name": "try", "who": who, "engine": kind, "new_messages": len(s.phone(who)) - before,
+                "events": s.bus.history, "phones": phones, "checkpoints": checkpoints}
+    finally:
+        await s.close()
+
+
 async def main() -> None:
     await record("tour", [("sunday", sunday), ("week", week), ("callout", callout), ("extra", extra),
                           ("issue", issue), ("team-meeting", team_meeting), ("supervisor-meeting", supervisor_meeting),

@@ -237,7 +237,8 @@ async def main() -> None:
     server = uvicorn.Server(uvicorn.Config(internal_api(bot), host="127.0.0.1", port=port, log_level="warning"))
     async with bot.app:
         await bot.app.start()
-        await bot.app.updater.start_polling(drop_pending_updates=True)
+        # keep what students sent while the bot was offline (a restart after a dropped connection answers it)
+        await bot.app.updater.start_polling(drop_pending_updates=False)
         me = await bot.app.bot.get_me()
         log.info("polling as @%s; relay on :%d", me.username, port)
         try:

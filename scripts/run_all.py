@@ -103,10 +103,13 @@ def main() -> None:
                                   stdout=(logs / "org.log").open("w"), stderr=subprocess.STDOUT))
     wait_up([f"{u}/public" for u in reg["agents"].values()] + [f"{reg['steward']}/roster", f"{reg['broker']}/agents"]
             + [f"{u}/phone" for r, u in reg["org"].items() if r != "steward"])
-    bot_on = False
+    bot_on, bot = False, None
+
+    def start_bot(mode: str = "w") -> subprocess.Popen:
+        return subprocess.Popen([PY, "-m", "bot.telegram_bot"], cwd=ROOT, env=base,
+                                stdout=(logs / "bot.log").open(mode), stderr=subprocess.STDOUT)
     if not args.no_bot and secret("TELEGRAM_BOT_TOKEN"):
-        procs.append(subprocess.Popen([PY, "-m", "bot.telegram_bot"], cwd=ROOT, env=base,
-                                      stdout=(logs / "bot.log").open("w"), stderr=subprocess.STDOUT))
+        bot = start_bot()
         try:
             wait_up([f"{reg['bot']}/links"], timeout=30)
             bot_on = True
@@ -122,12 +125,19 @@ def main() -> None:
               + ", ".join(f"{who} {code}" for who, code in codes.items()))
     try:
         while all(p.poll() is None for p in procs):
+            # the bot needs the internet and the agents don't: a dropped connection ends only the bot, so it comes
+            # back on its own instead of taking every agent down with it
+            if bot is not None and bot.poll() is not None:
+                print(f"{time.strftime('%H:%M:%S')} Telegram bot exited (see runtime/logs/bot.log); restarting it")
+                time.sleep(5)
+                bot = start_bot("a")
             time.sleep(1)
         dead = [p.args for p in procs if p.poll() is not None]
         print("a process exited:", dead, "- see runtime/logs")
     except KeyboardInterrupt:
         pass
     finally:
+        procs += [bot] if bot is not None else []
         for p in procs:
             p.terminate()
         for p in procs:

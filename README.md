@@ -13,8 +13,9 @@ No install. The hosted page replays a recording of the real system (`scripts/rec
 1. Press **Play the week**. The mascots check next week, trade in a three-way ring and a cover chain; the manager approves the cover, and the ring passes on the manager's standing rule for swaps. 4 of 5 collisions get fixed and $192 of pay is kept.
 2. **Sign in** as Ben (top right). You see his private week, his chat with his mascot ("You'd be at 17 of your 20 hours across all on-campus jobs") and what his coworkers can and can't see. Tap "I'm sick, can't make it today" to replay his same-day call-out.
 3. Open **Manager**. Approvals arrive in the inbox; post an extra shift or find a team meeting time to replay what the agents did with it.
-4. Open **How it works**. Every agent-to-agent message appears in a live graph; click one to read exactly what crossed. The counters show 0 fields outside the schemas and 0 private labels in any message. **Snoop** has a nosy broker ask every mascot why it passed: the closed schemas reject the question, and no mascot vouches for a shift it never picked.
-5. Open **Judge view** for the private limits and what a Library-only scheduler would have done to the same week (Ben at 21 of 20 hours).
+4. Open **Org chart** and press **Play the morning**. 16 student workers in three departments and the people above them (3 shift leads, 3 managers, a backup manager, Student Employment, ISSC: 25 agents, each with its own pet) handle a call-out nobody can cover, a safety report and an F-1 question. Watch the case climb one rung each time a timer runs out; click anyone to read their phone.
+5. Open **How it works**. Every agent-to-agent message appears in a live graph whose blocks you can drag like n8n nodes (pan, zoom, Fit, Reset layout); click one to read exactly what crossed. The counters show 0 fields outside the schemas and 0 private labels in any message. **Snoop** has a nosy broker ask every mascot why it passed: the closed schemas reject the question, and no mascot vouches for a shift it never picked.
+6. Open **Judge view** for the private limits and what a Library-only scheduler would have done to the same week (Ben at 21 of 20 hours). **Exit judge view** (top right of the red banner) or any tab takes you back.
 
 ## What happens in the demo week
 
@@ -58,6 +59,30 @@ The broker then runs a second attempt. Dev can't take Ben's Thursday any more, s
 
 Sunday doesn't catch everything. On Monday morning Ben texts his mascot "I woke up sick, can't make it Monday". The mascot finds his Mon 10 AM-2 PM shift, marks it busy, and sends the broker the shift id with `urgent`, nothing else, so the broker opens a cover round right away instead of waiting for Sunday. Priya would hit exactly 20 of her 20 F-1 hours, so her mascot asks her before picking it. Zoe, who gave up her Saturday for the wedding, has room and takes it, which gets her the $64 back. Ben confirms ("You'd be at 13 of your 20 hours across all on-campus jobs"), Zoe confirms, the manager approves, and the shift moves. The Sunday numbers don't change, Marco doesn't get a second "no trade" text, and the word "sick" never appears in any message between agents (`tests/test_callout.py`). If nobody can take a call-out safely, it goes to the manager as an open shift, the same as on Sunday. When the text names no day, the mascot replies with one button per shift that week.
 
+## When nobody can cover: the campus hierarchy
+
+A same-day call-out that no coworker can take shouldn't sit in one manager's inbox. Tag Out adds the chain of command above the mascots, modelled on a Workday supervisory org (`seeds/org.py`): ten more synthetic students in Dining (Aramark at the Memorial Union) and the Rec center front desk, plus Ben and Dev, who already work in two departments, and Raj, who works at both the Rec center and Dining. Above them, each of these is its own agent with its own inbox (`org/app.py`):
+
+| Rung | Who | Waits | Then |
+|---|---|---|---|
+| 1 | the department's shift lead (Jordan, Nia, Theo) | 2 h, asking every coworker in the department now and again halfway | moves the case to the department manager |
+| 2 | the department manager | 30 min | moves it to the backup manager |
+| 3 | the assistant director, the backup for all three departments | 30 min | can offer the shift to people trained for that station in other departments; otherwise moves it to Student Employment |
+| 4 | Student Employment (HR) | 60 min | the top: the case stays open, flagged |
+| - | ISSC, the international students office | 2 business days | F-1 questions only, and only when the student taps Send |
+
+**Silence counts as no.** A timeout moves a case up one rung and never approves anything; with nobody answering anywhere, the case ends open at the top and no shift moves (`test_silence_never_approves`). What climbs is an `Escalation` with the shift id and the rule that moved it (`no_cover_2h`, `no_answer_30m`, `safety_first`), never the student's reason. When a rung closes the case, every rung below it gets a `CaseUpdate` and stops its timer.
+
+**The recorded morning** (the Org chart page, `tests/test_org.py`):
+
+- 6:30 AM Lena texts "I woke up sick, can't make my Saturday shift". Nia, the Dining shift lead, asks the six people who work at Dining, then asks again at 7:30. All six pass, each for a reason only its own mascot knows: Kofi and Mei don't want hours, Diego is moving apartments, Hana never works Saturdays, Ben doesn't want hours, and Raj would be at 22 of his 20 F-1 hours across his Rec and Dining jobs. Nia and the Dining manager only ever see six passes.
+- 8:30 AM, 2 hours without a cover: the case moves to the Dining manager, who is in a meeting all morning.
+- 9:00 AM, 30 minutes of silence: it moves to the assistant director, who offers it to people trained for Dining in other departments. Omar (Rec center) picks it and Ivy passes; Lena and Omar confirm on their phones, and the case closes. Nia and the Dining manager are told, so their timers stop.
+- A safety report ("the fire exit by the weight room is blocked") skips the ladder: the Rec manager and Student Employment both get it at once, and Tess hears back when it's acknowledged.
+- Kofi asks "Can I work 40 hours over winter break on my F-1 if I graduate in December?". His mascot doesn't answer visa questions; it shows him the exact words it would send ISSC and waits for Send. ISSC gets only the question, replies with the rule ASU publishes and books an advisor reply.
+
+Locally the hierarchy runs as its own process next to the Library's (`scripts/run_org.py`, started by `run_all`, ports 8721-8738), with one story clock where a story minute is 0.05 s (`TAGOUT_ORG_MINUTE`).
+
 ## Beyond trades: the rest of a student worker's week
 
 The same agents handle the other things that come up around shifts, with the same rule: what leaves a mascot is busy-or-free bits, picks and yes/no answers, plus whatever the student chooses to send (an issue report). For meetings the Steward does receive each student's busy bits for the hours it asks about; the manager sees only counts.
@@ -100,6 +125,8 @@ The chat panel next to the commons is each student's private thread with their o
 
 ### Telegram
 
+Why Telegram: it is the student's private line to their own mascot. It reaches them when the site is closed (the Sunday "your shift collides" text, a same-day call-out), one tap is the human step (Confirm, Decline, Take it, Approve; nothing moves without it), reasons go only to their own mascot while other agents get a shift id and a yes or no, and there is no new app to install. The bot only messages chats that registered themselves with `/start`, and Cubbie users can use the included Cubbie Skill instead.
+
 1. Create a bot with BotFather. Put its token in a file named `api.env` one folder above the repo's parent, which is `../../api.env` relative to the repo root. The Anthropic key can go in the same file and is optional. Environment variables with the same names also work, and `TAGOUT_ENV_FILE` points to a different file.
 
    ```
@@ -138,6 +165,9 @@ ASU student workers already live in Workday, so Tag Out follows its shapes (chec
 | Steward (one per employer, the Library here) | one process on port 8701 | the roster, which the employer already shares with its staff, and pending approvals | serves the roster; on PREPARE checks that each giver still owns the shift; sends the manager an Approve/Deny card and votes; tells the manager about shifts no trade could fill; gives a crunch forecast that reports a slot only when at least 3 staff are busy |
 | Broker | one process on port 8700, which also serves the commons website and the event stream | shift ids, picks, ok bits, schedule version numbers and votes | runs Top Trading Cycles swap rounds, the counter-offer window and cover chains; asks every member for an ok bit on the exact final ring or chain; picks proposals with CP-SAT; runs the two-phase commit; retries after an abort |
 | Rulebook | a library inside each mascot process (`rulebook/`), with no network and no LLM | the limits in `config/rules.yaml` and the quotes in `docs/rule_quotes.json`; reads one student's numbers at a time | returns eligible, blocked or unverified for a proposed change, with the deciding rule; missing hours history is unverified, never safe; refuses to cite a quote that isn't verbatim in `docs/RULES.md` |
+
+| Mascot x10 more (Dining: Lena, Kofi, Mei, Diego, Hana; Rec center: Omar, Tess, Raj, Ivy, Sam) | the same mascot app, in the hierarchy's process on ports 8721-8730, each with its own SQLite file | the same kinds of private data for their own department's shifts | the same answers; their "broker" is their shift lead and their "steward" is their department manager |
+| Shift leads x3, managers x2 (Dining, Rec), backup manager, Student Employment, ISSC | one app each in `org/app.py`, ports 8731-8738; the Library manager is the Steward | the cases they hold, their inbox, their timer | ask mascots for picks, run a two-phase commit for a cover, move a case up when their timer runs out, acknowledge reports, answer F-1 questions with the cited rule |
 
 The Telegram bot (`bot/telegram_bot.py`, relay on port 8702) is each student's phone line, not an agent. It forwards texts and taps to the owning mascot with that mascot's owner token and delivers the mascot's messages.
 
@@ -318,7 +348,7 @@ From `pyproject.toml` (minimum versions):
 - python-telegram-bot 22.8 with long polling and inline buttons
 - icalendar 7.3 and recurring-ical-events 3.8 for Canvas, calendar and shift feeds
 - sse-starlette 3.5 for the commons' event stream
-- anthropic 2.3: Claude Haiku parses student texts and Claude Sonnet can rephrase a mascot's texts (model ids in `ingest/llm.py`)
+- anthropic 2.3: Claude Haiku routes each student text (call-out, visa question, issue, meeting, more hours, calendar) and parses calendar items, and Claude Sonnet can rephrase a mascot's texts (model ids in `ingest/llm.py`). Claude only reads words; every work rule is code in `rulebook/`, never a prompt. Every response is cached, tests and recordings run offline on the regex rules, and `ingest/llm.py` stops calling the API once `TAGOUT_SPEND_CAP` dollars are spent. The key's budget (about $99) is split: at most $35 for building and test runs, $15 for recording the demo, and at least $45 kept for judges typing into the hosted page, which also limits each visitor to 8 live runs every 10 minutes (`site/api/try.py`).
 - PyYAML 6.0 for `config/rules.yaml`, matplotlib 3.11 for the simulator chart (Pillow comes with it and cuts the pet frames for Telegram)
 - SQLite from the Python standard library, one file per mascot
 - Development: pytest 9, pytest-asyncio 1.4, Hypothesis 6.170, ruff 0.17

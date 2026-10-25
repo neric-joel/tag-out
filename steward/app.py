@@ -70,7 +70,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     if net is None and os.environ.get("TAGOUT_DEBUG") == "1":
         app.state.net.report_to(reg["broker"])  # the judge view's agent graph
     names = {s["id"]: s["name"] for s in STUDENTS}
-    state = {"roster": load_roster(), "version": 1, "holds": {}, "ballots": {}, "changed": {}, "phone": [],
+    state = {"roster": load_roster(), "version": 1, "holds": {}, "ballots": {}, "voted": {}, "changed": {}, "phone": [],
              "auto": os.environ.get("TAGOUT_MODE", "auto") == "auto",
              "delay": float(os.environ.get("TAGOUT_AUTO_DELAY", "1.5")) + 0.5, "open": [],
              "swap_rule": swap_rule_default(), "issues": {}, "meetings": {}, "extras": [], "checked": {}}
@@ -127,6 +127,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         if txn not in state["holds"]:
             return "That request is closed."
         vote = "yes" if verb == "approve" else "no"
+        state["voted"][txn] = vote  # before it's sent: the decision can come back at once
         await app.state.net.post(f"{reg['broker']}/txn/vote", Vote(txn_id=txn, agent_id="steward", vote=vote,
                                                                     ballot=state["ballots"].get(txn, "")))
         phone_add({"kind": "reply", "text": "Approved." if vote == "yes" else "Denied.", "buttons": []})
@@ -163,12 +164,14 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
                                                           for m in p.moves)
                              + ". Their mascot checked their classes and work-hour limits in private. It goes through "
                                "when they confirm.", [], kind="info")
+            state["voted"][p.txn_id] = "yes"
             return {"vote": Vote(txn_id=p.txn_id, agent_id="steward", vote="yes", ballot=p.ballot).model_dump()}
         if state["swap_rule"] and is_swap(p.moves):
             # the manager's standing rule: a swap changes who works, not coverage or anyone's hours
             await to_manager("Approved under your standing rule for swaps: " + "; ".join(lines) + ". Every shift "
                              "stays covered and nobody's hours change. It still needs every student to confirm.",
                              [("Ask me each time", "rule:swaps:off")], kind="info")
+            state["voted"][p.txn_id] = "yes"
             return {"vote": Vote(txn_id=p.txn_id, agent_id="steward", vote="yes", ballot=p.ballot).model_dump()}
         text = ("Trade request: " + "; ".join(lines) + ".\nChecked " + datetime.now(PHX).strftime("%a %b %d, %I:%M %p")
                 + ": each student's mascot re-checked this exact trade against " + CHECKS + ", and said eligible. "
@@ -311,6 +314,10 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
 
     @app.post("/txn/decide")
     async def decide(d: Decision) -> dict:
+        if d.txn_id not in state["holds"] or d.ballot != state["ballots"].get(d.txn_id):
+            return {}  # only the broker that prepared this hold knows its ballot
+        if d.outcome == "commit" and state["voted"].get(d.txn_id) != "yes":
+            return {}  # never commit what the manager (or the standing swap rule) didn't approve
         moves = state["holds"].pop(d.txn_id, None)
         if moves and d.outcome == "commit":
             done = []
@@ -396,7 +403,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     async def reset() -> dict:
         if os.environ.get("TAGOUT_DEBUG") != "1":
             raise HTTPException(403)
-        state.update(roster=load_roster(), version=1, holds={}, ballots={}, changed={}, phone=[], open=[],
+        state.update(roster=load_roster(), version=1, holds={}, ballots={}, voted={}, changed={}, phone=[], open=[],
                      swap_rule=swap_rule_default(), issues={}, meetings={}, extras=[], checked={})
         return {"ok": True}
 

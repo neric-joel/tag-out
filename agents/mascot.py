@@ -324,6 +324,8 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
     async def reset() -> dict:
         if not debug():
             raise HTTPException(403)
+        for t in list(brain.auto_tasks):  # no tap from before the reset lands on the fresh week
+            t.cancel()
         token = store.get("owner_token")
         seed(store, sid)
         store.put("owner_token", token)

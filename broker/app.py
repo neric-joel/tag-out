@@ -42,6 +42,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
     app.state.engine, app.state.bus, app.state.net = engine, bus, net
     net.hook = lambda m, u, p, s, b: bus.emit("wire", **describe(reg, m, u, p, s, b))
     tasks: set[asyncio.Task] = set()
+    org_runs: set[asyncio.Task] = set()  # /demo/org runs, cancelled by /admin/reset
 
     run_lock = asyncio.Lock()  # one run at a time: the Sunday week, then any same-day call-out rounds
 
@@ -196,11 +197,13 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
             if r == "steward" or r not in urls:
                 continue
             try:
+                if not debug():
+                    raise PermissionError  # outside the synthetic demo: the structure only, never an inbox
                 roles[r] = await net.get(f"{urls[r]}/state")
             except Exception:
                 roles[r] = {"id": r, **spec, "cases": [], "phone": []}
         try:
-            mgr = (await net.get(f"{reg['steward']}/phone"))["messages"]
+            mgr = (await net.get(f"{reg['steward']}/phone"))["messages"] if debug() else []
         except Exception:
             mgr = []
         roles["steward"] = {"id": "steward", **ROLES["steward"], "cases": [], "phone": mgr}
@@ -261,7 +264,9 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
             for key in (ORG_DEMO if which == "morning" else [which]):
                 await one(key)
                 await asyncio.sleep(1.0)
-        spawn(go())
+        t = asyncio.create_task(go())
+        org_runs.add(t)  # a reset cancels the rest of the morning
+        t.add_done_callback(org_runs.discard)
         return {"started": which}
 
     @app.post("/demo/break")
@@ -278,6 +283,8 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
     async def reset() -> dict:
         if not debug():
             raise HTTPException(403)
+        for t in list(org_runs):
+            t.cancel()
         engine.reset()
         app.state.baseline = None
         bus.clear()

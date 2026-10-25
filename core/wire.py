@@ -83,6 +83,7 @@ class Vote(Wire):
 class Decision(Wire):
     txn_id: str
     outcome: Literal["commit", "abort"]
+    ballot: str = ""  # the member's own ballot from its Prepare: only the coordinator that prepared it knows it
 
 
 class VersionReport(Wire):
@@ -148,6 +149,7 @@ class IssueReport(Wire):
     category: Literal["equipment", "facilities", "safety", "schedule", "other"]
     text: str
     agent_id: str | None = None  # None: anonymous
+    token: str = ""  # set only when a manager forwards a safety report up: the case's secret (see CaseUpdate)
 
 
 class IssueAck(Wire):
@@ -178,11 +180,12 @@ class Escalation(Wire):
     shift, never the student's reason. If nobody acts by the deadline it moves up again: silence counts as no."""
 
     case_id: str
-    kind: Literal["uncovered_callout", "safety", "f1_question"]
+    kind: Literal["uncovered_callout", "safety", "issue", "f1_question"]
     level: int  # 1 shift lead, 2 department manager, 3 backup manager, 4 Student Employment
     rule: Literal["no_cover_2h", "no_answer_30m", "safety_first"]
     shift_id: str | None = None
     deadline: datetime
+    token: str = ""  # the case's secret, known only to rungs that held it; a CaseUpdate must echo it
 
 
 class CaseUpdate(Wire):
@@ -190,6 +193,7 @@ class CaseUpdate(Wire):
 
     case_id: str
     outcome: Literal["covered", "acknowledged", "answered", "closed"]
+    token: str = ""
 
 
 class Question(Wire):

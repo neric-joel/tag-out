@@ -73,7 +73,8 @@
         setTimeout(() => { if (world) world.release(PEOPLE.filter((a) => !S.gathered.has(a) && !requesters.has(a))); }, 3400);
         setStatus("Sunday check: each mascot compares next week with its own student's calendar."); break;
       case "trade_request":
-        S.requested.add(ev.shift_id); requesters.add(ev.agent); W.status(ev.agent, "wants a trade"); W.play(ev.agent, "waiting");
+        S.requested.add(ev.shift_id); requesters.add(ev.agent); W.status(ev.agent, ev.urgent ? "called out" : "wants a trade"); W.play(ev.agent, "waiting");
+        if (ev.urgent) { W.say(ev.agent, "Can someone take my shift today?", 3200); setStatus(`${name(ev.agent)} called out of ${shiftLabel(ev.shift_id)}. The round opens now, not on Sunday.`); }
         renderKpis(); scheduleBoard(); break;
       case "round_open":
         ev.items.forEach((r) => { S.roster[r.shift_id] = S.roster[r.shift_id] || r; });
@@ -152,9 +153,15 @@
         S.pets[ev.agent] = ev.pet_id; if (world) world.setPet(ev.agent, ev.pet_id);
         renderTabs(); renderBoard(); renderCredits(); break;
       case "summary":
-        S.summary = ev; (ev.open_shifts || []).forEach((s) => S.open.add(s));
-        setStatus(`Week done: <b>${ev.fixed} of ${ev.asked}</b> fixed.`);
-        renderKpis(); setFinding(ev); renderBoard();
+        (ev.open_shifts || []).forEach((s) => S.open.add(s));
+        if (ev.kind === "callout") {
+          setStatus(ev.fixed ? `Call-out covered: <b>${ev.fixed} of ${ev.asked}</b>, confirmed by everyone and the manager.` : "Nobody could take the call-out safely. It went to the manager as an open shift.");
+          renderBoard();
+        } else {
+          S.summary = ev;
+          setStatus(`Week done: <b>${ev.fixed} of ${ev.asked}</b> fixed.`);
+          renderKpis(); setFinding(ev); renderBoard();
+        }
         setTimeout(() => { W.clear(); W.release(PEOPLE); requesters.clear(); PEOPLE.forEach((a) => W.status(a, "")); }, 4500); break;
     }
     logEvent(ev);
@@ -188,7 +195,7 @@
     const m = (x) => `${name(x.to_agent)} takes ${name(x.from_agent)}'s ${shiftLabel(x.shift_id)}`;
     switch (ev.type) {
       case "sunday_check": return "Sunday check sent to every mascot.";
-      case "trade_request": return `${name(ev.agent)} asked for a trade on ${shiftLabel(ev.shift_id)}. No reason attached.`;
+      case "trade_request": return ev.urgent ? `${name(ev.agent)} called out of ${shiftLabel(ev.shift_id)} (same day). No reason attached.` : `${name(ev.agent)} asked for a trade on ${shiftLabel(ev.shift_id)}. No reason attached.`;
       case "picks": {
         const p = Object.entries(ev.picks);
         const picked = p.filter(([, s]) => s).map(([a, s]) => `${name(a)} → ${shiftLabel(s)}`);
@@ -208,7 +215,7 @@
       case "abort": return `<span class="bad">Aborted</span> ${ev.txn_id}. Holds released, shifts unchanged.`;
       case "schedule_edited": return `${name(ev.agent)}'s week changed while the trade waited for confirmations.`;
       case "pet_changed": return `${name(ev.agent)} picked a new mascot.`;
-      case "summary": return `Week done: ${ev.fixed} of ${ev.asked} fixed, ${money(ev.pay_kept)} of pay kept by trading, ${ev.open} open.`;
+      case "summary": return ev.kind === "callout" ? `Call-out round done: ${ev.fixed ? "covered" : "no safe taker, sent to the manager"}.` : `Week done: ${ev.fixed} of ${ev.asked} fixed, ${money(ev.pay_kept)} of pay kept by trading, ${ev.open} open.`;
       case "reset": return "Demo reset.";
       default: return null;
     }

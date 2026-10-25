@@ -30,6 +30,7 @@ class ShiftRef(Wire):
 class TradeRequest(Wire):
     agent_id: str
     shift_id: str
+    urgent: bool = False  # a same-day call-out: the broker opens a round now instead of waiting for Sunday
 
 
 class PickRequest(Wire):

@@ -66,6 +66,31 @@ TIME_RE = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", re.I)
 NEVER_RE = re.compile(r"\b(never|no|not)\b.*\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*s?\b", re.I)
 
 
+CALLOUT_RE = re.compile(
+    r"\b(tag me out|call(?:ing)? out|call in sick|can'?t (?:make|work|do|come to) (?:it|my|the|today|tomorrow)|"
+    r"cover (?:for )?me|cover my|take my shift|i'?m sick|feel(?:ing)? sick|got sick|woke up sick)\b", re.I)
+RELATIVE_RE = re.compile(r"\b(today|tonight|tomorrow)\b", re.I)
+
+
+def callout(text: str, monday: date, today: date | None = None) -> dict | None:
+    """A same-day call-out ("I'm sick, tag me out of Thursday"), or None. No LLM: the words are few and fixed.
+
+    Returns the weekday (0=Mon) and hour the student named, when they named one."""
+    if not CALLOUT_RE.search(text):
+        return None
+    day = None
+    rel = RELATIVE_RE.search(text)
+    if rel and today is not None:
+        d = today + timedelta(days=1 if rel.group(1).lower() == "tomorrow" else 0)
+        if monday <= d < monday + timedelta(days=7):
+            day = d.weekday()
+    elif (m := DAY_RE.search(text)) is not None:
+        day = _day_index(m.group(1))
+    t = TIME_RE.search(text) or RANGE_RE.search(text)
+    hour = _hour(t.group(1), t.group(2), t.group(3))[0] if t else None
+    return {"weekday": day, "hour": hour}
+
+
 def _hour(h: str, m: str | None, ap: str | None, default_pm: bool = True) -> tuple[int, int]:
     hh, mm = int(h), int(m or 0)
     if ap:

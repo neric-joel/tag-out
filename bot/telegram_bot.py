@@ -99,7 +99,8 @@ class TagOutBot:
         self.links.link(update.effective_chat.id, who)
         msg = f"This chat is now {self.names[who]}'s phone."
         if who != "manager":
-            msg += " Text me things like \"dentist Thu 3pm\". /pet picks your mascot, /week shows your shifts."
+            msg += (" Text me things like \"dentist Thu 3pm\", or \"I'm sick, tag me out of today\" to call out. "
+                    "/pet picks your mascot, /week shows your shifts.")
         await update.message.reply_text(msg)
 
     async def pet(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:

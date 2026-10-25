@@ -1,8 +1,9 @@
 """Deterministic replay of the demo against a running system (start it with `python -m scripts.run_all`).
 
     python -m scripts.demo             # beat 2-4: Sunday check, rounds, ring + cover, commit
+    python -m scripts.demo --callout   # after the week: Ben texts that he's sick, a same-day round covers Monday
     python -m scripts.demo --break-it  # beat 5: edit Dev's week before commit, abort, next proposal commits
-    python -m scripts.demo --all       # both, with a reset in between (for recording)
+    python -m scripts.demo --all       # week, call-out, then (after a reset) break it: for recording
 """
 
 from __future__ import annotations
@@ -68,6 +69,17 @@ def beat_main(pause: float) -> dict:
     return summary
 
 
+def beat_callout(pause: float) -> dict:
+    time.sleep(pause + 2)
+    start = len(events())
+    print("Ben texts his mascot: I woke up sick, can't make it Monday")
+    httpx.post(f"{B}/phone/ben/text", json={"text": "I woke up sick, can't make it Monday"}, timeout=30)
+    summary = wait_for("summary", start)
+    for ev in events()[start:]:
+        show(ev)
+    return summary
+
+
 def beat_break(pause: float) -> dict:
     post("/admin/reset")
     time.sleep(pause)
@@ -92,11 +104,14 @@ def beat_break(pause: float) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--break-it", action="store_true")
+    ap.add_argument("--callout", action="store_true")
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--pause", type=float, default=1.0)
     a = ap.parse_args()
-    if a.all or not a.break_it:
+    if a.all or not (a.break_it or a.callout):
         print("Beat 2-4:", beat_main(a.pause))
+    if a.all or a.callout:
+        print("Call-out:", beat_callout(a.pause))
     if a.all or a.break_it:
         print("Beat 5:", beat_break(a.pause))
     post("/admin/auto", {"enabled": True, "delay": 1.5})

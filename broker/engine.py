@@ -66,6 +66,7 @@ class Engine:
         self.timing = timing or Timing()
         self.requests: dict[str, str] = {}  # shift_id -> owner (from trade requests)
         self.resolved: dict[str, str] = {}  # shift_id -> how ("ring-1", "chain-2")
+        self.closed: set[str] = set()  # requests a finished run already settled (fixed, or sent to the manager)
         self.roster: dict[str, ShiftRef] = {}
         self.txns: dict[str, Txn] = {}
         self.proposals: list[Proposal] = []
@@ -75,10 +76,11 @@ class Engine:
         self.running = False
 
     # ---------- inputs ----------
-    def request(self, agent: str, shift_id: str) -> None:
+    def request(self, agent: str, shift_id: str, urgent: bool = False) -> None:
         if shift_id not in self.resolved:
             self.requests[shift_id] = agent
-            self.bus.emit("trade_request", agent=agent, shift_id=shift_id)
+            self.closed.discard(shift_id)
+            self.bus.emit("trade_request", agent=agent, shift_id=shift_id, urgent=urgent)
 
     async def vote(self, v: Vote) -> None:
         t = self.txns.get(v.txn_id)
@@ -116,7 +118,8 @@ class Engine:
         """Conflicted shifts still waiting, one per owner per round (earliest first)."""
         out: dict[str, str] = {}
         for sid, owner in sorted(self.requests.items(), key=lambda kv: self.ref(kv[0]).start):
-            if sid not in self.resolved and owner not in out.values() and self.ref(sid).owner == owner:
+            if (sid not in self.resolved and sid not in self.closed and owner not in out.values()
+                    and self.ref(sid).owner == owner):
                 out[sid] = owner
         return out
 
@@ -256,26 +259,27 @@ class Engine:
         return commit
 
     # ---------- the week ----------
-    async def run(self, max_attempts: int = 3) -> dict:
+    async def run(self, max_attempts: int = 3, kind: str = "week") -> dict:
+        """kind "week" is the Sunday run; "callout" is a same-day round for requests that arrived since."""
         if self.running:
             return {"busy": True}
         self.running = True
         try:
             await self.load_roster()
-            asked = len(self.requests)
+            fresh = [s for s in self.requests if s not in self.closed]
             for attempt in range(1, max_attempts + 1):
-                aborted = await self.attempt(attempt)
+                aborted = await self.attempt(attempt, "round" if kind == "week" else kind)
                 if not aborted:
                     break
-            return await self.finish(asked)
+            return await self.finish(fresh, kind)
         finally:
             self.running = False
 
-    async def attempt(self, attempt: int) -> bool:
+    async def attempt(self, attempt: int, prefix: str = "round") -> bool:
         items = self.open_items()
         if not items:
             return False
-        rid = f"round-{attempt}"
+        rid = f"{prefix}-{attempt}"
         self.bus.emit("round_open", round_id=rid, attempt=attempt, items=[self.ref(s).model_dump(mode="json")
                                                                          for s in items])
         cycles, it = await self.swap_rounds(rid, dict(items), 1)
@@ -317,9 +321,10 @@ class Engine:
                 aborted = True
         return aborted
 
-    async def finish(self, asked: int) -> dict:
-        fixed = [s for s in self.requests if s in self.resolved]
-        open_ = [s for s in self.requests if s not in self.resolved]
+    async def finish(self, fresh: list[str], kind: str = "week") -> dict:
+        fixed = [s for s in fresh if s in self.resolved]
+        open_ = [s for s in fresh if s not in self.resolved]
+        self.closed |= set(fresh)
         for s in open_:
             try:
                 await self.net.post(f"{self.reg['steward']}/open", OpenShift(shift_id=s))
@@ -328,14 +333,16 @@ class Engine:
                 pass
         by_kind = {"ring": 0, "chain": 0}
         pay_kept = 0.0
-        for p in self.committed:
+        for p in (q for q in self.committed if any(mv.shift_id in fresh for mv in q.moves)):
             by_kind[p.kind] += len(p.fixes)
             kept = {mv.shift_id for mv in p.moves if mv.from_agent in p.keeps_pay}
             pay_kept += sum(self.hours(s) * WAGE for s in kept)
-        self.summary = {"asked": asked, "fixed": len(fixed), "open": len(open_), "by_ring": by_kind["ring"],
-                        "by_chain": by_kind["chain"], "pay_kept": pay_kept, "open_shifts": open_}
-        self.bus.emit("summary", **self.summary)
-        return self.summary
+        summary = {"asked": len(fresh), "fixed": len(fixed), "open": len(open_), "by_ring": by_kind["ring"],
+                   "by_chain": by_kind["chain"], "pay_kept": pay_kept, "open_shifts": open_, "kind": kind}
+        if kind == "week":
+            self.summary = summary
+        self.bus.emit("summary", **summary)
+        return summary
 
     def hours(self, sid: str) -> float:
         r = self.roster[sid]
@@ -345,6 +352,7 @@ class Engine:
         self.committed.clear()
         self.requests.clear()
         self.resolved.clear()
+        self.closed.clear()
         self.txns.clear()
         self.proposals.clear()
         self.summary = {}

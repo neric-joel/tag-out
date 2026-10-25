@@ -42,6 +42,10 @@ Ben is an F-1 student, so he may work at most 20 hours a week across all on-camp
 
 The broker then runs a second attempt. Dev can't take Ben's Thursday any more, so no ring closes, and the retry commits the chain Priya -> Ben -> Ana -> Dev instead: Priya covers Ben's Thu 2-6 PM, Ben takes Ana's Tue 6-10 PM, Ana takes Dev's Fri 10 AM-2 PM, and Dev drops his Friday. The week still ends with 4 of 5 fixed (`test_editing_a_week_before_commit_aborts_and_retries`). Priya, also on an F-1, would end that week at exactly 20 of her 20 hours with no slack to stay late, so her mascot asks her first (the safe answer comes first) instead of picking the shift on its own.
 
+### Same-day call-out
+
+Sunday doesn't catch everything. On Monday morning Ben texts his mascot "I woke up sick, can't make it Monday". The mascot finds his Mon 10 AM-2 PM shift, marks it busy, and sends the broker the shift id with `urgent`, nothing else, so the broker opens a cover round right away instead of waiting for Sunday. Priya would hit exactly 20 of her 20 F-1 hours, so her mascot asks her before picking it. Zoe, who gave up her Saturday for the wedding, has room and takes it, which gets her the $64 back. Ben confirms ("You'd be at 13 of your 20 hours across all on-campus jobs"), Zoe confirms, the manager approves, and the shift moves. The Sunday numbers don't change, Marco doesn't get a second "no trade" text, and the word "sick" never appears in any message between agents (`tests/test_callout.py`). If nobody can take a call-out safely, it goes to the manager as an open shift, the same as on Sunday. When the text names no day, the mascot replies with one button per shift that week.
+
 ## Quick start
 
 Python 3.12.
@@ -57,7 +61,7 @@ python -m scripts.run_all        # 6 mascots, the Steward, the broker, and the T
 Open http://127.0.0.1:8700 for the commons, where the mascots live (next section), with the roster, round log and simulator results below it, or http://127.0.0.1:8700/judge for the judge view, which adds the on-screen phones and the synthetic students' private numbers under a red banner. In a second terminal with the same virtual environment:
 
 ```
-python -m scripts.demo --all     # the demo week, a reset, then the break-it beat
+python -m scripts.demo --all     # the demo week, Ben's call-out, a reset, then the break-it beat
 ```
 
 By default the synthetic students tap their own buttons after a short delay. `python -m scripts.run_all --mode live` waits for real taps instead, and `--no-bot` skips Telegram. Logs go to `runtime/logs/`. Without an Anthropic key, text intake uses the committed cache in `seeds/llm_cache` and the regex parser, so the demo runs offline.

@@ -20,7 +20,7 @@ from agents.seed import seed
 from agents.store import Store
 from core.models import BusyBlock
 from core.net import RUNTIME, Net, registry
-from core.timeutil import fmt_span, overlaps, planning_monday
+from core.timeutil import PHX, fmt_span, overlaps, planning_monday
 from core.wire import (
     BusyBits,
     Decision,
@@ -205,6 +205,11 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
     async def intake(body: Intake, x_owner_token: str | None = Header(None)) -> dict:
         owner(x_owner_token)
         store.send({"kind": "student", "text": body.text, "buttons": []})
+        want = text_intake.callout(body.text, planning_monday(), datetime.now(PHX).date())
+        if want is not None:
+            reply = await brain.call_out(want, planning_monday())
+            store.send({"kind": "reply", "text": reply, "buttons": [], "engine": "callout"})
+            return {"reply": reply, "engine": "callout", "events": 0}
         parsed, engine = text_intake.parse(body.text, planning_monday())
         blocks = text_intake.to_blocks(parsed)
         from agents.seed import merge_prefs

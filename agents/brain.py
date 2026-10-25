@@ -12,7 +12,7 @@ from typing import Literal
 
 from agents import explain
 from agents.store import Store
-from core.models import Collision, Shift
+from core.models import BusyBlock, Collision, Shift
 from core.timeutil import overlaps, week_start
 from core.wire import (
     Decision,
@@ -91,6 +91,39 @@ class Brain:
             await self.notify(explain.collision(st.name, c), [("Find a trade", f"trade:yes:{c.shift_id}"),
                                                              ("Not now", f"trade:no:{c.shift_id}")], kind="collision")
         return len(found)
+
+    # ---------- same-day call-out ----------
+    async def call_out(self, want: dict, monday: date) -> str:
+        """'I'm sick, tag me out of Thursday': find that shift and ask the broker for a round now.
+
+        `want` is ingest.text.callout()'s weekday and hour. The reason stays here; the broker gets a shift id."""
+        done = set(self.store.get("called_out", []))
+        mine = sorted((s for s in self.store.shifts() if week_start(s.start.date()) == monday and s.id not in done),
+                      key=lambda s: s.start)
+        if want.get("weekday") is not None:
+            mine = [s for s in mine if s.start.weekday() == want["weekday"]]
+        if want.get("hour") is not None and len(mine) > 1:
+            mine = [s for s in mine if s.start.hour <= want["hour"] < s.end.hour] or mine
+        if len(mine) == 1:
+            return await self.tag_out(mine[0].id)
+        if not mine:
+            return "I couldn't find a shift of yours then. Which day is it?"
+        await self.notify("Which shift should I tag you out of?", [(s.label, f"out:{s.id}") for s in mine[:4]],
+                          kind="ask")
+        return "Which shift? Tap one."
+
+    async def tag_out(self, shift_id: str) -> str:
+        s = next((x for x in self.store.shifts() if x.id == shift_id), None)
+        if s is None:
+            return "That shift isn't yours any more."
+        self.store.put("called_out", [*self.store.get("called_out", []), shift_id])
+        self.store.add_busy([BusyBlock(id=f"out-{shift_id}", start=s.start, end=s.end, kind="other",
+                                       label="Called out", source="text")])
+        await self.schedule_changed()
+        await self.send_trade(TradeRequest(agent_id=self.me, shift_id=shift_id, urgent=True))
+        self.store.note(f"You called out of {s.label}. Asked for a round now; only the shift id left, no reason.")
+        return (f"Tagging you out of {s.label}. Your reason stays with me; the other mascots only see the shift. "
+                "I'll text you before anything moves. If nobody can take it, your manager decides.")
 
     # ---------- availability (private) ----------
     def availability(self, ref: ShiftRef, giving: str | None = None) -> Avail:
@@ -228,6 +261,8 @@ class Brain:
                 self.store.note("You asked me to find a trade. Request sent: only the shift id left.")
                 return "Looking for a trade. I'll text you when one works."
             return "OK, leaving it."
+        if parts[0] == "out" and len(parts) == 2:
+            return await self.tag_out(parts[1])
         if parts[0] == "ask" and len(parts) == 3:
             answers = self.store.get("answers", {})
             answers[parts[2]] = "yes" if parts[1] == "yes" else "no"

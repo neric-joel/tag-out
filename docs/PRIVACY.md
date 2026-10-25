@@ -12,6 +12,7 @@ A few other choices keep the allowed fields quiet:
 - A pass is the same message whatever the reason: the F-1 limit, a class, a soft preference, or not wanting the shift.
 - The broker waits for the pick deadline and publishes every reply of a round at once, so the arena and other agents can't tell who answered fast.
 - The public face is a closed list: name, pet, an animation state, trades made and badges from `Clutch`, `Chain Link` and `Streak`. Nothing about hours, limits, visa status or work-study. Every student goes through the same code path; the F-1 limit is just a private number in their mascot.
+- A same-day call-out adds one bit to the trade request, `urgent`, so the broker opens a round now. The broker learns that the student wants out of that shift today, not why (`tests/test_callout.py` checks that "sick" is in no message between agents). Coworkers' mascots see the same cover round they would see on Sunday.
 - The mascot's private diary (room before the limit that binds first, which limit, the quoted rule) is an owner endpoint.
 - The Rulebook runs inside the mascot process with no network and no LLM.
 

@@ -41,6 +41,8 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
     app.state.engine, app.state.bus, app.state.net = engine, bus, net
     tasks: set[asyncio.Task] = set()
 
+    run_lock = asyncio.Lock()  # one run at a time: the Sunday week, then any same-day call-out rounds
+
     def spawn(coro) -> None:
         t = asyncio.create_task(coro)
         tasks.add(t)
@@ -52,8 +54,17 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
     # ----- agent-facing -----
     @app.post("/trade")
     async def trade(t: TradeRequest) -> dict:
-        engine.request(t.agent_id, t.shift_id)
+        engine.request(t.agent_id, t.shift_id, urgent=t.urgent)
+        if t.urgent:
+            spawn(callout_round())
         return {}
+
+    async def callout_round() -> None:
+        """A same-day call-out doesn't wait for Sunday. Call-outs that land within half a second share a round."""
+        await asyncio.sleep(0.5)
+        async with run_lock:
+            if any(s not in engine.closed and s not in engine.resolved for s in engine.requests):
+                await engine.run(kind="callout")
 
     @app.post("/txn/vote")
     async def vote(v: Vote) -> dict:
@@ -308,12 +319,13 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
                 "violations": sum(1 for r in rows if r["breaks"])}
 
     async def run_week() -> None:
-        if debug() and app.state.baseline is None and engine.requests:
-            try:
-                app.state.baseline = await compute_baseline()
-            except Exception as e:  # the comparison is judge-view only; never block the real rounds on it
-                bus.emit("baseline_error", error=type(e).__name__)
-        await engine.run()
+        async with run_lock:
+            if debug() and app.state.baseline is None and engine.requests:
+                try:
+                    app.state.baseline = await compute_baseline()
+                except Exception as e:  # the comparison is judge-view only; never block the real rounds on it
+                    bus.emit("baseline_error", error=type(e).__name__)
+            await engine.run()
 
     @app.get("/sim")
     async def sim() -> JSONResponse:

@@ -45,7 +45,7 @@ def is_peer(url: str) -> bool:
 
 def redact(obj):
     if isinstance(obj, dict):
-        return {k: ("•••" if k == "ballot" else redact(v)) for k, v in obj.items()}
+        return {k: ("•••" if k in ("ballot", "token") else redact(v)) for k, v in obj.items()}
     if isinstance(obj, list):
         return [redact(v) for v in obj]
     return obj

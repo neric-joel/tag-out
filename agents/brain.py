@@ -142,6 +142,8 @@ class Brain:
         s = next((x for x in self.store.shifts() if x.id == shift_id), None)
         if s is None:
             return "That shift isn't yours any more."
+        if shift_id in self.store.get("called_out", []):
+            return f"I'm already asking your coworkers to cover your {s.label}. I'll text you what happens."
         self.store.put("called_out", [*self.store.get("called_out", []), shift_id])
         self.remember("requested", shift_id)
         self.store.add_busy([BusyBlock(id=f"out-{shift_id}", start=s.start, end=s.end, kind="other",
@@ -403,8 +405,8 @@ class Brain:
             return False
         adds, drops = self.my_moves(moves)
         wanted = [m for m in moves if m.to_agent == self.me]
-        if len(adds) != len(wanted):
-            return False
+        if len(adds) != len(wanted) or len(drops) != len([m for m in moves if m.from_agent == self.me]):
+            return False  # every shift I give must still be mine
         giving = drops[0].id if drops else None
         if any(self.availability(self.seen[s.id], giving=giving) != "yes" for s in adds):
             return False
@@ -417,6 +419,9 @@ class Brain:
 
     # ---------- two-phase commit ----------
     async def prepare(self, p: Prepare) -> Vote | None:
+        hold = self.store.get("hold")
+        if hold and hold["txn_id"] != p.txn_id:
+            return Vote(txn_id=p.txn_id, agent_id=self.me, vote="no", ballot=p.ballot)  # one held trade at a time
         if p.seen_version != self.store.version():
             return Vote(txn_id=p.txn_id, agent_id=self.me, vote="stale", ballot=p.ballot)
         if not self.ring_ok(p.moves):
@@ -464,10 +469,11 @@ class Brain:
             if not hold or hold["txn_id"] != parts[1]:
                 return "That trade is no longer open."
             ballot = hold.get("ballot", "")
+            vote = "no" if parts[0] == "decline" else "yes" if hold["version"] == self.store.version() else "stale"
+            self.store.put("hold", {**hold, "voted": vote})  # before it's sent: the decision can come back at once
             if parts[0] == "decline":
                 await self.send_vote(Vote(txn_id=parts[1], agent_id=self.me, vote="no", ballot=ballot))
                 return "Declined. The trade is off, and nobody is told why."
-            vote = "yes" if hold["version"] == self.store.version() else "stale"
             await self.send_vote(Vote(txn_id=parts[1], agent_id=self.me, vote=vote, ballot=ballot))
             return ("Confirmed. Waiting for the others and your manager; I'll text you the result." if vote == "yes"
                     else "Your week changed since this trade was set up, so I pulled out. Nothing moved.")
@@ -475,8 +481,10 @@ class Brain:
 
     async def decide(self, d: Decision) -> None:
         hold = self.store.get("hold")
-        if not hold or hold["txn_id"] != d.txn_id:
-            return
+        if not hold or hold["txn_id"] != d.txn_id or d.ballot != hold.get("ballot", ""):
+            return  # only the coordinator that prepared this hold knows its ballot
+        if d.outcome == "commit" and hold.get("voted") != "yes":
+            return  # never commit a trade my student didn't confirm
         moves = [Move(**m) for m in hold["moves"]]
         self.store.put("hold", None)
         if d.outcome == "abort":

@@ -73,6 +73,11 @@ CALLOUT_RE = re.compile(
     r"not feel(?:ing)? well|feel(?:ing)? (?:sick|ill)|got sick|woke up sick|family emergency)\b",
     re.I)
 RELATIVE_RE = re.compile(r"\b(today|tonight|tomorrow)\b", re.I)
+# "I'm not calling out", "no need to cover my shift": a call-out phrase right after a negation doesn't count
+NEGATED_RE = re.compile(r"\b(?:not|never|no need to|don'?t|won'?t|doesn'?t)\b(?:\s+[\w']+){0,3}\s*$", re.I)
+# texts often skip the "?": "can I do CPT next summer", "am I allowed to work during OPT"
+ASKS_RE = re.compile(r"^\s*(?:can|could|may|am|is|are|do|does|will|would|should|how|what|when)\b|\bwondering\b",
+                     re.I)
 
 
 ISSUE_RE = re.compile(
@@ -93,7 +98,7 @@ CATEGORIES = [("safety", r"unsafe|harass|threat|injur|hurt|fire|danger|exit"),
 def intent(text: str) -> str | None:
     """Work-life requests that aren't calendar items: a visa question (for ISSC), an issue report, a meeting, or
     wanting more hours."""
-    if VISA_RE.search(text) and "?" in text:
+    if VISA_RE.search(text) and ("?" in text or ASKS_RE.search(text)):
         return "visa"
     if ISSUE_RE.search(text):
         return "issue"
@@ -112,7 +117,7 @@ def callout(text: str, monday: date, today: date | None = None) -> dict | None:
     """A same-day call-out ("I'm sick, tag me out of Thursday"), or None. No LLM: the words are few and fixed.
 
     Returns the weekday (0=Mon) and hour the student named, when they named one."""
-    if not CALLOUT_RE.search(text):
+    if not any(not NEGATED_RE.search(text[:m.start()]) for m in CALLOUT_RE.finditer(text)):
         return None
     day = None
     rel = RELATIVE_RE.search(text)

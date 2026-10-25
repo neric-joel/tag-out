@@ -251,8 +251,9 @@ class Engine:
         commit = set(t.votes) >= t.expected and all(v == "yes" for v in t.votes.values())
         t.done.set()
         outcome = "commit" if commit else "abort"
-        await asyncio.gather(*(self.net.post(f"{u}/txn/decide", Decision(txn_id=tid, outcome=outcome))
-                               for u in targets.values()), return_exceptions=True)
+        await asyncio.gather(*(self.net.post(f"{u}/txn/decide", Decision(txn_id=tid, outcome=outcome,
+                                                                          ballot=t.ballots[a]))
+                               for a, u in targets.items()), return_exceptions=True)
         self.bus.emit(outcome, txn_id=tid, proposal=p.id, members=p.members,
                       moves=[m.model_dump() for m in p.moves])
         if commit:

@@ -30,6 +30,7 @@ from core.wire import (
     IssueAck,
     IssueReport,
     Move,
+    NoTrade,
     Pick,
     PickRequest,
     Prepare,
@@ -161,18 +162,23 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
         state["txns"][txn] = t
         event("org_hold", case_id=case["id"], txn_id=txn, members=crew)
         for a in crew:
-            seen = VersionReport(**await net.get(f"{url(a)}/version")).version
-            r = await net.post(f"{url(a)}/txn/prepare", Prepare(txn_id=txn, ring_id=case["id"], moves=moves,
-                                                                 seen_version=seen, ballot=t["ballots"][a]))
-            if r.get("vote"):
-                record(Vote(**r["vote"]))
+            try:
+                seen = VersionReport(**await net.get(f"{url(a)}/version")).version
+                r = await net.post(f"{url(a)}/txn/prepare", Prepare(txn_id=txn, ring_id=case["id"], moves=moves,
+                                                                     seen_version=seen, ballot=t["ballots"][a]))
+                if r.get("vote"):
+                    record(Vote(**r["vote"]))
+            except Exception:
+                record(Vote(txn_id=txn, agent_id=a, vote="no", ballot=t["ballots"][a]))  # no answer is a no
         try:
             await asyncio.wait_for(t["done"].wait(), VOTE_TIMEOUT)
         except TimeoutError:
             pass
         ok = all(t["votes"].get(a) == "yes" for a in crew)
-        decision = Decision(txn_id=txn, outcome="commit" if ok else "abort")
-        await asyncio.gather(*(net.post(f"{url(a)}/txn/decide", decision) for a in crew), return_exceptions=True)
+        outcome = "commit" if ok else "abort"
+        await asyncio.gather(*(net.post(f"{url(a)}/txn/decide", Decision(txn_id=txn, outcome=outcome,
+                                                                          ballot=t["ballots"][a]))
+                               for a in crew), return_exceptions=True)
         state["txns"].pop(txn, None)
         if ok:
             state["roster"][ref.shift_id] = ref.model_copy(update={"owner": taker})
@@ -199,20 +205,43 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
             event("org_overdue", case_id=case["id"])
             phone_add("This is past its deadline and there's nobody above me in the chain. It stays open on my "
                       "list until someone closes it.", kind="info")
+            await tell_owner(case)
             return
         deadline = clock.now() + timedelta(minutes=ROLES[up]["minutes"])
         esc = Escalation(case_id=case["id"], kind=case["kind"], level=case["level"] + 1, rule=rule,
-                         shift_id=case.get("shift_id"), deadline=deadline)
+                         shift_id=case.get("shift_id"), deadline=deadline, token=case["token"])
         case["status"] = "moved up"
         case["holder"] = up
         event("org_escalate", case_id=case["id"], frm=role, to=up, level=case["level"] + 1, rule=rule,
               deadline=deadline.isoformat(timespec="minutes"))
-        await net.post(f"{reg['org'][up]}/escalate", esc)
+        try:
+            await net.post(f"{reg['org'][up]}/escalate", esc)
+        except Exception:  # the rung above never got it: it stays on my list, not "moved up" to nobody
+            case["status"], case["holder"] = "overdue", role
+            event("org_overdue", case_id=case["id"])
+            phone_add(f"I couldn't hand this up to the {names[up].lower()}. It stays open on my list until "
+                      "someone closes it.", kind="info")
+            await tell_owner(case)
+
+    async def tell_owner(case: dict) -> None:
+        """The student hears once when nobody covers their call-out (a shift id only, no reason)."""
+        if case["kind"] != "uncovered_callout" or not case.get("owner") or case.get("told"):
+            return
+        case["told"] = True
+        try:
+            await net.post(f"{url(case['owner'])}/round/none", NoTrade(shift_id=case["shift_id"]))
+        except Exception:
+            pass  # their mascot is down: the case is still on the list above them
 
     async def wait_then_climb(case: dict, rule: str) -> None:
-        await clock.until(case["deadline"])
-        if case["status"] == "open":  # "acting" means this rung is mid-cover; it climbs after, if that fails
-            await climb(case, rule)
+        # a timer can wake a little early, and "acting" means this rung is mid-cover: keep waiting until the
+        # deadline has really passed with the case still open here
+        while case["status"] in ("open", "acting"):
+            await clock.until(case["deadline"])
+            if case["status"] == "open" and clock.now() >= case["deadline"]:
+                await climb(case, rule)
+                return
+            await asyncio.sleep(clock.minute)
 
     async def close(case: dict, outcome: str, taker: str | None = None) -> None:
         case["status"] = outcome
@@ -220,11 +249,16 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
         # every rung that held it stops its timer
         for holder in case.get("chain", []):
             if holder != role and holder in ROLES and holder != "steward":  # the Library Steward has its own flow
-                spawn(net.post(f"{reg['org'][holder]}/case", CaseUpdate(case_id=case["id"], outcome=outcome)))
+                spawn(net.post(f"{reg['org'][holder]}/case", CaseUpdate(case_id=case["id"], outcome=outcome,
+                                                                        token=case["token"])))
+        if outcome == "closed":
+            await tell_owner(case)
 
-    def open_case(cid: str, kind: str, level: int, deadline: datetime, chain: list[str], **extra) -> dict:
+    def open_case(cid: str, kind: str, level: int, deadline: datetime, chain: list[str], token: str = "",
+                  **extra) -> dict:
+        # the token travels up with each Escalation; only a CaseUpdate that echoes it closes a rung's copy
         case = {"id": cid, "kind": kind, "level": level, "status": "open", "holder": role, "deadline": deadline,
-                "chain": chain + [role], **extra}
+                "chain": chain + [role], "token": token or secrets.token_hex(8), **extra}
         state["cases"][cid] = case
         ref = state["roster"].get(extra.get("shift_id") or "")
         label = f"{when(ref)} at {DEPARTMENTS[extra['dept']]['name'].split(' (')[0]}" if ref and extra.get("dept") else None
@@ -236,9 +270,12 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
     # ---------- shift lead: a same-day call-out from a mascot in this department ----------
     @app.post("/trade")
     async def trade(t: TradeRequest) -> dict:
-        if spec["kind"] != "lead" or t.shift_id not in state["roster"]:
-            raise HTTPException(404, "not a shift this shift lead runs")
-        ref = state["roster"][t.shift_id]
+        ref = state["roster"].get(t.shift_id)
+        if (spec["kind"] != "lead" or ref is None or ref.owner != t.agent_id
+                or ref.employer != DEPARTMENTS[spec["dept"]]["employer"]):
+            raise HTTPException(404, "not a shift of yours that this shift lead runs")
+        if case_of(f"case-{t.shift_id}"):
+            return {}  # already on it: the same request twice opens one case
         deadline = clock.now() + timedelta(minutes=spec["minutes"])
         case = open_case(f"case-{t.shift_id}", "uncovered_callout", 1, deadline, [], shift_id=t.shift_id,
                          owner=ref.owner, dept=spec["dept"])
@@ -272,7 +309,7 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
     async def escalate(e: Escalation) -> dict:
         prev = case_of(e.case_id)
         ref = state["roster"].get(e.shift_id or "")
-        case = open_case(e.case_id, e.kind, e.level, e.deadline, (prev or {}).get("chain", []),
+        case = open_case(e.case_id, e.kind, e.level, e.deadline, (prev or {}).get("chain", []), token=e.token,
                          shift_id=e.shift_id, owner=ref.owner if ref else None,
                          dept=e.shift_id.split("-")[0] if e.shift_id else None)
         case["chain"] = sorted({*case["chain"], *lower_rungs(e)})
@@ -303,7 +340,8 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
     @app.post("/case")
     async def case_update(u: CaseUpdate) -> dict:
         case = case_of(u.case_id)
-        if case and case["status"] in ("open", "moved up"):
+        # only a rung above that held it can close my copy: the rung holding a case closes it itself
+        if case and case["status"] == "moved up" and u.token == case["token"]:
             case["status"] = u.outcome
             phone_add(f"Closed above you ({u.outcome}). Nothing more to do.", kind="info")
         return {}
@@ -333,14 +371,16 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
             # safety skips the ladder: straight to Student Employment, and the manager gets the same report
             event("org_escalate", case_id=cid, frm=role, to="hr", level=4, rule="safety_first",
                   deadline=(clock.now() + timedelta(minutes=ROLES["hr"]["minutes"])).isoformat(timespec="minutes"))
-            await net.post(f"{reg['org']['hr']}/issue", r)
-            phone_add(f"Safety report from {who}, sent straight to Student Employment as well: \"{r.text}\"")
+            token = secrets.token_hex(8)
             state["cases"][cid] = {"id": cid, "kind": "safety", "level": 2, "status": "moved up", "holder": "hr",
-                                   "deadline": clock.now(), "chain": [role]}
+                                   "deadline": clock.now(), "chain": [role], "token": token}
+            await net.post(f"{reg['org']['hr']}/issue", r.model_copy(update={"token": token}))
+            phone_add(f"Safety report from {who}, sent straight to Student Employment as well: \"{r.text}\"")
             return {}
         deadline = clock.now() + timedelta(minutes=spec["minutes"])
+        # a forwarded safety report keeps the manager's token, so Student Employment's close reaches them
         case = open_case(cid, "safety" if r.category == "safety" else "issue", 4 if spec["kind"] == "hr" else 2,
-                         deadline, [], dept=None)
+                         deadline, [], token=r.token if spec["kind"] == "hr" else "", dept=None)
         case.update(issue_id=r.issue_id, reporter=r.agent_id)
         if spec["kind"] == "hr":
             case["chain"] = sorted({*case["chain"], *[DEPARTMENTS[d]["manager"] for d in DEPARTMENTS]})
@@ -375,18 +415,16 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
     async def handle_tap(data: str) -> str:
         verb, _, cid = data.partition(":")
         case = case_of(cid)
-        if not case or case["status"] not in ("open",):
+        if not case or case["status"] not in ("open", "overdue"):  # overdue stays open until someone closes it
             return "That's already handled."
         for m in state["phone"]:  # one answer per card
             if any(b["data"] == data for b in m["buttons"]):
                 m["buttons"] = []
         if verb == "offer":
-            case["status"] = "acting"
+            was, case["status"] = case["status"], "acting"
             reply = await offer(case)
             if case["status"] == "acting":
-                case["status"] = "open"
-                if clock.now() >= case["deadline"]:
-                    spawn(climb(case, "no_answer_30m"))
+                case["status"] = was  # open: this rung's timer moves it up at the deadline; overdue stays overdue
         elif verb == "close":
             await close(case, "closed")
             reply = "Closed. The student stays excused under your call-out policy; the shift is marked open."
@@ -418,7 +456,7 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
         return {"id": role, **{k: spec.get(k) for k in ("name", "title", "kind", "dept", "pet_id", "up", "minutes")},
                 "answers": state["auto"],
                 "cases": [{k: (v.isoformat(timespec="minutes") if isinstance(v, datetime) else v)
-                           for k, v in c.items()} for c in state["cases"].values()],
+                           for k, v in c.items() if k != "token"} for c in state["cases"].values()],
                 "phone": [{"n": i + 1, **m} for i, m in enumerate(state["phone"])]}
 
     @app.post("/admin/reset")

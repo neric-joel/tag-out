@@ -46,6 +46,10 @@ class Intake(BaseModel):
     text: str
 
 
+class PetChoice(BaseModel):
+    pet_id: str
+
+
 class Auto(BaseModel):
     enabled: bool
     delay: float = 1.5
@@ -67,6 +71,9 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
         seed(store, sid)
     owner_token = store.get("owner_token") or secrets.token_urlsafe(16)
     store.put("owner_token", owner_token)
+    if db_path is None:  # a real process: leave the token where only this machine's bot can read it
+        (RUNTIME / "tokens").mkdir(parents=True, exist_ok=True)
+        (RUNTIME / "tokens" / f"{sid}.txt").write_text(owner_token)
 
     async def to_phone(msg: dict) -> None:
         try:
@@ -180,6 +187,14 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
         reply = f"Noted: {got}. Only 'busy' ever leaves me."
         store.send({"kind": "reply", "text": reply, "buttons": [], "engine": engine})
         return {"reply": reply, "engine": engine, "events": len(blocks)}
+
+    @app.post("/pet")
+    async def pet(body: PetChoice, x_owner_token: str | None = Header(None)) -> dict:
+        """The student's own pick. Cosmetic only; the bot keeps picks unique per roster."""
+        owner(x_owner_token)
+        st = store.student()
+        store.save_student(st.model_copy(update={"pet_id": body.pet_id}))
+        return {"reply": f"Done. Your mascot is now {body.pet_id.replace('-', ' ')}."}
 
     @app.get("/phone")
     async def phone(since: int = 0, x_owner_token: str | None = Header(None)) -> dict:

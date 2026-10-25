@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tag Out · Library roster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/web/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23121212'/%3E%3Cpath d='M9 11h14M16 11v12' stroke='%23fff' stroke-width='3.2' stroke-linecap='round'/%3E%3Ccircle cx='23.5' cy='21.5' r='3' fill='%231d5fbf'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="debug-banner" id="debugBanner" hidden>Judge view. Synthetic students: private numbers are shown for the demo only. In real use each student sees only their own.</div>
+
+<header class="topbar">
+  <a class="brand" href="/" aria-label="Tag Out home">
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M9 11h14M16 11v12"/><circle cx="23.5" cy="21.5" r="3"/></svg>
+    <span class="wordmark">Tag Out</span>
+  </a>
+  <span class="scope">Library front desk <span class="sep">/</span> week of Oct 26, 2026</span>
+  <nav class="tabs" aria-label="Views">
+    <a href="/" id="tabArena">Arena</a>
+    <a href="/judge" id="tabJudge">Judge view</a>
+  </nav>
+  <div class="live" id="live"><span class="dot"></span><span id="liveText">Connecting</span></div>
+</header>
+
+<main class="canvas">
+  <section class="titlerow">
+    <div>
+      <h1>This week's collisions</h1>
+      <p class="finding" id="finding">Mascots check every student's week on Sunday and trade shifts so nobody loses pay or breaks a limit their employer can't see.</p>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btnReset" type="button" data-debug>Reset demo</button>
+      <button class="btn" id="btnSunday" type="button">Run Sunday check</button>
+      <button class="btn primary" id="btnRun" type="button">Start trade rounds</button>
+    </div>
+  </section>
+
+  <section class="kpis" aria-label="This week">
+    <div class="kpi lead"><span class="label">Collisions fixed</span><span class="value num" id="kFixed">0<small> of 0</small></span></div>
+    <div class="kpi"><span class="label">Pay kept by trading</span><span class="value num" id="kPay">$0</span></div>
+    <div class="kpi"><span class="label">Rule breaks</span><span class="value num" id="kBreaks">0</span></div>
+    <div class="kpi"><span class="label">Open, no safe trade</span><span class="value num" id="kOpen">0</span></div>
+  </section>
+
+  <div class="grid">
+    <section class="panel arena" aria-labelledby="arenaTitle">
+      <header class="panel-head">
+        <h2 id="arenaTitle">Trade table</h2>
+        <p class="status" id="roundStatus" aria-live="polite">Waiting for the Sunday check.</p>
+      </header>
+      <div class="arena-stage" id="stage">
+        <canvas id="arenaCanvas" aria-label="Six mascots at the trade table" role="img"></canvas>
+      </div>
+      <footer class="arena-key" id="arenaKey">
+        <span><i class="k pick"></i>a pick: "I'd take that shift"</span>
+        <span><i class="k ring"></i>a closed ring: everyone keeps their hours</span>
+        <span><i class="k chain"></i>a cover chain</span>
+        <span class="muted">A pass looks the same whatever the reason.</span>
+      </footer>
+    </section>
+
+    <section class="panel board" aria-labelledby="boardTitle">
+      <header class="panel-head">
+        <h2 id="boardTitle">Library roster</h2>
+        <div class="legend" id="boardLegend">
+          <span><i class="m req"></i>wants a trade</span>
+          <span><i class="m moved"></i>traded in</span>
+          <span><i class="m covered"></i>covered</span>
+          <span><i class="m open"></i>open</span>
+        </div>
+      </header>
+      <div class="board-grid" id="board" role="table" aria-label="Shifts by person and day"></div>
+      <p class="board-note">Everyone on the roster sees who works which shift. Nobody sees why a shift is up for trade.</p>
+    </section>
+  </div>
+
+  <section class="phones-row" id="phonesRow" data-debug aria-labelledby="phonesTitle">
+    <header class="section-head">
+      <h2 id="phonesTitle">Phones</h2>
+      <p class="muted">Each student only ever sees their own phone. Tap the buttons or text a mascot here, or on Telegram.</p>
+    </header>
+    <div class="phones" id="phones"></div>
+  </section>
+
+  <div class="grid lower">
+    <section class="panel log" aria-labelledby="logTitle">
+      <header class="panel-head"><h2 id="logTitle">Round log</h2><span class="muted small" id="logCount">0 events</span></header>
+      <ol class="events" id="events"></ol>
+    </section>
+
+    <section class="panel sim" aria-labelledby="simTitle">
+      <header class="panel-head"><h2 id="simTitle">On a 40-person roster</h2><span class="muted small" id="simMeta">simulation</span></header>
+      <div id="sim"></div>
+    </section>
+  </div>
+
+  <section class="panel judge" id="judgePanel" hidden aria-labelledby="judgeTitle">
+    <header class="panel-head">
+      <h2 id="judgeTitle">Private limits, as each mascot sees its own student</h2>
+      <button class="btn danger" id="btnBreak" type="button">Break it: change Dev's week before commit</button>
+    </header>
+    <div class="judge-grid">
+      <table class="limits" id="limits"><caption class="sr-only">Hours and limits per student</caption></table>
+      <div class="forecast" id="forecast"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <p><strong>Not legal or immigration advice.</strong> Your DSO and ASU Student Employment decide. Rules are cited; limits are configurable. Students and schedules here are synthetic.</p>
+  <p class="credits" id="credits">Mascots from Codex Pets.</p>
+</footer>
+
+<script src="/web/js/sprites.js"></script>
+<script src="/web/js/app.js"></script>
+</body>
+</html>

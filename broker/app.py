@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
 import os
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from core.wire import SundayCheck, TradeRequest, Vote
 from seeds.scenario import BREAK_IT_EDIT, DEMO_MONDAY, STUDENTS
 
 WEB = Path(__file__).resolve().parent.parent / "web"
+mimetypes.add_type("image/webp", ".webp")  # Windows has no default type for it
 
 
 def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing | None = None,
@@ -184,6 +186,18 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         if not debug():
             raise HTTPException(403)
         return await net.post(f"{reg['agents'][who]}/intake", {"text": body["text"]})
+
+    @app.get("/sim")
+    async def sim() -> JSONResponse:
+        path = WEB.parent / "docs" / "simulation.json"
+        if not path.exists():
+            raise HTTPException(404, "run python -m sim.simulate")
+        return JSONResponse(json.loads(path.read_text(encoding="utf-8")))
+
+    @app.get("/forecast")
+    async def forecast() -> dict:
+        """The Steward's crunch forecast (counts only), relayed for the dashboard."""
+        return await net.get(f"{reg['steward']}/forecast")
 
     @app.get("/")
     async def index() -> FileResponse:

@@ -44,20 +44,24 @@ def _event(cal, uid: str, summary: str, start: datetime, end: datetime, categori
     cal.add_component(ev)
 
 
-def shift_id(start: datetime) -> str:
-    return f"{EMPLOYER}-{start:%a}-{start:%m%d}-{start:%H%M}".lower()
+def shift_id(start: datetime, desk: int) -> str:
+    """Stable roster id: the slot plus the desk position, since two people can staff the same slot."""
+    return f"{EMPLOYER}-{start:%a}-{start:%m%d}-{start:%H%M}-d{desk}".lower()
 
 
 def build() -> None:
     ICS.mkdir(parents=True, exist_ok=True)
     roster = _cal("Library roster (synthetic)")
+    desks: dict[datetime, int] = {}
     for s in STUDENTS:
         sid = s["id"]
         job = _cal(f"{s['name']} - Library shifts (synthetic)")
         for day, a, b in s["library_shifts"]:
             st, en = _dt(day, (a, 0)), _dt(day, (b, 0))
-            _event(job, f"{shift_id(st)}@tagout", "Library desk shift", st, en)
-            _event(roster, f"{shift_id(st)}@tagout", f"Library desk shift - {s['name']}", st, en)
+            desks[st] = desks.get(st, 0) + 1
+            uid = shift_id(st, desks[st])
+            _event(job, f"{uid}@tagout", "Library desk shift", st, en)
+            _event(roster, f"{uid}@tagout", f"Library desk shift - {s['name']}", st, en)
         (ICS / f"{sid}_library.ics").write_bytes(job.to_ical())
 
         personal = _cal(f"{s['name']} - personal (synthetic)")

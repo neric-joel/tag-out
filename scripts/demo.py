@@ -74,7 +74,7 @@ def beat_break(pause: float) -> dict:
     post("/admin/auto", {"enabled": False, "agents": ["dev"], "delay": 1.5})
     post("/demo/sunday")
     time.sleep(pause + 2.5)
-    httpx.post(f"{B}/phone/dev/tap", json={"data": "trade:yes:library-fri-1030-1000"}, timeout=10)
+    httpx.post(f"{B}/phone/dev/tap", json={"data": "trade:yes:library-fri-1030-1000-d1"}, timeout=10)
     start = len(events())
     post("/demo/run")
     prep = wait_for("prepare", start)

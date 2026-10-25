@@ -17,7 +17,7 @@ No packages. `scripts/tagout.py` uses only the Python 3.12 standard library.
 Once per student:
 
 1. Ask for their Tag Out mascot address and their owner token, using Cubbie's **secure input** (the token is a
-   secret; name the field `TAGOUT_OWNER_TOKEN`). The student finds both on the Tag Out site under their mascot.
+   secret; name the field `TAGOUT_OWNER_TOKEN`). The student gets both by sending `/cubbie` to the Tag Out Telegram bot from their own linked chat.
 2. Run `python scripts/tagout.py setup --mascot-url <address>`. The script reads the token from the
    `TAGOUT_OWNER_TOKEN` environment variable and saves both under `~/.config/tag-out/` (file mode 600).
 3. Offer a **weekly check-in every Sunday at 6 PM** in the student's time zone and create it only after they say yes.

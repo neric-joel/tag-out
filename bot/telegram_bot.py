@@ -67,7 +67,7 @@ class TagOutBot:
         self.app = Application.builder().token(token).build()
         for cmd, fn in [("start", self.start), ("join", self.join), ("pet", self.pet), ("week", self.week),
                         ("diary", self.diary), ("sunday", self.sunday), ("trade", self.trade),
-                        ("help", self.start)]:
+                        ("cubbie", self.cubbie), ("help", self.start)]:
             self.app.add_handler(CommandHandler(cmd, fn))
         self.app.add_handler(CallbackQueryHandler(self.on_tap))
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_text))
@@ -98,6 +98,21 @@ class TagOutBot:
     async def pet(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Mascots live on the Tag Out website: open it, click \"Pets\" and pick "
                                         "yours. No two people on a roster share one.")
+
+    async def cubbie(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        """Connection details for the Tag Out Cubbie Skill, sent only to the student's own linked chat."""
+        who = self.links.who(update.effective_chat.id)
+        if not who or who == "manager":
+            await update.message.reply_text("Link a student first: /join ana")
+            return
+        token = self.token(who).get("X-Owner-Token")
+        if not token:
+            await update.message.reply_text("Your mascot isn't running yet. Try again in a minute.")
+            return
+        await update.message.reply_text(
+            "To let your Cubbie talk to your mascot, give Cubbie these when it asks (use its secure input for the "
+            f"token; it is like a password):\n\nMascot address: {self.url(who)}\nTAGOUT_OWNER_TOKEN: {token}\n\n"
+            "Delete this message afterwards.")
 
     async def week(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         who = self.links.who(update.effective_chat.id)

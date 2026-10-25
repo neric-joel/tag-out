@@ -578,10 +578,11 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 #viewCommons > .kpis { margin-top: var(--gap); }
 /* the org chart: centered in its column when it's scaled to fit the window */
 .org-stage { left: 50%; margin-left: -600px; transform-origin: 50% 0; }
-/* one screen tall: the commons and the chat, so every mascot and the whole chat stay in view during a round.
-   --screen is the window's height in the page's own pixels (app.js sets it; the demo video zooms the page). */
+/* the commons and the chat fill the rest of the first screen under the title, so every mascot and the whole
+   chat are in view as soon as the page opens. --screen is the window's height in the page's own pixels and
+   --grid-top where the commons starts (app.js sets both; the demo video zooms the page). */
 @media (min-width: 1101px) {
-  #viewCommons > .grid:not(.lower) { height: clamp(520px, calc(var(--screen, 100vh) - 88px), 900px); grid-template-rows: minmax(0, 1fr); }
+  #viewCommons > .grid:not(.lower) { height: clamp(430px, calc(var(--screen, 100vh) - var(--grid-top, 72px) - 16px), 900px); grid-template-rows: minmax(0, 1fr); }
   #viewCommons > .grid:not(.lower) > .panel { min-height: 0; }
   #viewCommons .stage { min-height: 0; }
 }

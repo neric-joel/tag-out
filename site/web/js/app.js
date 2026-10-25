@@ -169,10 +169,16 @@
     release(ids) { if (!world) return; (ids || [...S.gathered]).forEach((i) => S.gathered.delete(i)); world.release(ids); },
   };
   function setStatus(html) { $("#roundStatus").innerHTML = html; }
-  // the window's height in the page's own pixels (the demo video zooms the whole page), for panels sized to fit it
+  // the window's height in the page's own pixels (the demo video zooms the whole page), and where the commons
+  // starts on the page, so the commons and the chat fit the first screen under the title
   function fitScreen() {
-    const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-    document.documentElement.style.setProperty("--screen", innerHeight / z + "px");
+    const root = document.documentElement, z = parseFloat(getComputedStyle(root).zoom) || 1;
+    root.style.setProperty("--screen", innerHeight / z + "px");
+    const grid = $("#viewCommons > .grid");
+    if (!grid || !grid.offsetParent) return;
+    let top = 0;
+    for (let el = grid; el; el = el.offsetParent) top += el.offsetTop;
+    root.style.setProperty("--grid-top", top + "px");
   }
   // when something starts moving in a panel, scroll just enough to show all of it
   function reveal(sel) {
@@ -629,6 +635,7 @@
     if (v === "agents") ensureFlow();
     if (v === "org") ensureOrg();
     if (v === "commons" && world) world.setPetHeight(+store.get("tagout.size", 96));
+    if (v === "commons") fitScreen();
   }
   function renderPill() {
     const r = role();
@@ -880,6 +887,7 @@
   // ---------- controls ----------
   function wire() {
     fitScreen(); addEventListener("resize", fitScreen); addEventListener("load", fitScreen);
+    new ResizeObserver(fitScreen).observe(document.body); // a banner or a longer summary moves the commons down
     $("#btnSunday").addEventListener("click", () => { reveal("#viewCommons > .grid"); post("/demo/sunday").catch(() => {}); });
     $("#btnRun").addEventListener("click", () => { reveal("#viewCommons > .grid"); post("/demo/run").catch(() => {}); });
     $("#btnReset").addEventListener("click", () => post("/admin/reset").catch(() => {}));

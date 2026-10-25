@@ -41,7 +41,8 @@
     let hover = null, pointer = null;
 
     function geometry() {
-      const effective = Math.min(size, width * 0.34, height * 0.48);
+      // a short commons (it fits the first screen) gets smaller pets, so all sixteen still have room to roam
+      const effective = Math.min(size, width * 0.34, height * 0.25);
       top = Math.min(height * 0.48, Math.max(100, effective * 1.08 + 30));
       band = Math.max(1, height - top - 58);
     }
@@ -78,7 +79,7 @@
     }
     function dimensions(p) {
       // Keep the world usable on narrow embeds; perspective is tied to ground depth.
-      const h = Math.min(size, width * 0.34, height * 0.48) * (0.88 + p.y * 0.18);
+      const h = Math.min(size, width * 0.34, height * 0.25) * (0.88 + p.y * 0.18);
       return { h, w: h * 192 / 208 };
     }
     function point(p) { return { x: p.x * width, y: top + p.y * band }; }
@@ -525,6 +526,13 @@
       clearLinks(style) { if (!dead) links.forEach((v, k) => { if (style === undefined || v.style === style) links.delete(k); }); },
       badge(id, value) { withPet(id, p => { p.badge = value === "yes" || value === "no" ? value : null; }); },
       pets() { return Array.from(pets.values(), p => ({ id: p.id, x: p.x, y: p.y, state: p.state })); },
+      // where a pet stands on the page (its middle, in client px): for the end-to-end tests and the demo video
+      where(id) {
+        const p = pets.get(id);
+        if (!p) return null;
+        const r = canvas.getBoundingClientRect(), b = point(p), d = dimensions(p);
+        return { x: r.left + b.x * r.width / width, y: r.top + (b.y - d.h / 2) * r.height / height };
+      },
       destroy() {
         if (dead) return;
         dead = true; if (raf) cancelAnimationFrame(raf); observer.disconnect();

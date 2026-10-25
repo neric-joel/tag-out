@@ -169,6 +169,18 @@
     release(ids) { if (!world) return; (ids || [...S.gathered]).forEach((i) => S.gathered.delete(i)); world.release(ids); },
   };
   function setStatus(html) { $("#roundStatus").innerHTML = html; }
+  // the window's height in the page's own pixels (the demo video zooms the whole page), for panels sized to fit it
+  function fitScreen() {
+    const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+    document.documentElement.style.setProperty("--screen", innerHeight / z + "px");
+  }
+  // when something starts moving in a panel, scroll just enough to show all of it
+  function reveal(sel) {
+    const el = $(sel);
+    if (!el || el.closest("[hidden]")) return;
+    const b = el.getBoundingClientRect();
+    if (b.top < 0 || b.bottom > innerHeight) el.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
   // the five-step tracker above the numbers: where the week is, at a glance
   const RAIL = { sunday_check: 1, trade_request: 1, round_open: 2, round: 2, picks: 2, cycle: 3, chain: 3, prepare: 4, vote: 4, commit: 5 };
   function rail(ev) {
@@ -867,8 +879,9 @@
 
   // ---------- controls ----------
   function wire() {
-    $("#btnSunday").addEventListener("click", () => post("/demo/sunday").catch(() => {}));
-    $("#btnRun").addEventListener("click", () => post("/demo/run").catch(() => {}));
+    fitScreen(); addEventListener("resize", fitScreen); addEventListener("load", fitScreen);
+    $("#btnSunday").addEventListener("click", () => { reveal("#viewCommons > .grid"); post("/demo/sunday").catch(() => {}); });
+    $("#btnRun").addEventListener("click", () => { reveal("#viewCommons > .grid"); post("/demo/run").catch(() => {}); });
     $("#btnReset").addEventListener("click", () => post("/admin/reset").catch(() => {}));
     $("#btnBreak").addEventListener("click", () => post("/demo/break").catch(() => {}));
     if ($("#btnPets")) $("#btnPets").addEventListener("click", () => openPets(chat.who === "manager" ? "ana" : chat.who));
@@ -888,12 +901,12 @@
     });
     $("#mgrMeeting").addEventListener("click", async () => { await post("/manager/meeting", {}).catch(() => {}); setTimeout(renderMgr, 400); });
     $("#mgrSwapRule").addEventListener("change", (e) => post("/manager/tap", { data: e.target.checked ? "rule:swaps:on" : "rule:swaps:off" }).then(renderMgr).catch(() => {}));
-    $("#agSunday").addEventListener("click", () => post("/demo/sunday").catch(() => {}));
-    $("#agRun").addEventListener("click", () => post("/demo/run").catch(() => {}));
-    $("#agSnoop").addEventListener("click", snoop);
-    $("#orgPlay").addEventListener("click", () => post("/demo/org/morning").catch(() => {}));
-    $("#orgSafety").addEventListener("click", () => post("/demo/org/safety").catch(() => {}));
-    $("#orgQuestion").addEventListener("click", () => post("/demo/org/question").catch(() => {}));
+    $("#agSunday").addEventListener("click", () => { reveal("#flow .tof-viewport"); post("/demo/sunday").catch(() => {}); });
+    $("#agRun").addEventListener("click", () => { reveal("#flow .tof-viewport"); post("/demo/run").catch(() => {}); });
+    $("#agSnoop").addEventListener("click", () => { reveal("#flow .tof-viewport"); snoop(); });
+    $("#orgPlay").addEventListener("click", () => { reveal("#viewOrg .org-panel"); post("/demo/org/morning").catch(() => {}); });
+    $("#orgSafety").addEventListener("click", () => { reveal("#viewOrg .org-panel"); post("/demo/org/safety").catch(() => {}); });
+    $("#orgQuestion").addEventListener("click", () => { reveal("#viewOrg .org-panel"); post("/demo/org/question").catch(() => {}); });
     $("#compose").addEventListener("submit", async (e) => {
       e.preventDefault();
       const input = $("#composeInput"), text = input.value.trim(); if (!text) return;

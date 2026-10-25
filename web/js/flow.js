@@ -255,7 +255,7 @@
       if (legacy) {
         base = 720;
         w = Math.max(base, available);
-        h = Math.max(w * 7 / 16, 70 + students.length * 76, 360);
+        h = Math.max(70 + students.length * 76, 360);  // as tall as its rows need, so it fits on one screen
         const xs = [12, w * .214, w * .452, w * .715, w - Math.max(124, w * .15) - 12];
         const ws = [w * .15, w * .19, w * .237, w * .212, Math.max(124, w * .15)];
         shown.forEach((c, i) => { c.x = xs[i]; c.w = ws[i]; });

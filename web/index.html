@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/web/css/app.css?v=22">
+<link rel="stylesheet" href="/web/css/app.css?v=23">
 <link rel="stylesheet" href="/web/css/flow.css?v=16">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23121212' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='%23fff' d='M11.2 7.3C14.8 7.1 22.4 6.8 26.1 7.2C27.6 7.4 28.3 8.3 28.4 9.8C28.6 13.6 28.7 18.4 28.3 22.1C28.1 23.7 27.2 24.5 25.7 24.6C21.9 24.9 14.9 24.8 11.4 24.6C10.5 24.5 9.9 24.1 9.3 23.4L4.6 17.4C4 16.6 4 15.6 4.7 14.8L9.2 8.4C9.7 7.7 10.3 7.3 11.2 7.3Z'/%3E%3Ccircle cx='9.7' cy='16' r='1.6'/%3E%3Cpath d='M8.6 15.1C6.4 12.5 4.6 8.9 2.7 5.1'/%3E%3Cpath d='M14.4 12.2C17.3 11.9 20.6 11.9 23.5 12.3M19.1 12.1C18.9 14.9 19.1 17.9 19.3 20.7'/%3E%3C/svg%3E">
 </head>
@@ -60,12 +60,6 @@
     <li data-step="4"><b>4</b>Everyone confirms<span>each student, then the manager</span></li>
     <li data-step="5"><b>5</b>Roster updated<span>pay kept, no limit broken</span></li>
   </ol>
-  <section class="kpis" aria-label="This week">
-    <div class="kpi lead"><span class="label">Collisions fixed</span><span class="value num" id="kFixed">0<small> of 0</small></span></div>
-    <div class="kpi"><span class="label">Pay kept by trading</span><span class="value num" id="kPay">$0</span></div>
-    <div class="kpi"><span class="label">Private limit re-checks</span><span class="value num" id="kChecks">0</span></div>
-    <div class="kpi"><span class="label">Open, no safe trade</span><span class="value num" id="kOpen">0</span></div>
-  </section>
 
   <div class="grid">
     <section class="panel commons" aria-labelledby="commonsTitle">
@@ -102,6 +96,12 @@
     </section>
   </div>
 
+  <section class="kpis" aria-label="This week">
+    <div class="kpi lead"><span class="label">Collisions fixed</span><span class="value num" id="kFixed">0<small> of 0</small></span></div>
+    <div class="kpi"><span class="label">Pay kept by trading</span><span class="value num" id="kPay">$0</span></div>
+    <div class="kpi"><span class="label">Private limit re-checks</span><span class="value num" id="kChecks">0</span></div>
+    <div class="kpi"><span class="label">Open, no safe trade</span><span class="value num" id="kOpen">0</span></div>
+  </section>
   <div class="grid lower">
     <section class="panel board" aria-labelledby="boardTitle">
       <header class="panel-head">
@@ -307,9 +307,9 @@
 </footer>
 
 <script src="/web/js/world.js?v=16"></script>
-<script src="/web/js/flow.js?v=22"></script>
-<script src="/web/js/org.js?v=7"></script>
+<script src="/web/js/flow.js?v=23"></script>
+<script src="/web/js/org.js?v=8"></script>
 <script src="/web/js/sprites.js?v=15"></script>
-<script src="/web/js/app.js?v=33"></script>
+<script src="/web/js/app.js?v=40"></script>
 </body>
 </html>

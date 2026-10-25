@@ -98,7 +98,15 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         if not debug():
             raise HTTPException(403)
         bus.emit("wire", **describe(reg, str(body.get("method", "POST")), str(body["url"]), body.get("payload"),
-                                    int(body.get("status", 0)), body.get("response")))
+                                    int(body.get("status", 0)), body.get("response"), sender=body.get("sender")))
+        return {}
+
+    @app.post("/admin/event")
+    async def org_event(body: dict) -> dict:
+        """Events from the campus hierarchy's process (scripts/run_org.py), for the org chart (debug only)."""
+        if not debug() or not str(body.get("type", "")).startswith("org_"):
+            raise HTTPException(403)
+        bus.emit(body.pop("type"), **body)
         return {}
 
     @app.post("/demo/snoop")
@@ -230,6 +238,31 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
 
         spawn(go())
         return {"started": True}
+
+    @app.post("/demo/org/{which}")
+    async def org_demo(which: str) -> dict:
+        """The org chart's buttons, live: the student texts their own mascot, and the hierarchy takes it from there.
+        "morning" runs all three, one after another."""
+        from seeds.org import ORG_DEMO
+
+        if not debug() or (which not in ORG_DEMO and which != "morning"):
+            raise HTTPException(404)
+
+        async def one(key: str) -> None:
+            who, text = ORG_DEMO[key]
+            n = len(bus.history)
+            await net.post(f"{who_url(who)}/intake", {"text": text})
+            for _ in range(1200):  # wait for that case to close before the next text
+                if any(e["type"] in ("org_done", "org_overdue") for e in bus.history[n:]):
+                    return
+                await asyncio.sleep(0.1)
+
+        async def go() -> None:
+            for key in (ORG_DEMO if which == "morning" else [which]):
+                await one(key)
+                await asyncio.sleep(1.0)
+        spawn(go())
+        return {"started": which}
 
     @app.post("/demo/break")
     async def break_it() -> dict:

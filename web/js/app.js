@@ -41,7 +41,8 @@
   }
   const shiftLabel = (id) => (S.roster[id] ? span(S.roster[id]) : id);
   const shortLabel = (id) => { const r = S.roster[id]; return r ? `${dayOf(new Date(r.start))} ${span(r, true)}` : id; };
-  const name = (id) => S.names[id] || (id === "steward" ? "the manager" : id);
+  const ORGN = {}; // the campus hierarchy's people (seeds/org.py), filled from /org
+  const name = (id) => S.names[id] || ORGN[id] || (id === "steward" ? "the manager" : id);
   const cap = (s) => s[0].toUpperCase() + s.slice(1);
   function listNames(ids) { const n = ids.map(name); return n.length < 2 ? n.join("") : n.slice(0, -1).join(", ") + " and " + n[n.length - 1]; }
   const money = (v) => "$" + Math.round(v).toLocaleString("en-US");
@@ -74,7 +75,10 @@
   const REPLAY = { "/demo/sunday": ["tour", null, "week"], "/demo/run": ["tour", null, "week"], "/demo/break": ["breakit"],
     "/demo/snoop": ["tour", "supervisor-meeting", "snoop"],
     "/manager/extra": ["tour", "callout", "extra", "Replaying the recorded run: the manager posted Thu 6-10 PM and every mascot was offered it."],
-    "/manager/meeting": ["tour", "issue", "team-meeting", "Replaying the recorded run: the manager looked for a team meeting time."] };
+    "/manager/meeting": ["tour", "issue", "team-meeting", "Replaying the recorded run: the manager looked for a team meeting time."],
+    "/demo/org/morning": ["org", null, null, "Replaying the recorded morning: a call-out nobody could cover, a safety report and an F-1 question."],
+    "/demo/org/safety": ["org", "callout", "safety", "Replaying the recorded safety report: Tess told her mascot the fire exit was blocked."],
+    "/demo/org/question": ["org", "safety", "question", "Replaying the recorded question: Kofi asked his mascot about winter-break hours on his F-1."] };
   const CHIP = { sick: ["tour", "week", "callout", "Replaying the recorded call-out: Ben texted that he woke up sick."],
     printer: ["tour", "extra", "issue", "Replaying the recorded report: Ana told her mascot the printer was broken."],
     supervisor: ["tour", "team-meeting", "supervisor-meeting", "Replaying the recorded request: Priya asked for a meeting with her supervisor."] };
@@ -160,9 +164,11 @@
   function onEvent(ev) {
     live = live || Date.parse(ev.ts) > BOOT - 1500;
     if (ev.type === "wire") { feedWire(ev); return; }
+    if (ev.type.startsWith("org_")) { orgFeed(ev); return; }
     if (flow && live) flowState(ev);
     switch (ev.type) {
       case "reset":
+        orgLog.length = 0; if (org) org.reset();
         Object.assign(S, { requested: new Set(), moved: {}, open: new Set(), votes: {}, summary: null, committed: [], checks: 0, passed: 0 });
         requesters.clear();
         $("#events").innerHTML = ""; $("#logCount").textContent = "0 items";
@@ -328,6 +334,8 @@
       case "extra_open": return `The manager posted an extra shift. Every mascot is offered it.`;
       case "snoop": if (ev.results) showSnoop(ev.results); return `A nosy broker asked every mascot why it passed. The schemas rejected every question.`;
       case "reset": return "Demo reset.";
+      case "org_escalate": return `<span class="tr">Moved up</span>: ${name(ev.frm)} → ${name(ev.to)} (${{ no_cover_2h: "no cover in 2 h", no_answer_30m: "no answer in 30 min", safety_first: "safety report" }[ev.rule] || ev.rule}).`;
+      case "org_done": return ev.outcome === "covered" ? `<span class="ok">Covered</span> by ${name(ev.taker)}, approved by ${name(ev.by)}.` : `${name(ev.by)}: <span class="ok">${ev.outcome}</span>.`;
       default: return null;
     }
   }
@@ -350,6 +358,8 @@
       case "summary": return ["Broker", "Done"];
       case "extra_open": return ["Manager", "Posted"];
       case "snoop": return ["Judge", "Refused"];
+      case "org_escalate": return [name(ev.to), "Moved up"];
+      case "org_done": return [name(ev.by), "Done"];
       case "schedule_edited": return [name(ev.agent), "Changed"];
       default: return ["", ""];
     }
@@ -562,8 +572,8 @@
   }
 
   // ---------- pages: sign in, a student's own page, the manager's page, how the agents talk ----------
-  const VIEWS = { commons: "#viewCommons", me: "#viewStudent", manager: "#viewManager", agents: "#viewAgents" };
-  const TAB = { commons: "#tabArena", me: "#tabMe", manager: "#tabMgr", agents: "#tabAgents" };
+  const VIEWS = { commons: "#viewCommons", me: "#viewStudent", manager: "#viewManager", org: "#viewOrg", agents: "#viewAgents" };
+  const TAB = { commons: "#tabArena", me: "#tabMe", manager: "#tabMgr", org: "#tabOrg", agents: "#tabAgents" };
   const role = () => store.get(ROLE_KEY, null);
   function route() {
     let v = (location.hash || "#commons").slice(1);
@@ -580,7 +590,8 @@
     if (v === "me") { meChat.reset(role()); renderMe(); }
     if (v === "manager") renderMgr();
     if (v === "agents") ensureFlow();
-    if (v === "commons" && world) world.setPetHeight(+store.get("tagout.size", 120));
+    if (v === "org") ensureOrg();
+    if (v === "commons" && world) world.setPetHeight(+store.get("tagout.size", 96));
   }
   function renderPill() {
     const r = role();
@@ -686,6 +697,26 @@
     $("#mgrLists").innerHTML = block("Open shifts", open.concat(extras), "None.") + block("Reports", issues, "No reports.") + block("Meetings", meets, "None scheduled.");
   }
 
+  // the org chart (web/js/org.js), fed by the hierarchy's events and its wire messages
+  let org = null, orgData = null;
+  const orgLog = []; // events from before the chart was opened, replayed into it without animation
+  function orgFeed(ev) {
+    orgLog.push(ev); if (orgLog.length > 600) orgLog.shift();
+    if (org) org.event(ev, live);
+    logEvent(ev);
+  }
+  async function ensureOrg() {
+    if (org || !window.TagOutOrg) return;
+    let d = orgData;
+    if (!d) { try { d = orgData = await get("/org"); } catch (_) { $("#org").innerHTML = '<p class="muted">The campus hierarchy is not running here. Start it with <code>python -m scripts.run_all</code>.</p>'; return; } }
+    d.students.forEach((p) => { ORGN[p.id] = p.name; });
+    Object.values(d.roles).forEach((r) => { ORGN[r.id] = r.name; });
+    $("#org").innerHTML = "";
+    org = TagOutOrg.create($("#org"), { data: d, judge: JUDGE && S.debug, name, shift: (id) => id,
+      phoneOf: async (id) => ((await get(`/phone/${id === "steward" ? "manager" : id}`)).messages || []) });
+    orgLog.forEach((ev) => org.event(ev, false));
+  }
+
   // the agent graph, fed by the broker's wire events
   const NODE = (id) => (PEOPLE.includes(id) || id === "broker" || id === "steward" ? id : null);
   function ensureFlow() {
@@ -723,6 +754,7 @@
     return 0;
   }
   function feedWire(ev) {
+    if (org) org.wire(ev, live && !ev.quiet);
     if (ev.status < 400) {
       leak.msgs++;
       leak.fields += countKeys(ev.payload) + countKeys(ev.response);
@@ -807,7 +839,7 @@
     $("#petQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); searchPets(); } });
     $("#petFor").addEventListener("change", searchPets);
     const size = $("#petSize");
-    size.value = store.get("tagout.size", 120);
+    size.value = store.get("tagout.size", 96);
     size.addEventListener("input", () => { if (world) world.setPetHeight(+size.value); store.set("tagout.size", +size.value); });
     $("#whoPill").addEventListener("click", openSignIn);
     window.addEventListener("hashchange", route);
@@ -822,6 +854,9 @@
     $("#agSunday").addEventListener("click", () => post("/demo/sunday").catch(() => {}));
     $("#agRun").addEventListener("click", () => post("/demo/run").catch(() => {}));
     $("#agSnoop").addEventListener("click", snoop);
+    $("#orgPlay").addEventListener("click", () => post("/demo/org/morning").catch(() => {}));
+    $("#orgSafety").addEventListener("click", () => post("/demo/org/safety").catch(() => {}));
+    $("#orgQuestion").addEventListener("click", () => post("/demo/org/question").catch(() => {}));
     $("#compose").addEventListener("submit", async (e) => {
       e.preventDefault();
       const input = $("#composeInput"), text = input.value.trim(); if (!text) return;
@@ -847,7 +882,7 @@
       $("#btnPets").remove();
       const note = document.createElement("div");
       note.className = "static-banner";
-      note.innerHTML = 'Hosted demo: a recording of the real system, where six mascot processes, a broker and the Library Steward really traded these messages. Press <b>Play the week</b>, then sign in as a student or the manager. Run it live with one command: <a href="https://github.com/neric-joel/tag-out">github.com/neric-joel/tag-out</a>.';
+      note.innerHTML = 'Hosted demo: a recording of the real system, where 16 student mascots, a broker, the Library Steward and the campus hierarchy really traded these messages. Press <b>Play the week</b>, then sign in as a student or the manager, or open the <b>Org chart</b>. Run it live with one command: <a href="https://github.com/neric-joel/tag-out">github.com/neric-joel/tag-out</a>.';
       document.body.prepend(note);
     }
     const [st, ag] = await Promise.all([get("/state"), get("/agents")]);
@@ -857,9 +892,18 @@
     document.querySelectorAll("[data-debug]").forEach((el) => { el.hidden = !S.debug; });
     $("#tabJudge").hidden = !S.debug;
     $("#tabMe").hidden = $("#tabMgr").hidden = $("#whoPill").hidden = !S.debug; // role pages need the synthetic demo
-    world = PetWorld.create($("#world"), { petHeight: +store.get("tagout.size", 120), onSelect: (id) => { if (S.debug) openChat(id); } });
+    world = PetWorld.create($("#world"), { petHeight: +store.get("tagout.size", 96), onSelect: (id) => { if (S.debug) openChat(id); } });
     window.tagOutWorld = world; // handy in the console during the demo
     world.setPets(PEOPLE.filter((p) => p in S.names).map((p) => ({ id: p, name: S.names[p], petId: S.pets[p] || "debug-duck-v2" })));
+    // the rest of campus wanders the commons too: Dining and Rec center student workers, each with their own pet
+    get("/org").then((o) => {
+      orgData = o;
+      o.students.forEach((p) => { ORGN[p.id] = p.name; });
+      Object.values(o.roles).forEach((r) => { ORGN[r.id] = r.name; });
+      const more = o.students.filter((p) => !PEOPLE.includes(p.id)).map((p) => ({ id: p.id, name: p.name, petId: p.pet_id }));
+      if (more.length) world.setPets(PEOPLE.filter((p) => p in S.names).map((p) => ({ id: p, name: S.names[p], petId: S.pets[p] || "debug-duck-v2" })).concat(more));
+    }).catch(() => { /* no hierarchy running (live mode without it) */ });
+    if (JUDGE) document.querySelectorAll('.tabs a[href^="#"]').forEach((a) => { a.href = "/" + a.getAttribute("href"); }); // tabs lead out of the judge view
 
     if (JUDGE && S.debug) { $("#debugBanner").hidden = false; $("#judgePanel").hidden = false; buildPhones(); renderJudge(); setInterval(renderJudge, 4000); }
     renderKpis(); renderBoard(); renderSim(); wire(); route();

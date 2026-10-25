@@ -120,7 +120,11 @@ def committed(adds: list[Shift], drops: list[Shift], week: list[Shift] | None = 
              "standing rule for swaps did).", ""]
     lines += [f"You gave: {d.label}" for d in drops] + [f"You took: {a.label}" for a in adds]
     if week:
-        lines.append("Your Library week now: " + ", ".join(s.label for s in sorted(week, key=lambda s: s.start)) + ".")
+        jobs = {s.employer for s in week}
+        employer = {"library": "Library ", "dining": "Dining ", "rec center": "Rec center "}.get(jobs.pop(), "") \
+            if len(jobs) == 1 else ""
+        lines.append(f"Your {employer}week now: "
+                     + ", ".join(s.label for s in sorted(week, key=lambda s: s.start)) + ".")
     lines += ["", "Enter your time in Workday as usual for the shifts you work."]
     return "\n".join(lines)
 

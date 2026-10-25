@@ -1,6 +1,6 @@
 """Record the real system for the hosted replay (site/data/*.json): every agent ran, nothing is scripted by hand.
 
-    python -m scripts.record          # writes site/data/tour.json and site/data/breakit.json
+    python -m scripts.record          # writes site/data/tour.json, breakit.json and org.json
 
 Each recording holds the public event stream, every phone message with its time, and snapshots of what each page
 asks the broker for, taken after each step. The hosted site replays them; `python -m scripts.run_all` runs it live.
@@ -18,16 +18,19 @@ os.environ["TAGOUT_OFFLINE"] = "1"  # texts are parsed by the regex fallback or 
 
 from broker.engine import Timing  # noqa: E402
 from scripts.inproc import System  # noqa: E402
+from seeds.org import ORG_DEMO, ORG_STUDENTS  # noqa: E402
 from seeds.scenario import STUDENTS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "site" / "data"
 PEOPLE = [s["id"] for s in STUDENTS]
 PACE = Timing(pick_deadline=0.4, ask_window=1.5, vote_timeout=15.0, between=0.5)
+ORG_MINUTE = 0.03  # real seconds per story minute for the hierarchy: its two-hour timer plays in 3.6 s
 
 
 async def snapshot(s: System) -> dict:
-    paths = ["/state", "/agents", "/manager/state", "/admin/judge", "/admin/baseline", "/forecast", "/sim", "/quotes"]
+    paths = ["/state", "/agents", "/manager/state", "/admin/judge", "/admin/baseline", "/forecast", "/sim", "/quotes",
+             "/org"]
     paths += [f"/me/{p}" for p in PEOPLE]
     out = {}
     for path in paths:
@@ -52,7 +55,8 @@ def summary_after(s: System, n: int, kind: str):
 
 
 async def record(name: str, steps) -> None:
-    s = System(timing=PACE, auto_delay=0.8, tmp=Path(tempfile.mkdtemp(prefix=f"tagout-{name}-")))
+    s = System(timing=PACE, auto_delay=0.8, tmp=Path(tempfile.mkdtemp(prefix=f"tagout-{name}-")),
+               org_minute=ORG_MINUTE)
     checkpoints = [{"label": "start", "n": 0, "snap": await snapshot(s)}]
     try:
         for label, step in steps:
@@ -60,8 +64,9 @@ async def record(name: str, steps) -> None:
             await asyncio.sleep(1.0)
             checkpoints.append({"label": label, "n": len(s.bus.history), "snap": await snapshot(s)})
             print(f"  {name}: {label} ({len(s.bus.history)} events)")
-        phones = {p: s.store(p).outbox() for p in PEOPLE}
+        phones = {p: s.store(p).outbox() for p in PEOPLE + [o["id"] for o in ORG_STUDENTS]}
         phones["manager"] = [{"n": i + 1, **m} for i, m in enumerate(s.steward.state.s["phone"])]
+        phones |= {r: [{"n": i + 1, **m} for i, m in enumerate(a.state.s["phone"])] for r, a in s.org.items()}
         data = {"name": name, "events": s.bus.history, "phones": phones, "checkpoints": checkpoints}
         OUT.mkdir(parents=True, exist_ok=True)
         (OUT / f"{name}.json").write_text(json.dumps(data, default=str), encoding="utf-8")
@@ -120,6 +125,29 @@ async def snoop(s: System) -> None:
     await s.post("/demo/snoop")
 
 
+# ----- the campus hierarchy (org/app.py), recorded on its own: org.json -----
+def org_done_after(s: System, n: int):
+    return lambda: any(e["type"] == "org_done" for e in s.bus.history[n:])
+
+
+async def org_text(s: System, who: str, text: str) -> None:
+    n = len(s.bus.history)
+    await s.net.post(f"{s.reg['org'][who]}/intake", {"text": text})
+    await until(org_done_after(s, n), 60)
+
+
+async def org_callout(s: System) -> None:
+    await org_text(s, *ORG_DEMO["callout"])
+
+
+async def org_safety(s: System) -> None:
+    await org_text(s, *ORG_DEMO["safety"])
+
+
+async def org_question(s: System) -> None:
+    await org_text(s, *ORG_DEMO["question"])
+
+
 async def break_it(s: System) -> None:
     await s.post("/admin/auto", {"enabled": False, "agents": ["dev"], "delay": 0.8})
     await s.post("/demo/sunday")
@@ -158,6 +186,8 @@ async def try_message(who: str, text: str, tmp: Path | None = None) -> dict:
                 await until(lambda: any("Your manager saw your report" in m["text"] for m in s.phone(who)), 10)
             elif kind == "meeting":
                 await until(manager_said(s, "booked a"), 10)
+            elif kind == "visa":
+                await until(org_done_after(s, n), 10)
             else:
                 await asyncio.sleep(0.5)
         except TimeoutError:
@@ -177,6 +207,7 @@ async def main() -> None:
                           ("issue", issue), ("team-meeting", team_meeting), ("supervisor-meeting", supervisor_meeting),
                           ("snoop", snoop)])
     await record("breakit", [("break-it", break_it)])
+    await record("org", [("callout", org_callout), ("safety", org_safety), ("question", org_question)])
 
 
 if __name__ == "__main__":

@@ -100,6 +100,13 @@ ROLES: dict[str, dict] = {
              "kind": "issc", "dept": None, "pet_id": "owl", "up": None, "minutes": 2 * 24 * 60},
 }
 
+# The three things that happen on the demo morning, as each student texts their own mascot.
+ORG_DEMO = {
+    "callout": ("lena", "I woke up sick, can't make my Saturday shift"),
+    "safety": ("tess", "The fire exit by the weight room is blocked with boxes again, it's unsafe"),
+    "question": ("kofi", "Can I work 40 hours over winter break on my F-1 if I graduate in December?"),
+}
+
 # The story clock for the hierarchy: cases start on Saturday morning of the demo week.
 CAMPUS_START = datetime(2026, 10, 31, 6, 30, tzinfo=PHX)
 

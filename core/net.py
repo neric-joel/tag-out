@@ -54,10 +54,12 @@ class Net:
             body = None
         self.hook(method, url, payload, r.status_code, body)
 
-    def report_to(self, broker: str) -> None:
-        """Debug only: copy each peer message this process sends to the broker's agent graph."""
+    def report_to(self, broker: str, sender: str | None = None) -> None:
+        """Debug only: copy each peer message this process sends to the broker's agent graph. `sender` names
+        agents whose messages don't say who sent them (the campus hierarchy)."""
         def send(method: str, url: str, payload: dict | None, status: int, body: Any) -> None:
-            report = {"method": method, "url": url, "payload": payload, "status": status, "response": body}
+            report = {"method": method, "url": url, "payload": payload, "status": status, "response": body,
+                      "sender": sender}
             t = asyncio.get_running_loop().create_task(self.client.post(f"{broker}/admin/wire", json=report))
             self.tasks.add(t)
             t.add_done_callback(self.tasks.discard)

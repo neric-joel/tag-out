@@ -1,4 +1,5 @@
-"""Start the whole system as separate processes: 6 mascots, the Steward, the Broker (+ arena) and the Telegram bot.
+"""Start the whole system as separate processes: 6 Library mascots, the Steward, the Broker (+ arena), the campus
+hierarchy (10 more mascots and the role agents above them, scripts/run_org.py) and the Telegram bot.
 
     python -m scripts.run_all                # auto mode: synthetic students tap their own buttons
     python -m scripts.run_all --mode live    # wait for real taps (Telegram or the on-screen phones)
@@ -22,6 +23,7 @@ import httpx
 
 from core.net import RUNTIME
 from ingest.llm import secret
+from seeds.org import ROLES
 from seeds.scenario import STUDENTS
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,8 +31,12 @@ PY = sys.executable
 
 
 def write_registry() -> dict:
+    from scripts.run_org import ports
+
+    org = {who: f"http://127.0.0.1:{p}" for who, p in ports().items()} | {"steward": "http://127.0.0.1:8701"}
     reg = {"agents": {s["id"]: f"http://127.0.0.1:{s['port']}" for s in STUDENTS},
-           "broker": "http://127.0.0.1:8700", "steward": "http://127.0.0.1:8701", "bot": "http://127.0.0.1:8702"}
+           "broker": "http://127.0.0.1:8700", "steward": "http://127.0.0.1:8701", "bot": "http://127.0.0.1:8702",
+           "org": org, "coordinators": {f"org-{r}-": org[r] for r in ROLES if r != "steward"}}
     RUNTIME.mkdir(parents=True, exist_ok=True)
     (RUNTIME / "registry.json").write_text(json.dumps(reg, indent=1))
     return reg
@@ -92,7 +98,10 @@ def main() -> None:
                              logs / f"mascot_{s['id']}.log"))
     procs.append(uvicorn("steward.app:app", 8701, base | {"TAGOUT_ROLE": "steward"}, logs / "steward.log"))
     procs.append(uvicorn("broker.app:app", 8700, base | {"TAGOUT_ROLE": "broker"}, logs / "broker.log"))
-    wait_up([f"{u}/public" for u in reg["agents"].values()] + [f"{reg['steward']}/roster", f"{reg['broker']}/agents"])
+    procs.append(subprocess.Popen([PY, "-m", "scripts.run_org"], cwd=ROOT, env=base,
+                                  stdout=(logs / "org.log").open("w"), stderr=subprocess.STDOUT))
+    wait_up([f"{u}/public" for u in reg["agents"].values()] + [f"{reg['steward']}/roster", f"{reg['broker']}/agents"]
+            + [f"{u}/phone" for r, u in reg["org"].items() if r != "steward"])
     bot_on = False
     if not args.no_bot and secret("TELEGRAM_BOT_TOKEN"):
         procs.append(subprocess.Popen([PY, "-m", "bot.telegram_bot"], cwd=ROOT, env=base,
@@ -102,7 +111,8 @@ def main() -> None:
             bot_on = True
         except SystemExit:
             print("Telegram bot did not start (see runtime/logs/bot.log); continuing with on-screen phones.")
-    print(f"Tag Out is up ({args.mode} mode). 6 mascots on :8711-8716, steward :8701, broker :8700"
+    print(f"Tag Out is up ({args.mode} mode). 6 Library mascots on :8711-8716, steward :8701, broker :8700, "
+          "campus hierarchy :8721-8738"
           + (", Telegram bot on" if bot_on else ", no Telegram bot"))
     print("Commons: http://127.0.0.1:8700        Judge view: http://127.0.0.1:8700/judge")
     if bot_on:

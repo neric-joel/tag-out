@@ -7,16 +7,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/web/css/app.css?v=16">
+<link rel="stylesheet" href="/web/css/app.css?v=18">
 <link rel="stylesheet" href="/web/css/flow.css?v=15">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23121212'/%3E%3Cpath d='M9 11h14M16 11v12' stroke='%23fff' stroke-width='3.2' stroke-linecap='round'/%3E%3Ccircle cx='23.5' cy='21.5' r='3' fill='%231d5fbf'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23121212' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='%23fff' d='M11.2 7.3C14.8 7.1 22.4 6.8 26.1 7.2C27.6 7.4 28.3 8.3 28.4 9.8C28.6 13.6 28.7 18.4 28.3 22.1C28.1 23.7 27.2 24.5 25.7 24.6C21.9 24.9 14.9 24.8 11.4 24.6C10.5 24.5 9.9 24.1 9.3 23.4L4.6 17.4C4 16.6 4 15.6 4.7 14.8L9.2 8.4C9.7 7.7 10.3 7.3 11.2 7.3Z'/%3E%3Ccircle cx='9.7' cy='16' r='1.6'/%3E%3Cpath d='M8.6 15.1C6.4 12.5 4.6 8.9 2.7 5.1'/%3E%3Cpath d='M14.4 12.2C17.3 11.9 20.6 11.9 23.5 12.3M19.1 12.1C18.9 14.9 19.1 17.9 19.3 20.7'/%3E%3C/svg%3E">
 </head>
 <body>
-<div class="debug-banner" id="debugBanner" hidden>Judge view. Synthetic students: private numbers are shown for the demo only. In real use each student sees only their own.</div>
+<div class="debug-banner" id="debugBanner" hidden><span>Judge view. Synthetic students: private numbers are shown for the demo only. In real use each student sees only their own.</span> <a class="exit" href="/">Exit judge view</a></div>
 
 <header class="topbar">
   <a class="brand" href="/" aria-label="Tag Out home">
-    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9"/><path d="M9 11h14M16 11v12"/><circle cx="23.5" cy="21.5" r="3"/></svg>
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><path class="tag" d="M11.2 7.3C14.8 7.1 22.4 6.8 26.1 7.2C27.6 7.4 28.3 8.3 28.4 9.8C28.6 13.6 28.7 18.4 28.3 22.1C28.1 23.7 27.2 24.5 25.7 24.6C21.9 24.9 14.9 24.8 11.4 24.6C10.5 24.5 9.9 24.1 9.3 23.4L4.6 17.4C4 16.6 4 15.6 4.7 14.8L9.2 8.4C9.7 7.7 10.3 7.3 11.2 7.3Z"/><circle cx="9.7" cy="16" r="1.6"/><path d="M8.6 15.1C6.4 12.5 4.6 8.9 2.7 5.1"/><path d="M14.4 12.2C17.3 11.9 20.6 11.9 23.5 12.3M19.1 12.1C18.9 14.9 19.1 17.9 19.3 20.7"/></svg>
     <span class="wordmark">Tag Out</span>
   </a>
   <span class="scope">Library front desk <span class="sep">/</span> week of Oct 26, 2026</span>
@@ -24,6 +24,7 @@
     <a href="#commons" id="tabArena">Commons</a>
     <a href="#me" id="tabMe">Student</a>
     <a href="#manager" id="tabMgr">Manager</a>
+    <a href="#org" id="tabOrg">Org chart</a>
     <a href="#agents" id="tabAgents">How it works</a>
     <a href="/judge" id="tabJudge">Judge view</a>
   </nav>
@@ -60,11 +61,11 @@
           <p class="status" id="roundStatus" aria-live="polite">The mascots are hanging out until Sunday's check.</p>
         </div>
         <div class="tools">
-          <label class="size"><span>Size</span><input type="range" id="petSize" min="48" max="200" step="2" value="120" aria-label="Mascot size"></label>
+          <label class="size"><span>Size</span><input type="range" id="petSize" min="48" max="200" step="2" value="96" aria-label="Mascot size"></label>
           <button class="btn small-btn" id="btnPets" type="button" data-debug>Pets</button>
         </div>
       </header>
-      <div class="stage" id="stage"><canvas id="world" aria-label="Six mascots living in the commons" role="img"></canvas></div>
+      <div class="stage" id="stage"><canvas id="world" aria-label="Sixteen student mascots living in the commons" role="img"></canvas></div>
       <footer class="arena-key">
         <span><i class="k pick"></i>a pick: "I'd take that shift"</span>
         <span><i class="k ring"></i>a closed ring: everyone keeps their hours</span>
@@ -138,6 +139,7 @@
         <input type="text" id="meInput" placeholder="Message your mascot" aria-label="Message to your mascot">
         <button class="btn primary" type="submit">Send</button>
       </form>
+      <details class="why-tg-mini"><summary>Why Telegram?</summary><p class="muted small">It's your private line to your own mascot: push alerts when the site is closed, one tap to confirm or decline, and your reasons never leave the chat. No new app, and the bot only messages chats that sent it /start.</p></details>
     </section>
     <section class="panel me-private" aria-labelledby="mePrivTitle">
       <header class="panel-head"><h2 id="mePrivTitle">Private to you</h2></header>
@@ -148,7 +150,7 @@
 
  <div class="view" id="viewManager" hidden>
   <section class="me-head">
-    <svg class="mgr-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9"/><path d="M9 11h14M16 11v12"/><circle cx="23.5" cy="21.5" r="3"/></svg>
+    <svg class="mgr-mark" viewBox="0 0 32 32" aria-hidden="true"><path class="tag" d="M11.2 7.3C14.8 7.1 22.4 6.8 26.1 7.2C27.6 7.4 28.3 8.3 28.4 9.8C28.6 13.6 28.7 18.4 28.3 22.1C28.1 23.7 27.2 24.5 25.7 24.6C21.9 24.9 14.9 24.8 11.4 24.6C10.5 24.5 9.9 24.1 9.3 23.4L4.6 17.4C4 16.6 4 15.6 4.7 14.8L9.2 8.4C9.7 7.7 10.3 7.3 11.2 7.3Z"/><circle cx="9.7" cy="16" r="1.6"/><path d="M8.6 15.1C6.4 12.5 4.6 8.9 2.7 5.1"/><path d="M14.4 12.2C17.3 11.9 20.6 11.9 23.5 12.3M19.1 12.1C18.9 14.9 19.1 17.9 19.3 20.7"/></svg>
     <div>
       <h1>Library front desk, manager</h1>
       <p class="finding">You see the roster, approvals, open shifts and reports. You never see why someone asked for a trade or their hours at other jobs. Each approval card says which limits every student's mascot checked, and when.</p>
@@ -192,6 +194,21 @@
   </section>
  </div>
 
+ <div class="view" id="viewOrg" hidden>
+  <section class="titlerow">
+    <div>
+      <h1>When nobody can cover</h1>
+      <p class="finding">16 student workers in three departments, 3 shift leads, 3 managers, a backup manager, Student Employment and ISSC: 25 agents, each with its own pet. A case climbs one rung each time a timer runs out, and silence never approves anything. Only the shift and the rule that moved it climb; the reason stays with the student's mascot.</p>
+    </div>
+    <div class="actions">
+      <button class="btn" id="orgSafety" type="button">Safety report</button>
+      <button class="btn" id="orgQuestion" type="button">F-1 question</button>
+      <button class="btn primary" id="orgPlay" type="button">Play the morning</button>
+    </div>
+  </section>
+  <section class="panel org-panel" aria-label="Org chart"><div id="org"><p class="muted">Loading the org chart…</p></div></section>
+ </div>
+
  <div class="view" id="viewAgents" hidden>
   <section class="titlerow">
     <div>
@@ -212,6 +229,15 @@
   </section>
   <p class="snoop-note" id="snoopNote" hidden></p>
   <div id="flow"></div>
+  <section class="panel why-tg" aria-labelledby="whyTgTitle">
+    <header class="panel-head"><h2 id="whyTgTitle">Why Telegram</h2><span class="muted small">the student's private line to their own mascot</span></header>
+    <ul class="why-list">
+      <li><b>It reaches you when the site is closed.</b> The Sunday "your shift collides" text and a same-day call-out arrive as push alerts.</li>
+      <li><b>One tap is the human step.</b> Confirm, Decline, Take it, Approve: nothing moves until the student (and the manager) taps.</li>
+      <li><b>Reasons stay private.</b> "I'm sick" or "interview" goes only to your own mascot. Other agents get a shift id and a yes or no.</li>
+      <li><b>No new app.</b> It works on any phone today, and the bot only messages chats that registered themselves with /start. Cubbie users can use the included Cubbie Skill instead.</li>
+    </ul>
+  </section>
   <section class="panel claims" id="claims" aria-labelledby="claimsTitle">
     <header class="panel-head"><h2 id="claimsTitle">Sources and claims</h2><span class="muted small">every number on this site, and where it comes from</span></header>
     <table class="ledger" id="ledger"></table>
@@ -266,10 +292,11 @@
   <p><strong>Not legal or immigration advice.</strong> Your DSO and ASU Student Employment decide. Rules are cited; limits are configurable. Students and schedules here are synthetic.</p>
 </footer>
 
-<script>window.TAGOUT_STATIC = true; const TAGOUT_SHEETS = {"kitsune-spirit": "https://codex-pets.net/assets/pets/v/1792744884248/kitsune-spirit/spritesheet.webp", "tide-kraken": "https://codex-pets.net/assets/pets/v/1792744941586/tide-kraken/spritesheet.webp", "crystal-kirin": "https://codex-pets.net/assets/pets/v/1792744924538/crystal-kirin/spritesheet.webp", "moon-phoenix": "https://codex-pets.net/assets/pets/v/1792744905088/moon-phoenix/spritesheet.webp", "storm-griffin": "https://codex-pets.net/assets/pets/v/1792744867266/storm-griffin/spritesheet.webp", "frost-yeti": "https://codex-pets.net/assets/pets/v/1792744847355/frost-yeti/spritesheet.webp", "ember-dragon": "https://codex-pets.net/assets/pets/v/1792744831101/ember-dragon/spritesheet.webp", "thunder-roc": "https://codex-pets.net/assets/pets/v/1792744742035/thunder-roc/spritesheet.webp", "raccoon": "https://codex-pets.net/assets/pets/v/1792588968157/raccoon/spritesheet.webp", "kumo": "https://codex-pets.net/assets/pets/v/1792589263611/kumo/spritesheet.webp", "nori": "https://codex-pets.net/assets/pets/v/1780482787379/nori/spritesheet.webp", "ali": "https://codex-pets.net/assets/pets/v/1792742095674/ali/spritesheet.webp", "biscuit": "https://codex-pets.net/assets/pets/v/1792748035258/biscuit/spritesheet.webp", "white": "https://codex-pets.net/assets/pets/v/1790581357760/white/spritesheet.webp", "cappy": "https://codex-pets.net/assets/pets/v/1777716783783/cappy/spritesheet.webp", "rook": "https://codex-pets.net/assets/pets/v/1777717655324/rook/spritesheet.webp", "rusty": "https://codex-pets.net/assets/pets/v/1777720068012/rusty/spritesheet.webp", "debug-duck-v2": "https://codex-pets.net/assets/pets/v/1790855975750/debug-duck-v2/spritesheet.webp"}; window.TAGOUT_PET_URL = (id) => TAGOUT_SHEETS[id] || '';</script>
+<script>window.TAGOUT_STATIC = true; const TAGOUT_SHEETS = {"kitsune-spirit": "https://codex-pets.net/assets/pets/v/1792744884248/kitsune-spirit/spritesheet.webp", "tide-kraken": "https://codex-pets.net/assets/pets/v/1792744941586/tide-kraken/spritesheet.webp", "crystal-kirin": "https://codex-pets.net/assets/pets/v/1792744924538/crystal-kirin/spritesheet.webp", "moon-phoenix": "https://codex-pets.net/assets/pets/v/1792744905088/moon-phoenix/spritesheet.webp", "storm-griffin": "https://codex-pets.net/assets/pets/v/1792744867266/storm-griffin/spritesheet.webp", "frost-yeti": "https://codex-pets.net/assets/pets/v/1792744847355/frost-yeti/spritesheet.webp", "ember-dragon": "https://codex-pets.net/assets/pets/v/1792744831101/ember-dragon/spritesheet.webp", "thunder-roc": "https://codex-pets.net/assets/pets/v/1792744742035/thunder-roc/spritesheet.webp", "raccoon": "https://codex-pets.net/assets/pets/v/1792588968157/raccoon/spritesheet.webp", "kumo": "https://codex-pets.net/assets/pets/v/1792589263611/kumo/spritesheet.webp", "nori": "https://codex-pets.net/assets/pets/v/1780482787379/nori/spritesheet.webp", "ali": "https://codex-pets.net/assets/pets/v/1792742095674/ali/spritesheet.webp", "biscuit": "https://codex-pets.net/assets/pets/v/1792748035258/biscuit/spritesheet.webp", "white": "https://codex-pets.net/assets/pets/v/1790581357760/white/spritesheet.webp", "cappy": "https://codex-pets.net/assets/pets/v/1777716783783/cappy/spritesheet.webp", "rook": "https://codex-pets.net/assets/pets/v/1777717655324/rook/spritesheet.webp", "rusty": "https://codex-pets.net/assets/pets/v/1777720068012/rusty/spritesheet.webp", "folio": "https://codex-pets.net/assets/pets/v/1786355219448/folio/spritesheet.webp", "kite": "https://codex-pets.net/assets/pets/v/1786824186765/kite/spritesheet.webp", "red-fox-cub": "https://codex-pets.net/assets/pets/v/1792589141102/red-fox-cub/spritesheet.webp", "owl": "https://codex-pets.net/assets/pets/v/1792593184107/owl/spritesheet.webp", "bruno": "https://codex-pets.net/assets/pets/v/1792588996213/bruno/spritesheet.webp", "bramble": "https://codex-pets.net/assets/pets/v/1792593371389/bramble/spritesheet.webp", "goldie": "https://codex-pets.net/assets/pets/v/1792588723084/goldie/spritesheet.webp", "rivet": "https://codex-pets.net/assets/pets/v/1784961462548/rivet/spritesheet.webp", "debug-duck-v2": "https://codex-pets.net/assets/pets/v/1790855975750/debug-duck-v2/spritesheet.webp"}; window.TAGOUT_PET_URL = (id) => TAGOUT_SHEETS[id] || '';</script>
 <script src="/web/js/world.js?v=15"></script>
 <script src="/web/js/flow.js?v=21"></script>
+<script src="/web/js/org.js?v=3"></script>
 <script src="/web/js/sprites.js?v=14"></script>
-<script src="/web/js/app.js?v=21"></script>
+<script src="/web/js/app.js?v=24"></script>
 </body>
 </html>

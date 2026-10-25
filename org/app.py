@@ -156,7 +156,8 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
         txn = f"org-{role}-{state['n']}"
         moves = [Move(shift_id=ref.shift_id, from_agent=ref.owner, to_agent=taker)]
         crew = [ref.owner, taker]
-        t = {"votes": {}, "ballots": {a: secrets.token_hex(4) for a in crew}, "done": asyncio.Event(), "crew": crew}
+        t = {"votes": {}, "ballots": {a: secrets.token_hex(4) for a in crew}, "done": asyncio.Event(), "crew": crew,
+             "case": case["id"]}
         state["txns"][txn] = t
         event("org_hold", case_id=case["id"], txn_id=txn, members=crew)
         for a in crew:
@@ -185,7 +186,7 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
         if not t or v.agent_id not in t["crew"] or v.ballot != t["ballots"][v.agent_id]:
             return  # a vote that doesn't echo its ballot doesn't count
         t["votes"][v.agent_id] = v.vote
-        event("org_vote", txn_id=v.txn_id, agent=v.agent_id, vote=v.vote)
+        event("org_vote", case_id=t["case"], txn_id=v.txn_id, agent=v.agent_id, vote=v.vote)
         if v.vote != "yes" or set(t["votes"]) == set(t["crew"]):
             t["done"].set()
 
@@ -225,8 +226,11 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
         case = {"id": cid, "kind": kind, "level": level, "status": "open", "holder": role, "deadline": deadline,
                 "chain": chain + [role], **extra}
         state["cases"][cid] = case
-        event("org_case", case_id=cid, kind=kind, level=level, holder=role, deadline=deadline.isoformat(
-            timespec="minutes"), **{k: v for k, v in extra.items() if k in ("shift_id", "owner", "dept")})
+        ref = state["roster"].get(extra.get("shift_id") or "")
+        label = f"{when(ref)} at {DEPARTMENTS[extra['dept']]['name'].split(' (')[0]}" if ref and extra.get("dept") else None
+        event("org_case", case_id=cid, kind=kind, level=level, holder=role, shift_label=label,
+              deadline=deadline.isoformat(timespec="minutes"),
+              **{k: v for k, v in extra.items() if k in ("shift_id", "owner", "dept")})
         return case
 
     # ---------- shift lead: a same-day call-out from a mascot in this department ----------

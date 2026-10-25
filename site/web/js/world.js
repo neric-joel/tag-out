@@ -16,6 +16,15 @@
   const random = (a, b) => a + Math.random() * (b - a);
   const running = state => state.indexOf("running") === 0;
   const font = (px, weight = 400) => `${weight} ${px}px "IBM Plex Sans", sans-serif`;
+  const SHEET_SCALE = 0.5;
+  function shrink(img, k) {
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const g = c.getContext("2d");
+    g.imageSmoothingQuality = "high";
+    g.drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  }
 
   function create(canvas, opts = {}) {
     const ctx = canvas.getContext("2d");
@@ -58,6 +67,9 @@
           if (dead) return;
           entry.ready = entry.img.naturalWidth >= 1536 && entry.img.naturalHeight >= 1872;
           entry.v2 = entry.img.naturalHeight === 2288;
+          // Draw from a half-size copy made once: a full sheet is ~14 MB decoded, and many of them at once
+          // overflow the browser's image cache, so it would decode every sheet again on every frame.
+          if (entry.ready) entry.src = shrink(entry.img, SHEET_SCALE);
         };
         entry.img.onerror = () => { entry.ready = false; };
         entry.img.src = window.TAGOUT_PET_URL ? window.TAGOUT_PET_URL(p.petId)
@@ -320,7 +332,8 @@
         ctx.save(); ctx.translate(a.x, a.y - lift);
         if (p.left && row !== 1 && row !== 2 && row < 9) ctx.scale(-1, 1);
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(entry.img, col * 192, row * 208, 192, 208, -w / 2, -h, w, h);
+        const k = entry.src ? SHEET_SCALE : 1;
+        ctx.drawImage(entry.src || entry.img, col * 192 * k, row * 208 * k, 192 * k, 208 * k, -w / 2, -h, w, h);
         ctx.restore();
       } else ellipse(a.x, a.y - h * 0.4 - lift, w * 0.34, h * 0.36, "#d9d6d0");
       if (p.badge) {

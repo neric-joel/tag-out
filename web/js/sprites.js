@@ -12,12 +12,19 @@
     walking: "running-right", failed: "failed",
   };
   const cache = new Map();
+  const BADGE_SCALE = 0.25;
 
   function load(petId) {
     if (cache.has(petId)) return cache.get(petId);
     const img = new Image();
     const entry = { img, ok: false, failed: false };
-    img.onload = () => { entry.ok = true; };
+    img.onload = () => {
+      // badges are small: draw from a quarter-size copy so many sheets don't thrash the image cache
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * BADGE_SCALE); c.height = Math.round(img.naturalHeight * BADGE_SCALE);
+      const g = c.getContext("2d"); g.imageSmoothingQuality = "high"; g.drawImage(img, 0, 0, c.width, c.height);
+      entry.src = c; entry.ok = true;
+    };
     img.onerror = () => { entry.failed = true; };
     img.src = window.TAGOUT_PET_URL ? window.TAGOUT_PET_URL(petId) : `/web/pets/${petId}/spritesheet.webp`;
     cache.set(petId, entry);
@@ -33,7 +40,8 @@
     const col = reduce ? 0 : Math.floor((t / 1000) * fps) % frames;
     ctx.save();
     if (flip) { ctx.translate(x + w, y); ctx.scale(-1, 1); x = 0; y = 0; }
-    ctx.drawImage(e.img, col * CELL_W, row * CELL_H, CELL_W, CELL_H, x, y, w, h);
+    const k = e.src ? BADGE_SCALE : 1;
+    ctx.drawImage(e.src || e.img, col * CELL_W * k, row * CELL_H * k, CELL_W * k, CELL_H * k, x, y, w, h);
     ctx.restore();
     return true;
   }

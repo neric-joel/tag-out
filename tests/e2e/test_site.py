@@ -112,6 +112,52 @@ def test_how_it_works_counts_messages_and_finds_no_leak(page, base_url):
     assert page.errors == []
 
 
+def test_org_chart_plays_the_morning_up_the_ladder(page, base_url):
+    page.goto(base_url + "/#org", wait_until="domcontentloaded")
+    ready(page)
+    expect(page.locator(".org-node")).to_have_count(25, timeout=30_000)  # 16 students, 3 leads, 6 people above
+    page.get_by_role("button", name="Play the morning").click()
+    case = page.locator(".org-case").last
+    expect(case).to_contain_text("up to Dining manager", timeout=30_000)
+    expect(case).to_contain_text("silence counts as no", timeout=30_000)
+    expect(case).to_contain_text("Covered: Omar takes it", timeout=30_000)
+    expect(page.locator(".org-case")).to_have_count(3, timeout=30_000)
+    expect(page.locator("#orgCases")).to_contain_text("safety report skips the ladder")
+    page.locator(".org-node[data-id='backup']").click()
+    expect(page.locator("#orgInbox")).to_contain_text("didn't answer in 30 minutes")
+    assert page.errors == []
+
+
+def test_judge_view_has_a_way_back_out(page, base_url):
+    if "127.0.0.1" in base_url:
+        pytest.skip("the /judge rewrite only exists on Vercel")
+    page.goto(base_url + "/judge", wait_until="domcontentloaded")
+    ready(page)
+    page.get_by_role("link", name="Exit judge view").click()
+    expect(page).to_have_url(re.compile(r"/$"))
+    page.goto(base_url + "/judge", wait_until="domcontentloaded")
+    ready(page)
+    page.get_by_role("link", name="Org chart").click()
+    expect(page.locator("#viewOrg")).to_be_visible()
+    assert page.errors == []
+
+
+def test_agent_graph_blocks_can_be_dragged(page, base_url):
+    page.goto(base_url + "/#agents", wait_until="domcontentloaded")
+    ready(page)
+    broker = page.locator(".tof-node-broker")
+    before = broker.bounding_box()
+    page.mouse.move(before["x"] + 40, before["y"] + 20)
+    page.mouse.down()
+    page.mouse.move(before["x"] + 140, before["y"] + 90, steps=8)
+    page.mouse.up()
+    after = broker.bounding_box()
+    assert after["x"] > before["x"] + 50 and after["y"] > before["y"] + 30
+    page.get_by_role("button", name="Reset layout").click()
+    assert abs(broker.bounding_box()["x"] - before["x"]) < 2
+    assert page.errors == []
+
+
 @pytest.mark.skipif(os.environ.get("TAGOUT_E2E_LIVE") != "1", reason="needs python -m scripts.run_all")
 def test_live_system_runs_the_week(page):
     page.goto("http://127.0.0.1:8700/", wait_until="domcontentloaded")

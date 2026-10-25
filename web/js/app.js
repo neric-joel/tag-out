@@ -160,12 +160,27 @@
     release(ids) { if (!world) return; (ids || [...S.gathered]).forEach((i) => S.gathered.delete(i)); world.release(ids); },
   };
   function setStatus(html) { $("#roundStatus").innerHTML = html; }
+  // the five-step tracker above the numbers: where the week is, at a glance
+  const RAIL = { sunday_check: 1, trade_request: 1, round_open: 2, round: 2, picks: 2, cycle: 3, chain: 3, prepare: 4, vote: 4, commit: 5 };
+  function rail(ev) {
+    const el = $("#rail"); if (!el) return;
+    if (ev.type === "reset") { el.querySelectorAll("li").forEach((li) => li.removeAttribute("data-state")); return; }
+    let at = RAIL[ev.type];
+    if (ev.type === "summary" && (ev.kind === "week" || !ev.kind)) at = 6;
+    if (!at || (ev.type === "trade_request" && ev.urgent)) return;
+    el.querySelectorAll("li").forEach((li) => {
+      const n = +li.dataset.step, now = +(el.dataset.at || 0);
+      if (n < Math.max(at, now) || at === 6) li.dataset.state = "done"; else if (n === at) li.dataset.state = "now";
+    });
+    el.dataset.at = String(Math.min(at, 5));
+  }
 
   function onEvent(ev) {
     live = live || Date.parse(ev.ts) > BOOT - 1500;
     if (ev.type === "wire") { feedWire(ev); return; }
     if (ev.type.startsWith("org_")) { orgFeed(ev); return; }
     if (flow && live) flowState(ev);
+    rail(ev);
     switch (ev.type) {
       case "reset":
         orgLog.length = 0; if (org) org.reset();
@@ -825,7 +840,7 @@
       [d.rule_breaks_hand_checked_per_week != null ? `${d.rule_breaks_hand_checked_per_week} a week` : "–", "Limit-breaking covers a group chat still makes when volunteers check this job's hours by hand.", src("Simulation", "docs/simulation.json", d.rule_breaks_by_rule ? Object.entries(d.rule_breaks_by_rule).map(([k, v]) => `${k} ${v}`).join(", ") : "")],
       ["10,000", "Students who work at ASU each year.", quote("stats")],
       ["0", "Private values in any agent-to-agent message (also counted live above).", src("Test", "tests/test_privacy.py")],
-      ["0", "Decisions made by an LLM. Rules are code; Claude only reads students' texts.", src("Code", "rulebook/rules.py")],
+      ["0", "Work-rule checks made by an LLM. Claude reads a student's own text (what they're asking for, any calendar item in it); whether a shift fits a limit is always code.", src("Code", "rulebook/rules.py")],
     ];
     $("#ledger").innerHTML = `<thead><tr><th>Number</th><th>What it says</th><th>Source</th></tr></thead><tbody>${rows.map((r) => `<tr><td class="fig">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join("")}</tbody>`;
   }
@@ -884,7 +899,7 @@
       $("#btnPets").remove();
       const note = document.createElement("div");
       note.className = "static-banner";
-      note.innerHTML = 'Hosted demo: a recording of the real system, where 16 student mascots, a broker, the Library Steward and the campus hierarchy really traded these messages. Press <b>Play the week</b>, then sign in as a student or the manager, or open the <b>Org chart</b>. Run it live with one command: <a href="https://github.com/neric-joel/tag-out">github.com/neric-joel/tag-out</a>.';
+      note.innerHTML = 'Hosted demo: a recording of the real system, where 16 student mascots, a broker, the Library Steward and the campus hierarchy really traded these messages. Press <b>Play the week</b>, then sign in as a student or the manager, or open the <b>Org chart</b>. <span class="honest"><b>Real:</b> the agents, every message, the rules. <b>Replayed:</b> this page. <b>Synthetic:</b> every student and number.</span> Run it live with one command: <a href="https://github.com/neric-joel/tag-out">github.com/neric-joel/tag-out</a>.';
       document.body.prepend(note);
     }
     const [st, ag] = await Promise.all([get("/state"), get("/agents")]);

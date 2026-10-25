@@ -58,6 +58,15 @@ To try it without an account: add `--sample` to any command. It uses `assets/sam
   department's call-out rule.
 - "Find someone to take my Tue shift": run `inbox`; if no trade is open, tell them the mascot will look in its next
   round and offer to run the check now.
+- A visa question ("Can I work 40 hours over winter break on my F-1?"): never answer it yourself, even if you know
+  the rule. Run `tell` with their words: the mascot drafts the question for ISSC (the international students office)
+  and asks the student whether to send it. Text back the draft and its two choices from `inbox`, and run `answer`
+  only after they reply. Only their words go to ISSC, never their hours or calendar.
+- A problem at work ("the printer is broken", "the fire exit is blocked"): run `tell`; the mascot drafts a report and
+  asks whether to send it with their name, anonymously, or not at all. Safety reports also go to Student Employment,
+  and the draft says so before anything is sent.
+- If nobody can cover a call-out, the mascot's department escalates it on its own (shift lead, then manager, then the
+  backup manager). Nothing changes for the student until a cover is confirmed; relay the mascot's texts as usual.
 
 ## Rules
 

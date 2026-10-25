@@ -61,7 +61,7 @@ Sunday doesn't catch everything. On Monday morning Ben texts his mascot "I woke 
 
 ## When nobody can cover: the campus hierarchy
 
-A same-day call-out that no coworker can take shouldn't sit in one manager's inbox. Tag Out adds the chain of command above the mascots, modelled on a Workday supervisory org (`seeds/org.py`): ten more synthetic students in Dining (Aramark at the Memorial Union) and the Rec center front desk, plus Ben and Dev, who already work in two departments, and Raj, who works at both the Rec center and Dining. Above them, each of these is its own agent with its own inbox (`org/app.py`):
+A same-day call-out that no coworker can take shouldn't sit in one manager's inbox. For Dining and the Rec center, Tag Out adds the chain of command above the mascots (the Library's call-outs still go to its manager, the Steward, as above; its shift lead sees a copy), modelled on a Workday supervisory org (`seeds/org.py`): ten more synthetic students in Dining (Aramark at the Memorial Union) and the Rec center front desk, plus Ben and Dev, who already work in two departments, and Raj, who works at both the Rec center and Dining. Above them, each of these is its own agent with its own inbox (`org/app.py`):
 
 | Rung | Who | Waits | Then |
 |---|---|---|---|
@@ -81,7 +81,7 @@ A same-day call-out that no coworker can take shouldn't sit in one manager's inb
 - A safety report ("the fire exit by the weight room is blocked") skips the ladder: the Rec manager and Student Employment both get it at once, and Tess hears back when it's acknowledged.
 - Kofi asks "Can I work 40 hours over winter break on my F-1 if I graduate in December?". His mascot doesn't answer visa questions; it shows him the exact words it would send ISSC and waits for Send. ISSC gets only the question, replies with the rule ASU publishes and books an advisor reply.
 
-Locally the hierarchy runs as its own process next to the Library's (`scripts/run_org.py`, started by `run_all`, ports 8721-8738), with one story clock where a story minute is 0.05 s (`TAGOUT_ORG_MINUTE`).
+Locally the hierarchy runs as its own process next to the Library's (`scripts/run_org.py`, started by `run_all`, ports 8721-8738): every rung and every Dining or Rec mascot is its own app with its own state (each mascot its own SQLite file), sharing one event loop and one story clock where a story minute is 0.05 s (`TAGOUT_ORG_MINUTE`). Student Employment and ISSC are thin on purpose: they acknowledge, reply with the cited rule and book a human; a person decides.
 
 ## Beyond trades: the rest of a student worker's week
 
@@ -331,7 +331,7 @@ pytest
 | `tests/test_privacy.py` | The schemas reject a pick with `hours` or `reason`, an eligibility answer with a rule, a vote with a reason, and badges that describe limits. The no-leak scan over a full run with the abort. The reason still reaches its owner's phone. |
 | `tests/test_baseline.py` | The same week through a Library-only scheduler (sees availability and Library hours, not other jobs) puts Ben at 21 of 20 F-1 hours and pushes Dev's 25-hour average over; the manager's CSV and calendar exports mark the traded shifts. |
 | `tests/test_workday.py` | Workday-shaped time rows sum across positions by Mon-Sun week and skip sent-back entries; Aramark hours count for F-1 but not the ASU average; the measurement window starts at the hire date, then runs October to September. |
-| `tests/test_cubbie_skill.py` | The Skill's sample mode runs offline, its description fits Cubbie's 200-character list, items it imports become private busy time on the mascot, and the real client (`tagout.py`, not `--sample`) works over HTTP against a running mascot with the owner token enforced. |
+| `tests/test_cubbie_skill.py` | The Skill's sample mode runs offline, its description's first sentence fits Cubbie's 200-character list, items it imports become private busy time on the mascot, and the real client (`tagout.py`, not `--sample`) works over HTTP against a running mascot with the owner token enforced. |
 | `tests/test_callout.py` | A same-day call-out opens its own round, tells the manager at once, never lets the student think they're already excused, doesn't disturb the Sunday numbers, and never puts the reason on the wire. |
 | `tests/test_worklife.py` | Extra shifts go to someone who wants hours and fits every limit; team meetings use busy bits only; a supervisor meeting sends free times, not the calendar; issue reports leave only after the student says so; wire events hide ballots; a nosy broker learns nothing. |
 | `tests/e2e/` | Opt-in browser tests (`TAGOUT_E2E=1`, Playwright): play the hosted week, sign in as Ben, the manager's inbox, the leak counters on How it works, and the live system's week. They pass against https://tag-out.vercel.app. |
@@ -348,7 +348,7 @@ From `pyproject.toml` (minimum versions):
 - python-telegram-bot 22.8 with long polling and inline buttons
 - icalendar 7.3 and recurring-ical-events 3.8 for Canvas, calendar and shift feeds
 - sse-starlette 3.5 for the commons' event stream
-- anthropic 2.3: Claude Haiku routes each student text (call-out, visa question, issue, meeting, more hours, calendar) and parses calendar items, and Claude Sonnet can rephrase a mascot's texts (model ids in `ingest/llm.py`). Claude only reads words; every work rule is code in `rulebook/`, never a prompt. Every response is cached, tests and recordings run offline on the regex rules, and `ingest/llm.py` stops calling the API once `TAGOUT_SPEND_CAP` dollars are spent. The key's budget (about $99) is split: at most $35 for building and test runs, $15 for recording the demo, and at least $45 kept for judges typing into the hosted page, which also limits each visitor to 8 live runs every 10 minutes (`site/api/try.py`).
+- anthropic 2.3: Claude Haiku routes each student text (call-out, visa question, issue, meeting, more hours, calendar) and parses calendar items, and Claude Sonnet can rephrase a mascot's texts (model ids in `ingest/llm.py`). Claude only reads words; every work rule is code in `rulebook/`, never a prompt. Every response is cached, tests and recordings run offline on the regex rules, and `ingest/llm.py` stops calling the API once `TAGOUT_SPEND_CAP` dollars are spent (default $15 per machine). The key's budget (about $99) is split: at most $35 for building and test runs, $15 for recording the demo, and at least $45 kept for judges typing into the hosted page. On Vercel the cap ($1) and the rate limit (8 live runs per visitor every 10 minutes) are per warm instance, held in memory and `/tmp`, so the hard stop for the hosted page is the spend limit set on the key itself in the Anthropic Console.
 - PyYAML 6.0 for `config/rules.yaml`, matplotlib 3.11 for the simulator chart (Pillow comes with it and cuts the pet frames for Telegram)
 - SQLite from the Python standard library, one file per mascot
 - Development: pytest 9, pytest-asyncio 1.4, Hypothesis 6.170, ruff 0.17

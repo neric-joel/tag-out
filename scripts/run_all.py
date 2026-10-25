@@ -84,7 +84,11 @@ def main() -> None:
     if not args.no_bot and secret("TELEGRAM_BOT_TOKEN"):
         procs.append(subprocess.Popen([PY, "-m", "bot.telegram_bot"], cwd=ROOT, env=base,
                                       stdout=(logs / "bot.log").open("w"), stderr=subprocess.STDOUT))
-        bot_on = True
+        try:
+            wait_up([f"{reg['bot']}/links"], timeout=30)
+            bot_on = True
+        except SystemExit:
+            print("Telegram bot did not start (see runtime/logs/bot.log); continuing with on-screen phones.")
     print(f"Tag Out is up ({args.mode} mode). 6 mascots on :8711-8716, steward :8701, broker :8700"
           + (", Telegram bot on" if bot_on else ", no Telegram bot"))
     print("Arena:  http://127.0.0.1:8700        Judge view: http://127.0.0.1:8700/judge")

@@ -50,7 +50,7 @@ async def ran(tmp_path):
     s = System(tmp=tmp_path)
     await s.post("/admin/auto", {"enabled": False, "agents": ["dev"], "delay": 0.05})
     await s.post("/demo/sunday")
-    await s.post("/phone/dev/tap", {"data": "trade:yes:library-fri-1030-1000"})
+    await s.post("/phone/dev/tap", {"data": "trade:yes:library-fri-1030-1000-d1"})
     await s.settle(0.3)
     await s.post("/demo/run")
     await s.wait_for("prepare")

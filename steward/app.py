@@ -16,10 +16,10 @@ from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 
 from core.net import Net, registry
-from core.timeutil import fmt_span
+from core.timeutil import fmt_span, planning_monday
 from core.wire import BusyBits, Decision, Move, OpenShift, Prepare, ShiftRef, SlotQuery, Vote
 from ingest.ics import read, shifts_from_ics
-from seeds.scenario import DEMO_MONDAY, EMPLOYER, STUDENTS
+from seeds.scenario import EMPLOYER, STUDENTS
 
 ICS = Path(__file__).resolve().parent.parent / "seeds" / "ics"
 K_ANON = 3  # the forecast only reports a slot when at least this many people are affected
@@ -31,7 +31,8 @@ class Tap(BaseModel):
 
 def load_roster() -> dict[str, ShiftRef]:
     roster: dict[str, ShiftRef] = {}
-    start, end = DEMO_MONDAY - timedelta(days=7), DEMO_MONDAY + timedelta(days=14)
+    monday = planning_monday()
+    start, end = monday - timedelta(days=7), monday + timedelta(days=14)
     for s in STUDENTS:
         for sh in shifts_from_ics(read(ICS / f"{s['id']}_library.ics"), EMPLOYER, start, end):
             roster[sh.id] = ShiftRef(shift_id=sh.id, employer=EMPLOYER, start=sh.start, end=sh.end, owner=s["id"])
@@ -190,7 +191,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     @app.get("/forecast")
     async def forecast(monday: str | None = None) -> dict:
         """Next week's crunch: for each roster slot, how many staff are busy. Counts only, k >= 3."""
-        mon = datetime.fromisoformat(monday).date() if monday else DEMO_MONDAY
+        mon = datetime.fromisoformat(monday).date() if monday else planning_monday()
         slots = {}
         for d in range(7):
             day = mon + timedelta(days=d)

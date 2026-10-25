@@ -22,9 +22,9 @@ from sse_starlette.sse import EventSourceResponse
 from broker.engine import Engine, Timing
 from core.events import Bus
 from core.net import RUNTIME, Net, registry
-from core.timeutil import PHX
+from core.timeutil import PHX, coming_monday, planning_monday
 from core.wire import SundayCheck, TradeRequest, Vote
-from seeds.scenario import BREAK_IT_EDIT, DEMO_MONDAY, STUDENTS
+from seeds.scenario import BREAK_IT_EDIT, STUDENTS
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 PETS = WEB / "pets"
@@ -91,7 +91,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         except Exception:
             roster = []
         return {"agents": faces, "roster": roster, "summary": engine.summary, "running": engine.running,
-                "monday": DEMO_MONDAY.isoformat(), "debug": debug(),
+                "monday": planning_monday().isoformat(), "debug": debug(),
                 "pets": json.loads((WEB.parent / "seeds" / "pets.json").read_text(encoding="utf-8"))}
 
     @app.get("/agents")
@@ -100,10 +100,11 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
 
     # ----- demo controls (synthetic roster) -----
     @app.post("/demo/sunday")
-    async def sunday() -> dict:
-        await asyncio.gather(*(net.post(f"{u}/sunday", SundayCheck(monday=DEMO_MONDAY))
+    async def sunday(monday: str | None = None) -> dict:
+        week = datetime.fromisoformat(monday).date() if monday else planning_monday()
+        await asyncio.gather(*(net.post(f"{u}/sunday", SundayCheck(monday=week))
                                for u in reg["agents"].values()), return_exceptions=True)
-        bus.emit("sunday_check", monday=DEMO_MONDAY.isoformat(), agents=sorted(reg["agents"]))
+        bus.emit("sunday_check", monday=week.isoformat(), agents=sorted(reg["agents"]))
         return {}
 
     @app.post("/demo/run")
@@ -268,7 +269,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         private = {a: await net.get(f"{u}/admin/debug") for a, u in reg["agents"].items()}
         library_hours = {a: 0.0 for a in reg["agents"]}
         for r in roster.values():
-            if DEMO_MONDAY.isoformat() <= r["start"][:10] < (DEMO_MONDAY + timedelta(days=7)).isoformat():
+            if planning_monday().isoformat() <= r["start"][:10] < (planning_monday() + timedelta(days=7)).isoformat():
                 library_hours[r["owner"]] = library_hours.get(r["owner"], 0) + 4
         rows, taken = [], set()
         for sid, owner in sorted(requested.items(), key=lambda kv: roster[kv[0]]["start"]):
@@ -349,7 +350,8 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
                 if now.weekday() == 6 and now.hour == 18 and last != now.date():
                     last = now.date()
                     bus.emit("scheduled", what="sunday_check")
-                    await sunday()
+                    week = planning_monday() if os.environ.get("TAGOUT_WEEK") else coming_monday(now)
+                    await sunday(week.isoformat())
                     await asyncio.sleep(600)
                     await run_week()
                 await asyncio.sleep(30)

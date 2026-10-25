@@ -2,11 +2,29 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 PHX = ZoneInfo("America/Phoenix")
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def planning_monday() -> date:
+    """The week the mascots plan for. TAGOUT_WEEK (a Monday, YYYY-MM-DD) overrides; the default is the synthetic
+    demo week, so the seeded students always line up with it."""
+    v = os.environ.get("TAGOUT_WEEK")
+    if v:
+        return week_start(date.fromisoformat(v))
+    from seeds.scenario import DEMO_MONDAY
+
+    return DEMO_MONDAY
+
+
+def coming_monday(now: datetime | None = None) -> date:
+    """The Monday after `now` (Arizona time): what a real Sunday check looks at."""
+    d = (now or datetime.now(PHX)).astimezone(PHX).date()
+    return d + timedelta(days=7 - d.weekday())
 
 
 def at(d: date, hh: int, mm: int = 0) -> datetime:

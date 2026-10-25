@@ -20,7 +20,7 @@ from agents.seed import seed
 from agents.store import Store
 from core.models import BusyBlock
 from core.net import RUNTIME, Net, registry
-from core.timeutil import fmt_span, overlaps
+from core.timeutil import fmt_span, overlaps, planning_monday
 from core.wire import (
     BusyBits,
     Decision,
@@ -38,7 +38,7 @@ from core.wire import (
 )
 from ingest import text as text_intake
 from ingest.ics import _bid, classify, exam_eves
-from seeds.scenario import DEMO_MONDAY, STUDENTS
+from seeds.scenario import STUDENTS
 
 
 class Tap(BaseModel):
@@ -192,7 +192,7 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
     async def intake(body: Intake, x_owner_token: str | None = Header(None)) -> dict:
         owner(x_owner_token)
         store.send({"kind": "student", "text": body.text, "buttons": []})
-        parsed, engine = text_intake.parse(body.text, DEMO_MONDAY)
+        parsed, engine = text_intake.parse(body.text, planning_monday())
         blocks = text_intake.to_blocks(parsed)
         from agents.seed import merge_prefs
         store.add_busy(blocks)
@@ -238,7 +238,7 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
     @app.get("/diary")
     async def diary(monday: str | None = None, x_owner_token: str | None = Header(None)) -> dict:
         owner(x_owner_token)
-        return brain.diary(date.fromisoformat(monday) if monday else DEMO_MONDAY)
+        return brain.diary(date.fromisoformat(monday) if monday else planning_monday())
 
     # ----- demo controls (synthetic data only) -----
     @app.post("/admin/reset")
@@ -268,9 +268,9 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
         shifts = store.shifts()
         return {
             "id": sid, "name": st.name, "f1": st.limits.f1_or_j1, "fws": st.limits.fws,
-            "week_hours": week_hours(st, shifts, DEMO_MONDAY),
+            "week_hours": week_hours(st, shifts, planning_monday()),
             "other_employers": st.limits.other_employer_hours,
-            "rooms": [r.__dict__ for r in rooms(st, shifts, DEMO_MONDAY)],
+            "rooms": [r.__dict__ for r in rooms(st, shifts, planning_monday())],
             "wants_more_hours": st.prefs.wants_more_hours,
         }
 

@@ -102,3 +102,20 @@ def test_a_forged_vote_without_the_ballot_is_ignored():
         return await eng.two_phase(p)
 
     assert asyncio.run(run()) is False  # Ana never voted; the forged yes didn't count
+
+
+@settings(max_examples=60, deadline=None)
+@given(st.lists(st.tuples(st.lists(st.sampled_from("abcdef"), min_size=1, max_size=3, unique=True),
+                          st.lists(st.sampled_from(["s1", "s2", "s3", "s4", "s5"]), min_size=1, max_size=3, unique=True),
+                          st.booleans()), min_size=1, max_size=7))
+def test_exhaustive_selection_matches_cp_sat(specs):
+    from broker.cpsat import Proposal, exhaustive, score, select
+    from core.wire import Move
+
+    props = []
+    for i, (members, shifts, ok) in enumerate(specs):
+        moves = [Move(shift_id=s, from_agent=members[0], to_agent=members[-1]) for s in shifts]
+        p = Proposal(f"p{i}", "chain", members, moves, members[:1], members[1:2])
+        p.ok = {m: ok for m in members}
+        props.append(p)
+    assert score(select(props)[0]) == score(exhaustive(props)[0])

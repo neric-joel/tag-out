@@ -39,8 +39,9 @@ def main() -> None:
     (app / "docs").mkdir()
     for f in ("rule_quotes.json", "simulation.json", "RULES.md"):
         shutil.copy2(ROOT / "docs" / f, app / "docs" / f)
+    # anthropic: with ANTHROPIC_API_KEY set on the project, a message nobody has sent before goes to Claude Haiku
     reqs = ["fastapi>=0.115", "httpx>=0.27", "pydantic>=2.8", "icalendar>=6", "recurring-ical-events>=3", "pyyaml>=6",
-            "sse-starlette>=2", "tzdata"]
+            "sse-starlette>=2", "tzdata", "anthropic>=2.3"]
     (SITE / "requirements.txt").write_text("\n".join(reqs) + "\n", encoding="utf-8")
     (SITE / "vercel.json").write_text(json.dumps({
         "functions": {"api/try.py": {"maxDuration": 60}},

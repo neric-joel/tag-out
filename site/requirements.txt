@@ -6,3 +6,4 @@ recurring-ical-events>=3
 pyyaml>=6
 sse-starlette>=2
 tzdata
+anthropic>=2.3

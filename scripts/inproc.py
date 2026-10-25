@@ -19,11 +19,11 @@ from agents.mascot import create_app as mascot_app
 from broker.app import create_app as broker_app
 from broker.engine import Timing
 from core.net import Net
+from core.wiretap import SCHEMAS
 from seeds.scenario import STUDENTS
 from steward.app import create_app as steward_app
 
-PEER_PATHS = ("/round/pick", "/ring/check", "/version", "/txn/prepare", "/txn/decide", "/txn/vote", "/trade",
-              "/sunday", "/public", "/busybits", "/roster", "/people", "/open")
+PEER_PATHS = (*SCHEMAS, "/public", "/people")
 
 
 @dataclass

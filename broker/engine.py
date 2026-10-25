@@ -69,6 +69,7 @@ class Engine:
         self.resolved: dict[str, str] = {}  # shift_id -> how ("ring-1", "chain-2")
         self.closed: set[str] = set()  # requests a finished run already settled (fixed, or sent to the manager)
         self.urgent: set[str] = set()  # requests that came in as same-day call-outs
+        self.extra_wins: dict[str, int] = {}  # extra shifts taken, so the next one goes to someone else first
         self.roster: dict[str, ShiftRef] = {}
         self.txns: dict[str, Txn] = {}
         self.proposals: list[Proposal] = []
@@ -262,6 +263,43 @@ class Engine:
                 self.roster[mv.shift_id] = self.roster[mv.shift_id].model_copy(update={"owner": mv.to_agent})
         return commit
 
+    # ---------- an extra shift the manager posted ----------
+    async def offer_extra(self, ref: ShiftRef) -> dict:
+        """Offer one open shift to every mascot at once. Each decides in private (wants hours? free? under every
+        limit?) and answers pick or pass; the broker learns nothing else. One taker, then the usual 2PC."""
+        self.roster[ref.shift_id] = ref
+        rid = f"extra-{next(self.ids)}"
+        agents = sorted(self.reg["agents"])
+        self.bus.emit("extra_open", round_id=rid, shift_id=ref.shift_id, start=ref.start.isoformat(),
+                      end=ref.end.isoformat())
+        taker = None
+        for it in (1, 2):  # a second ask after the counter-offer window, for mascots that asked their student
+            reqs = {a: PickRequest(round_id=rid, iteration=it, phase="cover", items=[ref]) for a in agents}
+            self.bus.emit("round", round_id=rid, iteration=it, phase="cover", agents=agents, items=[ref.shift_id])
+            picks = await self.ask_picks(reqs)
+            self.bus.emit("picks", round_id=rid, iteration=it, phase="cover", picks=picks)
+            takers = [a for a, s in picks.items() if s == ref.shift_id]
+            if takers:
+                taker = min(takers, key=lambda a: (self.extra_wins.get(a, 0), a))  # spread extra shifts around
+                break
+            if it == 1 and self.timing.ask_window > 0:
+                self.bus.emit("counter_window", round_id=rid, seconds=self.timing.ask_window, phase="cover")
+                await asyncio.sleep(self.timing.ask_window)
+        done = False
+        if taker:
+            p = Proposal(f"extra-{next(self.ids)}", "chain", [taker],
+                         [Move(shift_id=ref.shift_id, from_agent="open", to_agent=taker)], [], [taker])
+            await self.validate(p)
+            if p.valid:
+                done = await self.two_phase(p)
+                if done:
+                    self.extra_wins[taker] = self.extra_wins.get(taker, 0) + 1
+        summary = {"kind": "extra", "shift_id": ref.shift_id, "taker": taker if done else None,
+                   "asked": 1, "fixed": int(done), "open": int(not done), "by_ring": 0, "by_chain": int(done),
+                   "pay_kept": 0.0, "open_shifts": [] if done else [ref.shift_id]}
+        self.bus.emit("summary", **summary)
+        return summary
+
     # ---------- the week ----------
     async def run(self, max_attempts: int = 3, kind: str = "week") -> dict:
         """kind "week" is the Sunday run; "callout" is a same-day round for requests that arrived since."""
@@ -358,6 +396,7 @@ class Engine:
         self.resolved.clear()
         self.closed.clear()
         self.urgent.clear()
+        self.extra_wins.clear()
         self.txns.clear()
         self.proposals.clear()
         self.summary = {}

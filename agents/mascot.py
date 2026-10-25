@@ -25,6 +25,8 @@ from core.wire import (
     BusyBits,
     Decision,
     Eligibility,
+    IssueAck,
+    MeetingInvite,
     NoTrade,
     Pick,
     PickRequest,
@@ -80,6 +82,8 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
     store = Store(db_path or RUNTIME / f"mascot_{sid}.db")
     reg = reg or registry()
     app.state.net = net or Net()
+    if net is None and debug():
+        app.state.net.report_to(reg["broker"])  # the judge view's agent graph
     app.state.auto = {"enabled": os.environ.get("TAGOUT_MODE", "auto") == "auto",
                       "delay": float(os.environ.get("TAGOUT_AUTO_DELAY", "1.5"))}
     names = {s["id"]: s["name"] for s in STUDENTS} | {"steward": "Library manager"}
@@ -98,7 +102,8 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
             pass  # no bot running: the message is still on this mascot's own phone view
         if app.state.auto["enabled"] and msg.get("buttons"):
             yes = next((b["data"] for b in msg["buttons"]
-                        if b["data"].startswith(("ask:yes", "confirm:", "trade:yes"))), msg["buttons"][0]["data"])
+                        if b["data"].startswith(("ask:yes", "confirm:", "trade:yes", "book:", "issue:named"))),
+                       msg["buttons"][0]["data"])
             task = asyncio.create_task(auto_tap(yes))
             brain.auto_tasks.add(task)
             task.add_done_callback(brain.auto_tasks.discard)
@@ -115,7 +120,10 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
     async def send_trade(t: TradeRequest) -> None:
         await app.state.net.post(f"{reg['broker']}/trade", t)
 
-    brain = Brain(store, to_phone, send_vote, send_trade, lambda: names)
+    async def to_steward(path: str, body) -> dict:
+        return await app.state.net.post(f"{reg['steward']}{path}", body)
+
+    brain = Brain(store, to_phone, send_vote, send_trade, lambda: names, to_steward)
     app.state.brain, app.state.store = brain, store
 
     def owner(token: str | None) -> None:
@@ -176,6 +184,22 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
         slots = {k: any(overlaps(st, en, b.start, b.end) for b in busy) for k, (st, en) in body.slots.items()}
         return BusyBits(agent_id=sid, slots=slots)
 
+    @app.post("/meeting/invite")
+    async def meeting_invite(m: MeetingInvite) -> dict:
+        await brain.invited(m)
+        return {}  # the RSVP comes later, from the student's own tap
+
+    @app.post("/issue/ack")
+    async def issue_ack(a: IssueAck) -> dict:
+        await brain.issue_acked(a.issue_id)
+        return {}
+
+    @app.get("/intro")
+    async def intro(x_owner_token: str | None = Header(None)) -> dict:
+        owner(x_owner_token)
+        from agents.explain import intro as intro_text
+        return {"text": intro_text(store.student())}
+
     @app.get("/.well-known/agent-card.json")
     async def agent_card(request: Request) -> dict:
         base = str(request.base_url).rstrip("/")
@@ -215,6 +239,16 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
             reply = await brain.call_out(want, planning_monday())
             store.send({"kind": "reply", "text": reply, "buttons": [], "engine": "callout"})
             return {"reply": reply, "engine": "callout", "events": 0}
+        kind = text_intake.intent(body.text)
+        if kind is not None:
+            if kind == "issue":
+                reply = await brain.draft_issue(body.text, text_intake.issue_category(body.text))
+            elif kind == "meeting":
+                reply = await brain.ask_meeting(planning_monday())
+            else:
+                reply = await brain.want_hours(planning_monday())
+            store.send({"kind": "reply", "text": reply, "buttons": [], "engine": kind})
+            return {"reply": reply, "engine": kind, "events": 0}
         parsed, engine = text_intake.parse(body.text, planning_monday())
         blocks = text_intake.to_blocks(parsed)
         from agents.seed import merge_prefs

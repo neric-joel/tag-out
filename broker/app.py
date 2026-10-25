@@ -23,7 +23,8 @@ from broker.engine import Engine, Timing
 from core.events import Bus
 from core.net import RUNTIME, Net, registry
 from core.timeutil import PHX, coming_monday, planning_monday
-from core.wire import CallOut, SundayCheck, TradeRequest, Vote
+from core.wire import CallOut, Move, RingCheck, ShiftRef, SundayCheck, TradeRequest, Vote
+from core.wiretap import describe
 from seeds.scenario import BREAK_IT_EDIT, STUDENTS
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -39,6 +40,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
     bus = Bus(log if log is not None else RUNTIME / "events.jsonl")
     engine = Engine(net, reg, bus, timing or Timing())
     app.state.engine, app.state.bus, app.state.net = engine, bus, net
+    net.hook = lambda m, u, p, s, b: bus.emit("wire", **describe(reg, m, u, p, s, b))
     tasks: set[asyncio.Task] = set()
 
     run_lock = asyncio.Lock()  # one run at a time: the Sunday week, then any same-day call-out rounds
@@ -66,6 +68,58 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         async with run_lock:
             if any(s not in engine.closed and s not in engine.resolved for s in engine.requests):
                 await engine.run(kind="callout")
+
+    @app.post("/extra")
+    async def extra(ref: ShiftRef) -> dict:
+        """The Steward posts an extra shift the manager wants filled; every mascot gets offered it."""
+        async def go() -> None:
+            async with run_lock:
+                await engine.offer_extra(ref)
+        spawn(go())
+        return {}
+
+    @app.post("/manager/{action}")
+    async def manager_action(action: str, body: dict) -> dict:
+        """The manager's own screen, relayed to the Steward (synthetic demo: the manager channel)."""
+        if action not in ("extra", "meeting", "tap"):
+            raise HTTPException(404)
+        return await net.post(f"{reg['steward']}/manager/{action}" if action != "tap" else f"{reg['steward']}/tap",
+                              body)
+
+    @app.get("/manager/state")
+    async def manager_state() -> JSONResponse:
+        return JSONResponse(await net.get(f"{reg['steward']}/manager/state"))
+
+    @app.post("/admin/wire")
+    async def wire(body: dict) -> dict:
+        """Peer messages the other processes sent (debug only), for the judge view's agent graph."""
+        if not debug():
+            raise HTTPException(403)
+        bus.emit("wire", **describe(reg, str(body.get("method", "POST")), str(body["url"]), body.get("payload"),
+                                    int(body.get("status", 0)), body.get("response")))
+        return {}
+
+    @app.post("/demo/snoop")
+    async def snoop() -> dict:
+        """The judge plays a nosy broker: ask every mascot why it passed, then probe for room it never offered.
+        The closed schemas reject the first, and a mascot only vouches for shifts it picked, so both get nothing."""
+        if not debug():
+            raise HTTPException(403)
+        await engine.load_roster()
+        out = {}
+        for a, url in reg["agents"].items():
+            nosy = {"round_id": "snoop", "iteration": 1, "phase": "cover", "items": [], "why_did_you_pass": True}
+            r = await net.client.post(f"{url}/round/pick", json=nosy)
+            net._tap("POST", f"{url}/round/pick", nosy, r)
+            other = next((s for s in engine.roster.values() if s.owner != a), None)
+            ok = None
+            if other is not None:
+                probe = RingCheck(ring_id="snoop", moves=[Move(shift_id=other.shift_id, from_agent=other.owner,
+                                                               to_agent=a)])
+                ok = (await net.post(f"{url}/ring/check", probe)).get("ok")
+            out[a] = {"why": r.status_code, "room_probe": ok}
+        bus.emit("snoop", results=out)
+        return out
 
     @app.post("/txn/vote")
     async def vote(v: Vote) -> dict:

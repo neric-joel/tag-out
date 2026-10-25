@@ -105,6 +105,55 @@ class OpenShift(Wire):
     urgent: bool = False  # it was a same-day call-out
 
 
+class MeetingInvite(Wire):
+    """The Steward invites a mascot's student to a meeting at a time most of the team is free."""
+
+    meeting_id: str
+    start: datetime
+    end: datetime
+    title: str
+
+
+class Rsvp(Wire):
+    meeting_id: str
+    agent_id: str
+    going: bool  # no reason, either way
+
+
+class MeetingRequest(Wire):
+    """A student asks for a meeting with the manager. The mascot sends only times its student is free."""
+
+    request_id: str
+    agent_id: str
+    minutes: int
+    slots: list[tuple[datetime, datetime]]
+
+
+class MeetingOptions(Wire):
+    request_id: str
+    slots: list[tuple[datetime, datetime]]
+
+
+class MeetingBook(Wire):
+    request_id: str
+    agent_id: str
+    start: datetime
+    end: datetime
+
+
+class IssueReport(Wire):
+    """A work problem the student chose to send their manager, in their own words, named or anonymous."""
+
+    issue_id: str
+    category: Literal["equipment", "facilities", "safety", "schedule", "other"]
+    text: str
+    agent_id: str | None = None  # None: anonymous
+
+
+class IssueAck(Wire):
+    issue_id: str
+
+
 class CallOut(Wire):
     """Sent to the Steward the moment a student calls out of a shift today. No reason, ever."""
 

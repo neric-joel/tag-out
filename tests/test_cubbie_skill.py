@@ -26,7 +26,7 @@ def test_sample_mode_needs_no_network_or_account():
     out = run("inbox")
     assert "Find a trade" in out and "code: confirm:txn-3" in out
     assert "would send 2 canvas items" in run("sync", "--source", "canvas")
-    assert run("answer", "confirm:txn-3").strip() == "Confirmed. Waiting for the others."
+    assert run("answer", "confirm:txn-3").strip() == "Confirmed. Waiting for the others and your manager."
 
 
 def test_skill_frontmatter_first_sentence_fits_cubbie_list():
@@ -83,7 +83,7 @@ async def test_cubbie_script_against_a_live_mascot(system, tmp_path, monkeypatch
         inbox = await live("inbox")
         code = re.search(r"code: (trade:yes:\S+)", inbox).group(1)
         assert "Find a trade" in inbox
-        assert (await live("answer", code)).startswith("Looking for a trade")
+        assert (await live("answer", code)).startswith("On it.")
         assert code.split(":")[2] in system.engine.requests, "the tap reached the broker as a trade request"
         assert (await live("tell", "dentist Thu 3pm")).startswith("Noted")
         await live("setup", "--mascot-url", url, token="not-zoes-token")

@@ -93,4 +93,6 @@ POSITIONS = {"library": "P900101 Student Worker II - Library front desk",
 SUPERVISORY_ORG = "University Libraries >> Library Front Desk Student Workers (synthetic)"
 
 # Who confirms on behalf of the employer.
-MANAGER = {"id": "manager", "name": "Library manager"}
+MANAGER = {"id": "manager", "name": "Library manager",
+           # the manager's own calendar (synthetic): (weekday, start hour, end hour)
+           "busy": [(0, 9, 12), (2, 13, 17), (4, 9, 17)]}

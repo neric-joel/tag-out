@@ -1,0 +1,134 @@
+<!doctype html>
+<!-- Tag Out scripted demo. Original code; free to use, modify, and share. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tag Out · Agent flow</title>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/flow.css">
+  <script src="js/flow.js" defer></script>
+</head>
+<body>
+  <main class="tof-demo">
+    <header class="tof-demo-header">
+      <div>
+        <h1>Tag Out · A week in messages</h1>
+        <p>Six students, six private mascots, one shared roster. Follow a three-person trade from Sunday’s calendar check to the manager’s approval.</p>
+      </div>
+      <div class="tof-demo-controls">
+        <button class="btn" id="play" type="button" aria-pressed="false">Pause</button>
+        <label for="speed">Speed
+          <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+        </label>
+      </div>
+    </header>
+    <p class="tof-demo-phase" role="status"><strong id="phase">Sunday · Checking next week</strong> <span id="phase-note">Private calendars stay with each mascot.</span></p>
+    <div id="flow"></div>
+    <p class="tof-demo-note">Scripted example · October 25–31, 2026 · No backend connection. Select any message to inspect it. Ballots are masked as “•••” in this demo. The week repeats after the final decision.</p>
+  </main>
+  <script>
+    window.addEventListener('DOMContentLoaded', function () {
+      'use strict';
+      const students = ['Ana', 'Ben', 'Dev', 'Priya', 'Zoe', 'Marco'].map(name => ({ id: name.toLowerCase(), name }));
+      const flow = TagOutFlow.create(document.getElementById('flow'), { students, manager: 'Library manager' });
+      const play = document.getElementById('play'), speedControl = document.getElementById('speed');
+      const phase = document.getElementById('phase'), note = document.getElementById('phase-note');
+      const shifts = [
+        { shift_id: 'library-tue-1027-1800-d1', employer: 'Campus Library', start: '2026-10-27T18:00:00-07:00', end: '2026-10-27T22:00:00-07:00', owner: 'ana', role: 'Circulation desk' },
+        { shift_id: 'library-fri-1030-1000-d1', employer: 'Campus Library', start: '2026-10-30T10:00:00-07:00', end: '2026-10-30T14:00:00-07:00', owner: 'ben', role: 'Circulation desk' },
+        { shift_id: 'library-sat-1031-1400-d1', employer: 'Campus Library', start: '2026-10-31T14:00:00-07:00', end: '2026-10-31T18:00:00-07:00', owner: 'dev', role: 'Circulation desk' }
+      ];
+      const round = 'round-2026-w44-01', ring = 'ring-w44-ana-ben-dev', txn = 'txn-w44-001';
+      const moves = [
+        { shift_id: shifts[0].shift_id, from_agent: 'ana', to_agent: 'ben' },
+        { shift_id: shifts[1].shift_id, from_agent: 'ben', to_agent: 'dev' },
+        { shift_id: shifts[2].shift_id, from_agent: 'dev', to_agent: 'ana' }
+      ];
+      const events = [];
+      let sequence = 0, elapsed = 0, cursor = 0, paused = false, speed = 1, last = 0, raf;
+      function at(time, action) { events.push({ time, action }); }
+      function chapter(time, title, text) { at(time, () => { phase.textContent = title; note.textContent = text; }); }
+      function send(time, from, to, schema, payload, extra = {}) {
+        at(time, () => flow.message(Object.assign({ id: 'week-message-' + (++sequence), from, to, schema,
+          path: '/agents/' + to + '/' + schema, payload, dir: 'req',
+          ts: new Date(Date.parse('2026-10-25T17:00:00Z') + time).toISOString() }, extra)));
+      }
+      function state(time, id, text, tone) { at(time, () => flow.state(id, text, tone)); }
+      chapter(0, 'Sunday · Checking next week', 'Private calendars stay with each mascot.');
+      students.forEach((s, i) => {
+        send(500 + i * 180, 'broker', s.id, 'SundayCheck', { week_start: '2026-10-26', roster_version: 17 });
+        at(1250 + i * 180, () => flow.rule(s.id));
+        send(2000 + i * 160, s.id, 'broker', 'SundayCheck', {}, { dir: 'resp' });
+        state(2000 + i * 160, s.id, 'Week checked', 'ok');
+      });
+      send(3300, 'ana', 'phone:ana', 'OwnerNotice', {}, { private: true,
+        text: 'Your Tue 6-10 PM shift hits your CSE 310 midterm prep. I can look for a trade without sharing your calendar or the reason. Shall I try?' });
+      send(4600, 'phone:ana', 'ana', 'OwnerReply', {}, { private: true, dir: 'resp', text: 'Yes, please find a trade. Saturday afternoon works for me.' });
+      chapter(5800, 'Monday · Finding a trade', 'Only shift references, picks and yes/no answers leave the mascots.');
+      send(6000, 'ana', 'broker', 'TradeRequest', { agent_id: 'ana', shift_id: shifts[0].shift_id, urgent: false });
+      state(6000, 'ana', 'Trade requested', 'wait');
+      send(7200, 'steward', 'broker', 'ShiftRef', { roster_version: 17, shifts }, { dir: 'resp' });
+      ['ana', 'ben', 'dev'].forEach((id, i) => {
+        send(8500 + i * 240, 'broker', id, 'PickRequest', { round_id: round, iteration: 1, phase: 'discover', items: shifts, you_give: shifts[i].shift_id });
+        at(9400 + i * 240, () => flow.rule(id));
+        send(10300 + i * 240, id, 'broker', 'Pick', { round_id: round, iteration: 1, agent_id: id, shift_id: id === 'ben' ? shifts[0].shift_id : id === 'dev' ? shifts[1].shift_id : null }, { dir: 'resp' });
+        state(10300 + i * 240, id, id === 'ana' ? 'Passed this round' : id === 'ben' ? 'Picked Tue 6–10' : 'Picked Fri 10–2', id === 'ana' ? '' : 'ok');
+      });
+      chapter(12200, 'Monday · A second round', 'Ana passes first, then chooses Saturday. A pass carries no reason.');
+      ['ana', 'ben', 'dev'].forEach((id, i) => {
+        send(12500 + i * 220, 'broker', id, 'PickRequest', { round_id: round, iteration: 2, phase: 'discover', items: shifts, you_give: shifts[i].shift_id });
+        send(13700 + i * 220, id, 'broker', 'Pick', { round_id: round, iteration: 2, agent_id: id, shift_id: shifts[(i + 2) % 3].shift_id }, { dir: 'resp' });
+      });
+      chapter(15400, 'Monday · Checking the exact ring', 'Each private rulebook returns one eligibility bit.');
+      ['ana', 'ben', 'dev'].forEach((id, i) => {
+        send(15700 + i * 260, 'broker', id, 'RingCheck', { ring_id: ring, moves });
+        at(16500 + i * 260, () => flow.rule(id));
+        send(17400 + i * 260, id, 'broker', 'Eligibility', { ring_id: ring, agent_id: id, ok: true }, { dir: 'resp' });
+        state(17400 + i * 260, id, 'Ring eligible', 'ok');
+      });
+      chapter(19100, 'Monday · Prepare and confirm', 'The roster is held while students and the manager approve.');
+      ['ana', 'ben', 'dev', 'steward'].forEach((id, i) => {
+        send(19400 + i * 260, 'broker', id, 'Prepare', { txn_id: txn, ring_id: ring, moves, seen_version: 17, ballot: '•••' });
+        state(20200 + i * 260, id, 'Awaiting confirmation', 'wait');
+      });
+      ['ana', 'ben', 'dev'].forEach((id, i) => {
+        const descriptions = ['Give Tue 6–10 PM; receive Sat 2–6 PM.', 'Give Fri 10 AM–2 PM; receive Tue 6–10 PM.', 'Give Sat 2–6 PM; receive Fri 10 AM–2 PM.'];
+        send(21600 + i * 260, id, 'phone:' + id, 'ConfirmTrade', {}, { private: true, text: descriptions[i] + ' Confirm this trade? Your shift is held until everyone answers.' });
+        send(24200 + i * 260, 'phone:' + id, id, 'OwnerReply', {}, { private: true, dir: 'resp', text: 'Confirm. This trade works for me.' });
+        send(25500 + i * 260, id, 'broker', 'Vote', { txn_id: txn, agent_id: id, vote: 'yes', ballot: '•••' }, { dir: 'resp' });
+        state(25500 + i * 260, id, 'Voted yes', 'ok');
+      });
+      send(22600, 'steward', 'phone:manager', 'ManagerApproval', {}, { private: true, text: 'Approve this three-person circulation-desk trade? Tue: Ana → Ben. Fri: Ben → Dev. Sat: Dev → Ana. All shifts remain covered; roster version 17.' });
+      send(26600, 'phone:manager', 'steward', 'OwnerReply', {}, { private: true, dir: 'resp', text: 'Approved. Coverage and roles look correct.' });
+      send(27900, 'steward', 'broker', 'Vote', { txn_id: txn, agent_id: 'steward', vote: 'yes', ballot: '•••' }, { dir: 'resp' });
+      chapter(29300, 'Monday · Commit', 'Every participant receives the same decision. The roster advances together.');
+      ['ana', 'ben', 'dev', 'priya', 'zoe', 'marco', 'steward'].forEach((id, i) => {
+        send(29600 + i * 180, 'broker', id, 'Decision', { txn_id: txn, outcome: 'commit' });
+        state(30500 + i * 180, id, ['ana', 'ben', 'dev'].includes(id) ? 'Trade committed' : id === 'steward' ? 'Roster version 18' : 'Week unchanged', 'ok');
+      });
+      state(32000, 'broker', 'Committed · all votes yes', 'ok');
+      send(32400, 'ana', 'phone:ana', 'OwnerNotice', {}, { private: true, text: 'Trade confirmed. Ben covers your Tuesday shift. You now work Saturday 2–6 PM. Good luck with CSE 310.' });
+      send(33000, 'steward', 'phone:manager', 'OwnerNotice', {}, { private: true, text: 'Trade committed. Roster version 18 is published; all three shifts remain covered.' });
+      chapter(35000, 'Week complete · All shifts covered', 'Select a message to review. The example will restart shortly.');
+      events.sort((a, b) => a.time - b.time);
+      function tick(now) {
+        if (!paused) {
+          elapsed += last ? Math.min(now - last, 250) * speed : 0;
+          while (cursor < events.length && events[cursor].time <= elapsed) events[cursor++].action();
+          if (elapsed >= 44000) { flow.clear(); elapsed = 0; cursor = 0; sequence = 0; }
+        }
+        last = now;
+        raf = requestAnimationFrame(tick);
+      }
+      play.addEventListener('click', () => {
+        paused = !paused; flow.pause(paused); play.textContent = paused ? 'Play' : 'Pause';
+        play.setAttribute('aria-pressed', String(paused));
+      });
+      speedControl.addEventListener('change', () => { speed = Number(speedControl.value); flow.setSpeed(speed); });
+      window.addEventListener('pagehide', event => { if (!event.persisted) { cancelAnimationFrame(raf); flow.destroy(); } });
+      raf = requestAnimationFrame(tick);
+    });
+  </script>
+</body>
+</html>

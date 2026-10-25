@@ -7,22 +7,28 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 from agents import explain
 from agents.store import Store
 from core.models import BusyBlock, Collision, Shift
-from core.timeutil import overlaps, week_start
+from core.timeutil import at, fmt_span, overlaps, week_start
 from core.wire import (
     Decision,
     Eligibility,
+    IssueReport,
+    MeetingBook,
+    MeetingInvite,
+    MeetingOptions,
+    MeetingRequest,
     Move,
     Pick,
     PickRequest,
     Prepare,
     PublicFace,
     RingCheck,
+    Rsvp,
     ShiftRef,
     TradeRequest,
     Vote,
@@ -53,12 +59,14 @@ class Brain:
         send_vote: Callable[[Vote], Awaitable[None]],
         send_trade: Callable[[TradeRequest], Awaitable[None]],
         names: Callable[[], dict[str, str]],
+        to_steward: Callable[[str, object], Awaitable[dict]] | None = None,
     ):
         self.store = store
         self._notify = notify
         self.send_vote = send_vote
         self.send_trade = send_trade
         self.names = names
+        self.to_steward = to_steward
         self.seen: dict[str, ShiftRef] = {}  # public roster facts about shifts offered in rounds
         self.auto_tasks: set[asyncio.Task] = set()
 
@@ -140,6 +148,112 @@ class Brain:
                 "confirms and your manager approves, so also follow your department's call-out rule (usually: tell "
                 "your supervisor directly). Your reason stays with me; your manager only hears it's a same-day "
                 "request.")
+
+    # ---------- work life beyond trades: issues, meetings, extra hours ----------
+    async def draft_issue(self, text: str, category: str) -> str:
+        issues = self.store.get("issues", {})
+        iid = f"issue-{self.me}-{len(issues) + 1}"
+        issues[iid] = {"text": text, "category": category, "status": "draft"}
+        self.store.put("issues", issues)
+        await self.notify(explain.issue_draft(text, category),
+                          [("Send with my name", f"issue:named:{iid}"), ("Send anonymously", f"issue:anon:{iid}"),
+                           ("Don't send", f"issue:no:{iid}")], kind="ask")
+        return "I wrote it up. Check it and choose how to send it."
+
+    async def send_issue(self, mode: str, iid: str) -> str:
+        issues = self.store.get("issues", {})
+        it = issues.get(iid)
+        if not it or it["status"] != "draft":
+            return "That report is already handled."
+        if mode == "no":
+            it["status"] = "dropped"
+            self.store.put("issues", issues)
+            return "OK, not sent."
+        named = mode == "named"
+        await self.to_steward("/issue", IssueReport(issue_id=iid, category=it["category"], text=it["text"],
+                                                    agent_id=self.me if named else None))
+        it["status"] = "sent"
+        self.store.put("issues", issues)
+        self.store.note(f"Sent your {it['category']} report to your manager" + ("." if named else ", anonymously."))
+        return ("Sent to your manager with your name. I'll tell you when they've seen it." if named
+                else "Sent anonymously. Your manager can't see who sent it, so they can't reply to you.")
+
+    async def issue_acked(self, iid: str) -> None:
+        it = self.store.get("issues", {}).get(iid)
+        if it:
+            await self.notify(f"Your manager saw your report: \"{it['text']}\"", kind="info")
+
+    def free_slots(self, monday: date, minutes: int) -> list[tuple]:
+        """Times this student is free on weekdays 9-5 (no class, no shift, nothing on the calendar)."""
+        taken = [(b.start, b.end) for b in self.store.busy()] + [(s.start, s.end) for s in self.store.shifts()]
+        out = []
+        for d in range(5):
+            day = monday + timedelta(days=d)
+            for half in range(18, 34 - minutes // 30 + 1):
+                st = at(day, half // 2, 30 * (half % 2))
+                en = st + timedelta(minutes=minutes)
+                if not any(overlaps(st, en, a, b) for a, b in taken):
+                    out.append((st, en))
+        return out
+
+    async def ask_meeting(self, monday: date, minutes: int = 30) -> str:
+        opts_all = self.store.get("meeting_opts", {})
+        rid = f"meet-{self.me}-{len(opts_all) + 1}"
+        req = MeetingRequest(request_id=rid, agent_id=self.me, minutes=minutes, slots=self.free_slots(monday, minutes))
+        opts = MeetingOptions(**await self.to_steward("/meeting/request", req))
+        if not opts.slots:
+            return "Your manager has no time next week that matches yours. Text me again and I'll try the week after."
+        opts_all[rid] = [[s.isoformat(), e.isoformat()] for s, e in opts.slots]
+        self.store.put("meeting_opts", opts_all)
+        await self.notify(explain.meeting_options(opts.slots),
+                          [(fmt_span(s, e), f"book:{rid}:{i}") for i, (s, e) in enumerate(opts.slots)], kind="ask")
+        return "I found times that work for you and your manager."
+
+    async def book(self, rid: str, i: int) -> str:
+        opts = self.store.get("meeting_opts", {}).get(rid)
+        if not opts or i >= len(opts):
+            return "That meeting is already booked or gone."
+        s, e = (datetime.fromisoformat(x) for x in opts[i])
+        await self.to_steward("/meeting/book", MeetingBook(request_id=rid, agent_id=self.me, start=s, end=e))
+        self.store.add_busy([BusyBlock(id=f"meet-{rid}", start=s, end=e, kind="appointment",
+                                       label="Meeting with your supervisor", source="calendar")])
+        await self.schedule_changed()
+        left = self.store.get("meeting_opts", {})
+        left.pop(rid, None)
+        self.store.put("meeting_opts", left)
+        return f"Booked: {fmt_span(s, e)} with your supervisor. It's on your week now, and I'll keep shifts off it."
+
+    async def invited(self, m: MeetingInvite) -> None:
+        invites = self.store.get("invites", {})
+        invites[m.meeting_id] = m.model_dump(mode="json")
+        self.store.put("invites", invites)
+        clash = next((b.label for b in self.store.busy() if overlaps(m.start, m.end, b.start, b.end)), None) or \
+            next((f"your {s.label} shift" for s in self.store.shifts() if overlaps(m.start, m.end, s.start, s.end)), None)
+        buttons = [("I'll be there", f"rsvp:yes:{m.meeting_id}"), ("Can't make it", f"rsvp:no:{m.meeting_id}")]
+        await self.notify(explain.invite(m.title, fmt_span(m.start, m.end), clash),
+                          buttons[::-1] if clash else buttons, kind="ask")
+
+    async def rsvp(self, going: bool, mid: str) -> str:
+        inv = self.store.get("invites", {}).get(mid)
+        if not inv:
+            return "That invite is gone."
+        await self.to_steward("/meeting/rsvp", Rsvp(meeting_id=mid, agent_id=self.me, going=going))
+        if going:
+            self.store.add_busy([BusyBlock(id=f"team-{mid}", start=datetime.fromisoformat(inv["start"]),
+                                           end=datetime.fromisoformat(inv["end"]), kind="other", label=inv["title"],
+                                           source="calendar")])
+            await self.schedule_changed()
+            return "Added to your week. Your manager only sees that you're coming."
+        return "OK, I told your manager you can't make it, with no reason."
+
+    async def want_hours(self, monday: date) -> str:
+        st = self.store.student()
+        self.store.save_student(st.model_copy(update={"prefs": st.prefs.model_copy(update={"wants_more_hours": True})}))
+        room = binding(st, self.store.shifts(), monday)
+        left = f"${room.room:.0f} of Work-Study award" if room.unit == "$" else f"{room.room:g} h"
+        return ("Got it. When your manager posts an extra shift, I'll offer to take it if it fits your classes and "
+                f"every limit I check for you (your tightest limit leaves {left} this week). You confirm each one "
+                "before it's yours.")
 
     # ---------- availability (private) ----------
     def availability(self, ref: ShiftRef, giving: str | None = None) -> Avail:
@@ -290,16 +404,25 @@ class Brain:
                 self.remember("requested", parts[2])
                 await self.send_trade(TradeRequest(agent_id=self.me, shift_id=parts[2]))
                 self.store.note("You asked me to find a trade. Request sent: only the shift id left.")
-                return "Looking for a trade. I'll text you when one works."
-            return "OK, leaving it."
+                return ("On it. I'll look for a swap first, then a cover, in the next trade round. I'll text you "
+                        "before anything moves; you don't need to do anything else.")
+            return "OK, you keep the shift. Text me if that changes."
         if parts[0] == "out" and len(parts) == 2:
             return await self.tag_out(parts[1])
+        if parts[0] == "issue" and len(parts) == 3:
+            return await self.send_issue(parts[1], parts[2])
+        if parts[0] == "book" and len(parts) == 3:
+            return await self.book(parts[1], int(parts[2]))
+        if parts[0] == "rsvp" and len(parts) == 3:
+            return await self.rsvp(parts[1] == "yes", parts[2])
         if parts[0] == "ask" and len(parts) == 3:
             answers = self.store.get("answers", {})
             answers[parts[2]] = "yes" if parts[1] == "yes" else "no"
             self.store.put("answers", answers)
             self.store.note(f"You answered {answers[parts[2]]} about {parts[2]}.")
-            return "Got it, I'll offer it in the next round." if parts[1] == "yes" else "OK, keeping your slot."
+            return ("Got it. I'll offer to take it in the next round, and you'll still get a final Confirm before "
+                    "anything moves." if parts[1] == "yes" else "OK, keeping your slot. I passed, and nobody is "
+                    "told why.")
         if parts[0] in ("confirm", "decline") and len(parts) == 2:
             hold = self.store.get("hold")
             if not hold or hold["txn_id"] != parts[1]:
@@ -307,10 +430,11 @@ class Brain:
             ballot = hold.get("ballot", "")
             if parts[0] == "decline":
                 await self.send_vote(Vote(txn_id=parts[1], agent_id=self.me, vote="no", ballot=ballot))
-                return "Declined. Nobody will be told why."
+                return "Declined. The trade is off, and nobody is told why."
             vote = "yes" if hold["version"] == self.store.version() else "stale"
             await self.send_vote(Vote(txn_id=parts[1], agent_id=self.me, vote=vote, ballot=ballot))
-            return "Confirmed. Waiting for the others." if vote == "yes" else "Your week changed, so I pulled out."
+            return ("Confirmed. Waiting for the others and your manager; I'll text you the result." if vote == "yes"
+                    else "Your week changed since this trade was set up, so I pulled out. Nothing moved.")
         return "?"
 
     async def decide(self, d: Decision) -> None:
@@ -337,7 +461,9 @@ class Brain:
         for s in drops:
             self.store.put("collisions", [c for c in self.store.get("collisions", []) if c["shift_id"] != s.id])
         self.store.note(f"{hold['ring_id']} committed.")
-        await self.notify(explain.committed(adds, drops), kind="commit")
+        monday = week_start((adds or drops)[0].start.date()) if adds or drops else None
+        week = [s for s in self.store.shifts() if week_start(s.start.date()) == monday]
+        await self.notify(explain.committed(adds, drops, week), kind="commit")
 
     async def schedule_changed(self) -> None:
         """Called after any edit to this student's week. A held trade with an old version must not commit."""

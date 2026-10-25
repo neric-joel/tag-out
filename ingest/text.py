@@ -72,6 +72,34 @@ CALLOUT_RE = re.compile(
 RELATIVE_RE = re.compile(r"\b(today|tonight|tomorrow)\b", re.I)
 
 
+ISSUE_RE = re.compile(
+    r"\b(broken|not working|(?:isn'?t|doesn'?t|won'?t) work(?:ing)?|jammed|out of (?:paper|toner|order)|"
+    r"leak(?:ing|s)?|unsafe|spill(?:ed)?|report (?:an? )?(?:issue|problem)|problem with)\b", re.I)
+MEETING_RE = re.compile(r"\b(meet(?:ing)?|1:1|one[- ]on[- ]one|talk)\b.*\b(supervisor|manager|boss)\b", re.I)
+HOURS_RE = re.compile(r"\b(more hours|extra (?:hours|shifts?)|need (?:more )?hours|pick up (?:a |more |extra )?shifts?)\b",
+                      re.I)
+CATEGORIES = [("safety", r"unsafe|harass|threat|injur|hurt|fire|danger"),
+              ("facilities", r"leak|spill|bathroom|restroom|clean|air condition|\bheat|\blights?\b"),
+              ("equipment", r"printer|computer|scanner|laptop|register|card reader|phone|desk|chair|key|door|badge|"
+                            r"toner|paper"),
+              ("schedule", r"schedule|hours|shift|timesheet|workday")]
+
+
+def intent(text: str) -> str | None:
+    """Work-life requests that aren't calendar items: an issue report, a meeting, or wanting more hours."""
+    if ISSUE_RE.search(text):
+        return "issue"
+    if MEETING_RE.search(text):
+        return "meeting"
+    if HOURS_RE.search(text):
+        return "hours"
+    return None
+
+
+def issue_category(text: str) -> str:
+    return next((name for name, pat in CATEGORIES if re.search(pat, text, re.I)), "other")
+
+
 def callout(text: str, monday: date, today: date | None = None) -> dict | None:
     """A same-day call-out ("I'm sick, tag me out of Thursday"), or None. No LLM: the words are few and fixed.
 

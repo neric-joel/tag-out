@@ -85,9 +85,9 @@ def sample(cmd: str, args) -> None:
     elif cmd == "inbox":
         print(show(msgs))
     elif cmd == "answer":
-        print({"trade": "Looking for a trade. I'll text you when one works.",
-               "ask": "Got it, I'll offer it in the next round.",
-               "confirm": "Confirmed. Waiting for the others."}.get(args.code.split(":")[0], "OK."))
+        print({"trade": "On it. I'll look for a swap first, then a cover, in the next trade round.",
+               "ask": "Got it. I'll offer to take it in the next round.",
+               "confirm": "Confirmed. Waiting for the others and your manager."}.get(args.code.split(":")[0], "OK."))
     elif cmd == "tell":
         print(f"sample: your mascot would note \"{args.text}\" as busy time; only 'busy' ever leaves it")
     elif cmd == "setup":

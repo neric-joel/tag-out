@@ -54,13 +54,19 @@ python -m scripts.fetch_pets     # downloads the mascot art into web/pets/ (git-
 python -m scripts.run_all        # 6 mascots, the Steward, the broker, and the Telegram bot if a token is set
 ```
 
-Open http://127.0.0.1:8700 for the dashboard (arena, roster, round log and simulator results), or http://127.0.0.1:8700/judge for the judge view, which adds the on-screen phones and the synthetic students' private numbers under a red banner. In a second terminal with the same virtual environment:
+Open http://127.0.0.1:8700 for the commons, where the mascots live (next section), with the roster, round log and simulator results below it, or http://127.0.0.1:8700/judge for the judge view, which adds the on-screen phones and the synthetic students' private numbers under a red banner. In a second terminal with the same virtual environment:
 
 ```
 python -m scripts.demo --all     # the demo week, a reset, then the break-it beat
 ```
 
 By default the synthetic students tap their own buttons after a short delay. `python -m scripts.run_all --mode live` waits for real taps instead, and `--no-bot` skips Telegram. Logs go to `runtime/logs/`. Without an Anthropic key, text intake uses the committed cache in `seeds/llm_cache` and the regex parser, so the demo runs offline.
+
+### Where the mascots live
+
+The home page is the commons: a small square where all six mascots live on a canvas (`web/js/world.js`). They walk around using every animation in the Codex Pets sprite sheet: idle, running left and right, waving when two of them meet, jumping, waiting, the review pose while they think, the failed pose on an abort, and the 16 look directions on version-2 pets, which they use to face a trade partner. When a trade round opens, the mascots whose students asked for a trade walk to the table; picks appear as grey arrows, a closed ring as blue arrows, and each confirm as a tick over the mascot. After the week they wander off again. You can drag a mascot anywhere, click one to open that student's chat with it, and change their size with the slider.
+
+The chat panel next to the commons is each student's private thread with their own mascot (the same messages arrive on Telegram). The Pets button opens a picker that searches the [Codex Pets](https://codex-pets.net) gallery (3,500+ pets), downloads the chosen sprite sheet into `web/pets/` and gives it to that student; no two students on a roster can share one. Fan art of copyrighted characters (for example the several Goku pets) works locally, but the default roster sticks to original art so a public demo video carries no third-party characters.
 
 ### Telegram
 
@@ -72,7 +78,17 @@ By default the synthetic students tap their own buttons after a short delay. `py
    ```
 
 2. Start everything with `python -m scripts.run_all --mode live` so the mascots wait for your taps.
-3. In Telegram, open your bot and send `/start`, then `/join ana`. That chat is now Ana's phone. `/join manager` from another chat gets the manager's approval cards. Other commands: `/pet` picks a mascot, `/week` lists your shifts, `/diary` shows your room before your tightest limit, `/sunday` runs the Sunday check, `/trade` starts the rounds.
+3. In Telegram, open your bot and send `/start`, then `/join ana`. That chat is now Ana's phone. `/join manager` from another chat gets the manager's approval cards. Telegram carries plain text and buttons only; the mascots themselves live on the website. Other commands: `/week` lists your shifts, `/diary` shows your room before your tightest limit, `/sunday` runs the Sunday check, `/trade` starts the rounds.
+
+## What we took from ASU Workday
+
+ASU student workers already live in Workday, so Tag Out follows its shapes (checked on a real student account; no data copied):
+
+- Time is entered per day and per position, in Mon-Sun weeks inside a biweekly time period, and each entry is approved by the supervisor. Mascots read their hours history from a Workday-shaped time export (`seeds/workday/<student>_time.csv`, synthetic) through `ingest/workday.py`, summing every ASU position.
+- The 25 h average counts ASU jobs only. Ben's Dining job is Aramark, which is not in Workday, so it counts toward his F-1 20 hours but not toward the 25 h average (`Limits.non_asu_employers`).
+- The hire date starts the 25 h measurement period: the first 12 months after hire, then October to September (`rulebook.rules.measurement_window`).
+- A shift needs a job profile, and a mascot never picks a shift its student's profile can't work (an instructional assistant can't cover a grader).
+- The supervisory organization names the manager who approves time; that is who gets the Steward's approval card.
 
 ## The agents
 
@@ -80,7 +96,7 @@ By default the synthetic students tap their own buttons after a short delay. `py
 |---|---|---|---|
 | Mascot x6 (Ana, Ben, Dev, Priya, Zoe, Marco) | one FastAPI process each on ports 8711-8716, each with its own SQLite file `runtime/mascot_<id>.db` | its student's calendar as busy blocks with private labels, their Library shifts, their limits (F-1/J-1 flag, Federal Work-Study award left, hours at other employers, hours history), their preferences (wants more hours, days they never work, soft slots like Ana's gym time) and a private diary | runs the Sunday check; answers each round with one shift id or a pass; asks its student about a soft-preference shift and counter-offers in the next round; re-checks the exact final ring or chain; holds the shifts on PREPARE, asks its student to confirm, and votes yes, no or stale |
 | Steward (one per employer, the Library here) | one process on port 8701 | the roster, which the employer already shares with its staff, and pending approvals | serves the roster; on PREPARE checks that each giver still owns the shift; sends the manager an Approve/Deny card and votes; tells the manager about shifts no trade could fill; gives a crunch forecast that reports a slot only when at least 3 staff are busy |
-| Broker | one process on port 8700, which also serves the arena and the event stream | shift ids, picks, ok bits, schedule version numbers and votes | runs Top Trading Cycles swap rounds, the counter-offer window and cover chains; asks every member for an ok bit on the exact final ring or chain; picks proposals with CP-SAT; runs the two-phase commit; retries after an abort |
+| Broker | one process on port 8700, which also serves the commons website and the event stream | shift ids, picks, ok bits, schedule version numbers and votes | runs Top Trading Cycles swap rounds, the counter-offer window and cover chains; asks every member for an ok bit on the exact final ring or chain; picks proposals with CP-SAT; runs the two-phase commit; retries after an abort |
 | Rulebook | a library inside each mascot process (`rulebook/`), with no network and no LLM | the limits in `config/rules.yaml` and the quotes in `docs/rule_quotes.json`; reads one student's numbers at a time | returns eligible, blocked or unverified for a proposed change, with the deciding rule; missing hours history is unverified, never safe; refuses to cite a quote that isn't verbatim in `docs/RULES.md` |
 
 The Telegram bot (`bot/telegram_bot.py`, relay on port 8702) is each student's phone line, not an agent. It forwards texts and taps to the owning mascot with that mascot's owner token and delivers the mascot's messages.
@@ -98,7 +114,7 @@ flowchart TB
     anthropic["Anthropic API"]
     broker["Broker :8700, rounds, TTC, CP-SAT, two-phase commit"]
     steward["Steward :8701, Library roster and approvals"]
-    arena["Arena dashboard in the browser"]
+    arena["Commons website in the browser"]
 
     student <-->|texts and taps| bot
     manager <-->|approval cards and taps| bot
@@ -199,14 +215,14 @@ The model:
 
 - Every agent-to-agent message is a closed Pydantic schema in `core/wire.py` with `extra="forbid"` and `frozen=True`. A pick carries one shift id or nothing, an eligibility answer is one boolean, and a vote is yes, no, stale or timeout. There is no field for hours, reasons, rule names or event labels, so a message carrying one fails to parse.
 - Each mascot is its own process with its own SQLite file. A student's calendar, limits and preferences live only in that file, and only that process opens it.
-- Replies are released together at the round deadline, so how fast a mascot answered says nothing to the other agents or to the arena.
+- Replies are released together at the round deadline, so how fast a mascot answered says nothing to the other agents or to the commons.
 - Passes look identical. A pass because of the F-1 limit, a class, a preference or not wanting the shift is the same message, `"shift_id": null`.
 - The no-leak test runs the whole demo week including the abort, records every agent-to-agent request and response, and fails if a key outside the wire schemas or any private string (every calendar label, preference label and other employer's name, plus words like "F-1" and "visa") shows up. It scans the public event stream and the manager's messages too.
 
 Its limits:
 
 - Separate processes protect a student's data from peers and from the employer, not from whoever runs the server. In this build every mascot runs on one machine, and its operator can open every database.
-- The allowed fields can still leak a little over many weeks. Which shifts someone asks to trade, their picks and passes, and their stale or no votes are visible to the broker and, by name, on the public arena stream, and patterns build up.
+- The allowed fields can still leak a little over many weeks. Which shifts someone asks to trade, their picks and passes, and their stale or no votes are visible to the broker and, by name, on the public event stream the commons shows, and patterns build up.
 - TTC is a central matching step. The broker sees every mascot's pick, though only the pick.
 - The demo data is synthetic: the six students, their calendars, and the simulated roster.
 - With an Anthropic key, the texts a student sends their mascot go to the Anthropic API to be parsed. With `TAGOUT_LLM_EXPLAIN=1`, so do the explanation texts a mascot sends its own student, which carry the private label and, for F-1 students, their hours. Rules and limits never go into a prompt.
@@ -243,7 +259,7 @@ From `pyproject.toml` (minimum versions):
 - OR-Tools 9.15 (CP-SAT) to choose which rings and chains run
 - python-telegram-bot 22.8 with long polling and inline buttons
 - icalendar 7.3 and recurring-ical-events 3.8 for Canvas, calendar and shift feeds
-- sse-starlette 3.5 for the arena's event stream
+- sse-starlette 3.5 for the commons' event stream
 - anthropic 2.3: Claude Haiku parses student texts and Claude Sonnet can rephrase a mascot's texts (model ids in `ingest/llm.py`)
 - PyYAML 6.0 for `config/rules.yaml`, matplotlib 3.11 for the simulator chart (Pillow comes with it and cuts the pet frames for Telegram)
 - SQLite from the Python standard library, one file per mascot

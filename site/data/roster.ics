@@ -1,0 +1,112 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Tag Out//Library roster//EN
+BEGIN:VEVENT
+SUMMARY:Library front desk - Zoe
+DTSTART;TZID=America/Phoenix:20261026T100000
+DTEND;TZID=America/Phoenix:20261026T140000
+UID:library-mon-1026-1000-d1@tagout
+DESCRIPTION:Changed by an approved Tag Out trade
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Priya
+DTSTART;TZID=America/Phoenix:20261026T140000
+DTEND;TZID=America/Phoenix:20261026T180000
+UID:library-mon-1026-1400-d1@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Zoe
+DTSTART;TZID=America/Phoenix:20261027T100000
+DTEND;TZID=America/Phoenix:20261027T140000
+UID:library-tue-1027-1000-d1@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Ben
+DTSTART;TZID=America/Phoenix:20261027T180000
+DTEND;TZID=America/Phoenix:20261027T220000
+UID:library-tue-1027-1800-d1@tagout
+DESCRIPTION:Changed by an approved Tag Out trade
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Dev
+DTSTART;TZID=America/Phoenix:20261028T100000
+DTEND;TZID=America/Phoenix:20261028T140000
+UID:library-wed-1028-1000-d1@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Priya
+DTSTART;TZID=America/Phoenix:20261028T140000
+DTEND;TZID=America/Phoenix:20261028T180000
+UID:library-wed-1028-1400-d1@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Marco
+DTSTART;TZID=America/Phoenix:20261028T140000
+DTEND;TZID=America/Phoenix:20261028T180000
+UID:library-wed-1028-1400-d2@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Marco
+DTSTART;TZID=America/Phoenix:20261029T100000
+DTEND;TZID=America/Phoenix:20261029T140000
+UID:library-thu-1029-1000-d1@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Dev
+DTSTART;TZID=America/Phoenix:20261029T140000
+DTEND;TZID=America/Phoenix:20261029T180000
+UID:library-thu-1029-1400-d1@tagout
+DESCRIPTION:Changed by an approved Tag Out trade
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Zoe
+DTSTART;TZID=America/Phoenix:20261029T180000
+DTEND;TZID=America/Phoenix:20261029T220000
+UID:library-extra-1029-1800@tagout
+DESCRIPTION:Changed by an approved Tag Out trade
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Ana
+DTSTART;TZID=America/Phoenix:20261030T100000
+DTEND;TZID=America/Phoenix:20261030T140000
+UID:library-fri-1030-1000-d1@tagout
+DESCRIPTION:Changed by an approved Tag Out trade
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Priya
+DTSTART;TZID=America/Phoenix:20261030T140000
+DTEND;TZID=America/Phoenix:20261030T180000
+UID:library-fri-1030-1400-d1@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Ana
+DTSTART;TZID=America/Phoenix:20261031T100000
+DTEND;TZID=America/Phoenix:20261031T140000
+UID:library-sat-1031-1000-d1@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Priya
+DTSTART;TZID=America/Phoenix:20261031T100000
+DTEND;TZID=America/Phoenix:20261031T140000
+UID:library-sat-1031-1000-d2@tagout
+DESCRIPTION:Changed by an approved Tag Out trade
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Marco
+DTSTART;TZID=America/Phoenix:20261031T140000
+DTEND;TZID=America/Phoenix:20261031T180000
+UID:library-sat-1031-1400-d1@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Zoe
+DTSTART;TZID=America/Phoenix:20261101T100000
+DTEND;TZID=America/Phoenix:20261101T140000
+UID:library-sun-1101-1000-d1@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Library front desk - Dev
+DTSTART;TZID=America/Phoenix:20261101T140000
+DTEND;TZID=America/Phoenix:20261101T180000
+UID:library-sun-1101-1400-d1@tagout
+END:VEVENT
+END:VCALENDAR

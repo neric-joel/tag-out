@@ -425,6 +425,7 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 /* how it works */
 #flow { margin: var(--gap) 0; }
 .snoop-note { border: 1px solid var(--negative); background: var(--neg-soft); color: var(--text); border-radius: var(--radius-control); padding: 10px 14px; font-size: 13px; line-height: 19px; margin: var(--gap) 0 0; }
+.claims { overflow-x: auto; }
 .ledger { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 18px; }
 .ledger th { text-align: left; color: var(--muted); font: 400 12px/16px var(--font); padding: 0 12px 8px 0; }
 .ledger td { padding: 10px 12px 10px 0; border-top: 1px solid var(--rule); vertical-align: top; }
@@ -561,3 +562,14 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 .sim-fold[open] .sim-open { display: none; }
 .sim-fold[open] > summary { margin-bottom: 12px; }
 @media (max-width: 900px) { .hero-case { grid-template-columns: 1fr; } .hero-case > * + * { border-left: 0; border-top: 1px solid var(--border); } }
+
+/* phone and tablet: the tabs get their own scrolling row under the brand */
+@media (max-width: 960px) {
+  .topbar { flex-wrap: wrap; height: auto; padding: 8px 16px; gap: 6px 12px; }
+  .scope { display: none; }
+  .tabs { order: 3; width: 100%; margin-left: 0; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs a { flex: none; }
+  .who-pill { margin-left: auto; }
+  .static-banner, .debug-banner { font-size: 12px; }
+}

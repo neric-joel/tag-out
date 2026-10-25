@@ -65,7 +65,7 @@
     const p = path.split("?")[0];
     const m = p.match(/^\/phone\/(\w+)$/);
     if (m) {
-      const all = (R.cur && R.cur.phones[m[1]]) || [], now = R.clock ? Date.parse(R.clock) + 999 : -1;
+      const all = (R.cur && R.cur.phones[m[1]]) || [], now = R.clock ? Date.parse(R.clock) : -1;
       return { messages: all.filter((x) => Date.parse(x.ts) <= now) };
     }
     let snap = R.cur.checkpoints[0].snap;
@@ -75,11 +75,12 @@
   }
   // what a judge's action replays: the recorded real run of that same action
   // [recording, replay from this step, up to this step, note]: each action replays just its own segment
-  const REPLAY = { "/demo/sunday": ["tour", null, "week"], "/demo/run": ["tour", null, "week"], "/demo/break": ["breakit"],
+  const REPLAY = { "/demo/sunday": ["tour", null, "week"], "/demo/break": ["breakit"],
+    "/demo/run": ["breakit", null, null, "Replaying the break-it run: Dev's week changes while the ring waits for confirmations, so it aborts, nothing moves, and the broker retries."],
     "/demo/snoop": ["tour", "supervisor-meeting", "snoop"],
-    "/manager/extra": ["tour", "callout", "extra", "Replaying the recorded run: the manager posted Thu 6-10 PM and every mascot was offered it."],
+    "/manager/extra": ["tour", "callout", "extra", "The hosted page replays the recorded extra shift (Thu 6-10 PM, offered to every mascot). Run it live to post your own."],
     "/manager/meeting": ["tour", "issue", "team-meeting", "Replaying the recorded run: the manager looked for a team meeting time."],
-    "/demo/org/morning": ["org", null, null, "Replaying the recorded morning: a call-out nobody could cover, a safety report and an F-1 question."],
+    "/demo/org/morning": ["org", "week", null, "Replaying the recorded morning: a call-out nobody could cover, a safety report and an F-1 question."],
     "/demo/org/safety": ["org", "callout", "safety", "Replaying the recorded safety report: Tess told her mascot the fire exit was blocked."],
     "/demo/org/question": ["org", "safety", "question", "Replaying the recorded question: Kofi asked his mascot about winter-break hours on his F-1."] };
   const CHIP = { sick: ["tour", "week", "callout", "Replaying the recorded call-out: Ben texted that he woke up sick."],
@@ -89,9 +90,11 @@
     if (REPLAY[path]) { const [name, from, until, note] = REPLAY[path]; if (note) toast(note); return play(name, from, until); }
     if (path === "/admin/reset") return play(null);
     const text = ((body && body.text) || "").toLowerCase();
-    const chip = text.includes("sick") ? CHIP.sick : text.includes("printer") || text.includes("broken") ? CHIP.printer : text.includes("supervisor") ? CHIP.supervisor : null;
-    if (chip) { toast(chip[3]); return play(chip[0], chip[1], chip[2]); }
     const typed = path.match(/^\/phone\/(\w+)\/text$/);
+    const chip = text.includes("sick") ? CHIP.sick : text.includes("printer") || text.includes("broken") ? CHIP.printer : text.includes("supervisor") ? CHIP.supervisor : null;
+    // a chip replays only for the student it was recorded with; anyone else's text runs the real agents
+    const recorded = new Map([[CHIP.sick, "ben"], [CHIP.printer, "ana"], [CHIP.supervisor, "priya"]]);
+    if (chip && (!typed || recorded.get(chip) === typed[1])) { toast(chip[3]); return play(chip[0], chip[1], chip[2]); }
     if (typed && text) return liveTry(typed[1], body.text);
     toast("This hosted page replays a recording of the real agents. Type a message to a student's mascot to run them live.");
     return {};
@@ -129,7 +132,9 @@
     const ev = evs[R.i]; R.clock = ev.ts; R.i++;
     onEvent(ev);
     const next = evs[R.i];
-    if (next) R.timer = setTimeout(tick, Math.min(2200, Math.max(25, Date.parse(next.ts) - Date.parse(ev.ts))));
+    // long gaps are squeezed to 2.2 s, except the hierarchy's timers, whose countdowns should be watchable
+    const cap = next && (next.type.startsWith("org_") || ev.type.startsWith("org_")) ? 6000 : 2200;
+    if (next) R.timer = setTimeout(tick, Math.min(cap, Math.max(25, Date.parse(next.ts) - Date.parse(ev.ts))));
   }
   let toastTimer = 0;
   function toast(text) {
@@ -187,10 +192,12 @@
     switch (ev.type) {
       case "reset":
         orgLog.length = 0; if (org) org.reset();
+        Object.assign(leak, { msgs: 0, fields: 0, hits: 0 }); wireLog.length = 0; if (flow) flow.clear();
+        ["#lkMsgs", "#lkFields", "#lkLabels"].forEach((s) => { $(s).textContent = "0"; });
         Object.assign(S, { requested: new Set(), moved: {}, open: new Set(), votes: {}, summary: null, committed: [], checks: 0, passed: 0 });
         requesters.clear();
         $("#events").innerHTML = ""; $("#logCount").textContent = "0 items";
-        W.clear(); W.release(PEOPLE); PEOPLE.forEach((a) => { W.badge(a, null); W.status(a, ""); W.face(a, null); });
+        W.clear(); W.release(PEOPLE); if (world) PEOPLE.forEach((a) => { world.badge(a, null); world.status(a, ""); world.face(a, null); });
         refreshRoster(); setStatus("Reset. The mascots are hanging out until Sunday's check."); setFinding(null); renderKpis(); break;
       case "sunday_check":
         ev.agents.forEach((a, i) => setTimeout(() => { W.play(a, "review"); W.say(a, "Checking next week…", 2600); }, i * 180));
@@ -580,7 +587,7 @@
   async function renderForecast(sel) {
     try {
       const f = await get("/forecast");
-      const lab = (slot) => { const m = slot.match(/^(\w{3}) (\d+)-(\d+)$/); if (!m) return slot; const h = (x) => (+x % 12) || 12; return `${m[1]} ${h(m[2])}–${h(m[3])} ${+m[3] >= 12 ? "PM" : "AM"}`; };
+      const lab = (slot) => { const m = slot.match(/^(\w{3}) (\d+)-(\d+)$/); if (!m) return slot; const h = (x) => (+x % 12) || 12; const ap = (x) => (+x >= 12 ? "PM" : "AM"); return ap(m[2]) === ap(m[3]) ? `${m[1]} ${h(m[2])}–${h(m[3])} ${ap(m[3])}` : `${m[1]} ${h(m[2])} ${ap(m[2])}–${h(m[3])} ${ap(m[3])}`; };
       const top = f.alerts.slice().sort((a, b) => b.busy - a.busy);
       $(sel).innerHTML = `<h3>Crunch forecast for the manager</h3>
         <p class="muted small" style="margin-bottom:8px">Counts only, shown when ${f.k} or more of ${f.staff} staff are busy. No names, no reasons.</p>
@@ -598,8 +605,7 @@
     if (!(v in VIEWS) || JUDGE) v = "commons";
     // hosted replay: pages that show a week's results start from the finished week, not a blank one
     if (STATIC && R.i === 0 && (v === "me" || v === "manager" || JUDGE)) { play("tour", "week", "week").then(route); return; }
-    if (v === "me" && !PEOPLE.includes(role())) { openSignIn(); v = S.view || "commons"; }
-    if (v === "manager") store.set(ROLE_KEY, "manager");
+    if (v === "me" && !PEOPLE.includes(role())) { openSignIn(); v = S.view || "commons"; history.replaceState(null, "", "#" + v); }
     Object.entries(VIEWS).forEach(([k, sel]) => { $(sel).hidden = k !== v; });
     document.querySelectorAll(".tabs a").forEach((a) => a.removeAttribute("aria-current"));
     $(JUDGE ? "#tabJudge" : TAB[v]).setAttribute("aria-current", "page");
@@ -619,11 +625,13 @@
     const wrap = $("#people");
     wrap.innerHTML = PEOPLE.filter((p) => p in S.names).map((p) => `<button type="button" data-who="${p}">
         <canvas data-pet="${esc(S.pets[p] || "")}" width="96" height="104"></canvas>${S.names[p]}<span class="sub">${esc(SUBTITLE[p] || "student worker")}</span></button>`).join("")
-      + `<button type="button" data-who="manager"><svg class="mgr-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9"/><path d="M9 11h14M16 11v12"/><circle cx="23.5" cy="21.5" r="3"/></svg>Library manager<span class="sub">approves trades, posts shifts</span></button>`;
+      + `<button type="button" data-who="manager">${($(".mgr-mark") || { outerHTML: "" }).outerHTML}Library manager<span class="sub">approves trades, posts shifts</span></button>`;
     wrap.querySelectorAll("canvas").forEach((c) => Sprites.badge(c, c.dataset.pet || "debug-duck-v2", "idle"));
     wrap.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
       store.set(ROLE_KEY, b.dataset.who); $("#signIn").close();
-      location.hash = b.dataset.who === "manager" ? "#manager" : "#me"; route();
+      const to = b.dataset.who === "manager" ? "#manager" : "#me";
+      if (JUDGE) { location.href = "/" + to; return; } // the judge view only has the commons
+      location.hash = to; route();
     }));
     $("#signIn").showModal();
   }
@@ -731,6 +739,14 @@
     Object.values(d.roles).forEach((r) => { ORGN[r.id] = r.name; });
     $("#org").innerHTML = "";
     org = TagOutOrg.create($("#org"), { data: d, judge: JUDGE && S.debug, name, shift: (id) => id,
+      // synthetic demo only: what only one mascot knew, so a judge can check why it passed
+      privateNote: async (who) => {
+        const me = await get(`/me/${who}`).catch(() => null);
+        const r = me && (me.rooms || []).find((x) => x.rule_id === "f1_weekly_20");
+        if (!r) return null;
+        const jobs = Object.keys(me.other_jobs || {}).length ? " across his Rec and Dining jobs" : "";
+        return `Only ${name(who)}'s own mascot knows why he passed: he's at ${r.used.toFixed(0)} of his ${r.cap.toFixed(0)} F-1 hours${jobs}, so 4 more would make ${(r.used + 4).toFixed(0)}. The shift lead saw a pass. (Synthetic demo: shown here so you can check it; in real use only he sees this.)`;
+      },
       phoneOf: async (id) => ((await get(`/phone/${id === "steward" ? "manager" : id}`)).messages || []) });
     orgLog.forEach((ev) => org.event(ev, false));
   }
@@ -788,7 +804,7 @@
     if (from && to && !ev.quiet) { wireLog.push(ev); if (wireLog.length > 300) wireLog.shift(); }
     if (!flow || !from || !to) return;
     const quiet = !live || ev.quiet;
-    flow.message({ from, to, schema: ev.schema, path: ev.path, payload: ev.payload, dir: "req", ts: ev.ts }, quiet);
+    flow.message({ id: `m${ev.n}`, from, to, schema: ev.schema, path: ev.path, payload: ev.payload, dir: "req", ts: story(ev.ts).toISOString() }, quiet);
     if (ev.status >= 400) flow.message({ from: to, to: from, schema: `${ev.status} rejected`, payload: ev.response || {}, dir: "resp", ts: ev.ts }, quiet);
     else if (ev.response != null) {
       const held = ev.schema === "Prepare" && ev.response && ev.response.vote === null;
@@ -808,7 +824,7 @@
         const phone = `phone:${who}`, agent = who === "manager" ? "steward" : who;
         const toPhone = m.kind !== "student";
         if (m.kind === "reply" && m.from === "auto") return;
-        flow.message({ from: toPhone ? agent : phone, to: toPhone ? phone : agent, schema: toPhone ? "Message" : "Text", private: true, text: m.text, dir: "req" });
+        flow.message({ id: `${who}-${m.n || ""}`, from: toPhone ? agent : phone, to: toPhone ? phone : agent, schema: toPhone ? "Message" : "Text", private: true, text: m.text, dir: "req", ts: m.ts ? story(m.ts).toISOString() : undefined });
       });
     }));
   }
@@ -902,6 +918,8 @@
       $("#btnSunday").classList.add("primary"); $("#btnRun").classList.remove("primary");
       $("#btnReset").textContent = "Restart";
       $("#btnPets").remove();
+      document.querySelectorAll('a[href="/roster.csv"], a[href="/roster.ics"]').forEach((a) => { a.href = "data" + a.getAttribute("href"); });
+      $("#mgrSwapRule").disabled = true; $("#mgrSwapRule").closest("label").title = "Live system only: the hosted page replays a recording.";
       const note = document.createElement("div");
       note.className = "static-banner";
       note.innerHTML = 'Hosted demo: a recording of the real system, where 16 student mascots, a broker, the Library Steward and the campus hierarchy really traded these messages. Press <b>Play the week</b>, then sign in as a student or the manager, or open the <b>Org chart</b>. <span class="honest"><b>Real:</b> the agents, every message, the rules. <b>Replayed:</b> this page. <b>Synthetic:</b> every student and number.</span> Run it live with one command: <a href="https://github.com/neric-joel/tag-out">github.com/neric-joel/tag-out</a>.';

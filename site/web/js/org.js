@@ -47,7 +47,7 @@
       el.addEventListener("click", () => { if (!n.dragged) inbox(id); });
       el.addEventListener("keydown", (e) => {
         const step = e.shiftKey ? 64 : 16, d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
-        if (d) { e.preventDefault(); n.x += d[0]; n.y += d[1]; place(n); route(); keep(); }
+        if (d) { e.preventDefault(); n.x = Math.max(0, Math.min(W - n.w, n.x + d[0])); n.y = Math.max(0, Math.min(H - n.h, n.y + d[1])); place(n); route(); keep(); }
         if (e.key === "Enter") inbox(id);
       });
       drag(n);
@@ -148,7 +148,7 @@
         const t = n.el.querySelector(".org-timer");
         shown.add(c.holder);
         const left = Math.round((c.deadline - now) / 60000);
-        t.hidden = false; t.textContent = left > 0 ? `moves up in ${left >= 60 ? Math.floor(left / 60) + " h " + (left % 60) + " min" : left + " min"}` : "deadline passed";
+        t.hidden = false; t.textContent = c.acting ? "waiting for both to confirm" : left > 0 ? `moves up in ${left >= 60 ? Math.floor(left / 60) + " h " + (left % 60) + " min" : left + " min"}` : "deadline passed";
         t.classList.toggle("late", left <= 10);
       });
       nodes.forEach((n, id) => { if (!shown.has(id)) n.el.querySelector(".org-timer").hidden = true; });
@@ -187,10 +187,15 @@
           step(c, ev, picked.length ? `${picked.map(name).join(", ")} picked it${passed.length ? `; ${passed.length} passed` : ""}.`
             : `Nobody could take it: ${passed.length} passes. A pass looks the same whatever the reason${judge ? ` (${passed.map(name).join(", ")})` : ""}.`);
           passed.forEach((a) => { status(a, judge ? "passed" : "answered"); face(a, "waiting"); });
+          if (!picked.length && ev.picks.raj === null && opts.privateNote && !c.noted) {
+            c.noted = true;
+            opts.privateNote("raj").then((t) => { if (t) { step(c, ev, t); renderCases(); } });
+          }
           picked.forEach((a) => { status(a, "picked it", "ok"); face(a, "jumping"); if (animate) packet(a, ev.by, "ask"); });
           break;
         }
         case "org_escalate":
+          c.acting = false;
           step(c, ev, `${RULE[ev.rule] || ev.rule}: up to ${name(ev.to)}. They have until ${clockText(new Date(ev.deadline))}.`);
           if (animate) packet(ev.frm, ev.to, "up");
           status(ev.frm, ev.rule === "no_answer_30m" ? "didn't answer" : ev.rule === "safety_first" ? "sent it up" : "moved it up", ev.rule === "no_answer_30m" ? "bad" : "");
@@ -199,6 +204,7 @@
           Object.assign(c, { holder: ev.to, deadline: new Date(ev.deadline), status: "open" });
           break;
         case "org_hold":
+          c.acting = true;
           step(c, ev, `Asking ${ev.members.map(name).join(" and ")} to confirm on their phones. Nothing moves without both.`);
           ev.members.forEach((a) => status(a, "asked to confirm", "wait"));
           break;

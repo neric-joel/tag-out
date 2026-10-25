@@ -425,6 +425,7 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 /* how it works */
 #flow { margin: var(--gap) 0; }
 .snoop-note { border: 1px solid var(--negative); background: var(--neg-soft); color: var(--text); border-radius: var(--radius-control); padding: 10px 14px; font-size: 13px; line-height: 19px; margin: var(--gap) 0 0; }
+.claims { overflow-x: auto; }
 .ledger { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 18px; }
 .ledger th { text-align: left; color: var(--muted); font: 400 12px/16px var(--font); padding: 0 12px 8px 0; }
 .ledger td { padding: 10px 12px 10px 0; border-top: 1px solid var(--rule); vertical-align: top; }
@@ -518,3 +519,57 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 .org-inbox .thread { max-height: 260px; min-height: 0; overflow: auto; }
 .org-inbox .thread:empty { display: none; }
 @media (max-width: 1100px) { .org-body { grid-template-columns: 1fr; } }
+
+/* where the week is: five steps above the numbers */
+.rail { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.rail li {
+  display: grid; grid-template-columns: 26px 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface);
+  color: var(--muted); font-weight: 500; font-size: 13px; transition: background .25s, color .25s, border-color .25s;
+}
+.rail li b {
+  grid-row: span 2; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  border: 1.5px solid var(--control); font-size: 12px; color: var(--muted);
+}
+.rail li span { font-weight: 400; font-size: 11px; line-height: 14px; color: var(--faint); }
+.rail li[data-state="now"] { border-color: var(--text); color: var(--text); }
+.rail li[data-state="now"] b { background: var(--text); border-color: var(--text); color: #fff; }
+.rail li[data-state="done"] { color: var(--text); }
+.rail li[data-state="done"] b { background: var(--hue); border-color: var(--hue); color: #fff; }
+.static-banner .honest { color: var(--muted); }
+@media (max-width: 900px) { .rail { grid-template-columns: repeat(2, 1fr); } .rail li span { display: none; } }
+
+/* Ben's case, above the fold: what a Library-only scheduler does vs what his mascot does */
+.hero-case {
+  display: grid; grid-template-columns: minmax(240px, 1.2fr) 1fr 1fr auto; gap: 0; align-items: stretch; margin-bottom: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden;
+}
+.hero-case > * { padding: 12px 18px; }
+.hero-case > * + * { border-left: 1px solid var(--border); }
+.hc-who { display: flex; align-items: center; gap: 12px; }
+.hc-who canvas { width: 52px; height: 56px; flex: none; }
+.hc-who b, .hc-col b { display: block; }
+.hc-who span, .hc-col span { color: var(--muted); font-size: 12px; line-height: 16px; }
+.hc-col .hc-k { display: block; font-size: 12px; color: var(--muted); }
+.hc-col b { font-size: 26px; line-height: 32px; font-weight: 600; }
+.hc-col.bad b { color: var(--negative); }
+.hc-col.good b { color: var(--positive); }
+.hc-src { align-self: center; font-size: 12px; color: var(--muted); }
+.sim-fold > summary { display: flex; align-items: baseline; gap: 12px; cursor: pointer; list-style: none; }
+.sim-fold > summary::-webkit-details-marker { display: none; }
+.sim-fold > summary h2 { margin: 0; }
+.sim-fold .sim-open { margin-left: auto; text-decoration: underline; }
+.sim-fold[open] .sim-open { display: none; }
+.sim-fold[open] > summary { margin-bottom: 12px; }
+@media (max-width: 900px) { .hero-case { grid-template-columns: 1fr; } .hero-case > * + * { border-left: 0; border-top: 1px solid var(--border); } }
+
+/* phone and tablet: the tabs get their own scrolling row under the brand */
+@media (max-width: 960px) {
+  .topbar { flex-wrap: wrap; height: auto; padding: 8px 16px; gap: 6px 12px; }
+  .scope { display: none; }
+  .tabs { order: 3; width: 100%; margin-left: 0; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs a { flex: none; }
+  .who-pill { margin-left: auto; }
+  .static-banner, .debug-banner { font-size: 12px; }
+}

@@ -27,12 +27,12 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "site" / "data"
 PEOPLE = [s["id"] for s in STUDENTS]
 PACE = Timing(pick_deadline=0.4, ask_window=1.5, vote_timeout=15.0, between=0.5)
-ORG_MINUTE = 0.03  # real seconds per story minute for the hierarchy: its two-hour timer plays in 3.6 s
+ORG_MINUTE = 0.045  # real seconds per story minute for the hierarchy: its two-hour timer plays in 5.4 s
 
 
 async def snapshot(s: System) -> dict:
     paths = ["/state", "/agents", "/manager/state", "/admin/judge", "/admin/baseline", "/forecast", "/sim", "/quotes",
-             "/org"]
+             "/org", "/me/raj"]
     paths += [f"/me/{p}" for p in PEOPLE]
     out = {}
     for path in paths:
@@ -71,6 +71,10 @@ async def record(name: str, steps) -> None:
         phones |= {r: [{"n": i + 1, **m} for i, m in enumerate(a.state.s["phone"])] for r, a in s.org.items()}
         data = {"name": name, "events": s.bus.history, "phones": phones, "checkpoints": checkpoints}
         OUT.mkdir(parents=True, exist_ok=True)
+        if name == "tour":  # the roster downloads the hosted page links to, as the manager would get them
+            for f in ("roster.csv", "roster.ics"):
+                r = await s.net.client.get(f"{s.reg['broker']}/{f}")
+                (OUT / f).write_bytes(r.content)
         (OUT / f"{name}.json").write_text(json.dumps(data, default=str), encoding="utf-8")
         print(f"saved {OUT / (name + '.json')} ({len(s.bus.history)} events)")
     finally:
@@ -210,7 +214,9 @@ async def main() -> None:
                           ("issue", issue), ("team-meeting", team_meeting), ("supervisor-meeting", supervisor_meeting),
                           ("snoop", snoop)])
     await record("breakit", [("break-it", break_it)])
-    await record("org", [("callout", org_callout), ("safety", org_safety), ("question", org_question)])
+    # the hierarchy's morning comes after the Library's week, so its replay starts from the finished week
+    await record("org", [("sunday", sunday), ("week", week), ("callout", org_callout), ("safety", org_safety),
+                         ("question", org_question)])
 
 
 if __name__ == "__main__":

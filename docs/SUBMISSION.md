@@ -6,6 +6,7 @@ Track: `agents`
 
 Website (the gallery card opens this first): https://tag-out.vercel.app
 Repo: https://github.com/neric-joel/tag-out
+Demo video (2:50): https://youtu.be/5tDReaVx7ic
 
 ## One-line pitch
 
@@ -25,14 +26,6 @@ About 10,000 students work at ASU each year, and when a shift collides with scho
 - 83.1% vs 82.7% vs 72.8% (Tag Out, a group chat that swaps with every volunteer checking their own limits correctly, plain covers), 1.49 limit-breaking covers a week with nobody checking and 1.45 with volunteers checking this job's hours by hand (0.73 F-1 across jobs, 0.50 Work-Study award, 0.26 25-hour average): `docs/simulation.json` (1,000 weeks, seed 7, 15% conflicts, full adoption). Tag Out adds only 0.4 points over the swap-capable group chat; the gain is privacy, automation and the blocked limit breaks, not more fixes. See `docs/SIMULATION.md`.
 - 21 of 20 hours: the judge view's Library-only scheduler comparison and `tests/test_baseline.py` (Ben's 9 Aramark Dining hours are invisible to the Library).
 - 20 hours across every on-campus job: `f1_weekly_20` in `docs/RULES.md`.
-
-## Still to do before submitting
-
-- [x] Hosted demo judges can click through: https://tag-out.vercel.app (a replay of the real system; `tests/e2e` passes against it).
-- [ ] Demo video: a captioned draft with music is at `recordings/tagout_demo.mp4` (`python -m scripts.video`). Add your voice if you like (script in `docs/VIDEO.md`), upload it (YouTube unlisted) and put the link in the README and the submission.
-- [ ] Survey results are pending. Add the numbers from the ASU student worker survey to the README and the pitch only once they are collected. Until then nothing in the repo or the submission claims a survey result.
-- [ ] Make `neric-joel/tag-out` public, then check on GitHub that the simulator chart, the Mermaid diagrams and the CI badge render.
-- [ ] Submit on the Cubbie site with the kit CLI, track `agents`, before 12:00 PM Arizona on Sun Oct 25 2026.
 
 ---
 

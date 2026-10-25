@@ -416,7 +416,7 @@
     $("#petQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); searchPets(); } });
     $("#petFor").addEventListener("change", searchPets);
     const size = $("#petSize");
-    size.value = store.get("tagout.size", 104);
+    size.value = store.get("tagout.size", 120);
     size.addEventListener("input", () => { if (world) world.setPetHeight(+size.value); store.set("tagout.size", +size.value); });
     $("#compose").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -442,7 +442,8 @@
     $("#tabJudge").hidden = !S.debug;
     (JUDGE ? $("#tabJudge") : $("#tabArena")).setAttribute("aria-current", "page");
 
-    world = PetWorld.create($("#world"), { petHeight: +store.get("tagout.size", 104), onSelect: (id) => { if (S.debug) openChat(id); } });
+    world = PetWorld.create($("#world"), { petHeight: +store.get("tagout.size", 120), onSelect: (id) => { if (S.debug) openChat(id); } });
+    window.tagOutWorld = world; // handy in the console during the demo
     world.setPets(PEOPLE.filter((p) => p in S.names).map((p) => ({ id: p, name: S.names[p], petId: S.pets[p] || "debug-duck-v2" })));
 
     if (JUDGE && S.debug) { $("#debugBanner").hidden = false; $("#judgePanel").hidden = false; buildPhones(); renderJudge(); setInterval(renderJudge, 4000); }

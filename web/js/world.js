@@ -77,8 +77,20 @@
       p.x = clamp(p.x, b.x, 1 - b.x); p.y = clamp(p.y, b.y, 1 - b.y);
     }
     function target(p) {
+      // Best of five random spots: the one farthest from every other pet (and their targets), so the commons
+      // stays spread out instead of everyone piling into one corner.
       const b = bounds(p);
-      p.target = { x: random(b.x, 1 - b.x), y: random(b.y, 1 - b.y) };
+      let best = null, bestScore = -1;
+      for (let k = 0; k < 5; k++) {
+        const c = { x: random(b.x, 1 - b.x), y: random(b.y, 1 - b.y) };
+        let score = 1e9;
+        pets.forEach(q => {
+          if (q === p) return;
+          [q, q.target].forEach(o => { if (o) score = Math.min(score, Math.hypot((c.x - o.x) * width, (c.y - o.y) * band)); });
+        });
+        if (score > bestScore) { best = c; bestScore = score; }
+      }
+      p.target = best;
     }
     function rest(p) {
       p.target = null; p.mood = random(1.5, 5);
@@ -153,7 +165,7 @@
         if (q === p) return;
         const b = point(q), qw = dimensions(q).w;
         let sx = a.x - b.x, sy = a.y - b.y;
-        const rx = (w + qw) * 0.47 + 12, ry = Math.max(44, (h + dimensions(q).h) * 0.3);
+        const rx = (w + qw) * 0.52 + 12, ry = Math.max(48, (h + dimensions(q).h) * 0.32);
         let gap = Math.hypot(sx / rx, sy / ry);
         if (gap < 1) {
           if (gap < 0.001) { sx = p.order < q.order ? -1 : 1; sy = 0.25; gap = 0.01; }

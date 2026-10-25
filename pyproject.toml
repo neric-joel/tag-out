@@ -34,3 +34,6 @@ extend-exclude = ["web/pets", "cache", "runtime"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 ignore = ["E501"]
+
+[tool.setuptools.packages.find]
+include = ["agents*", "bot*", "broker*", "core*", "ingest*", "rulebook*", "scripts*", "sim*", "steward*"]

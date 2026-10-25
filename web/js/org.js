@@ -164,6 +164,7 @@
     function event(ev, animate) {
       if (ev.sim) last = { sim: new Date(ev.sim), at: performance.now(), minute: ev.minute || 0.05 };
       if (ev.minute) root.querySelector("#orgPace").textContent = `1 story minute = ${ev.minute} s here`;
+      if (ev.type === "org_reset") { reset(); return; }
       const c = ev.case_id ? caseFor(ev.case_id) : null;
       switch (ev.type) {
         case "org_case":

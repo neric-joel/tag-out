@@ -228,11 +228,17 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         await asyncio.gather(*(net.post(f"{u}/sunday", SundayCheck(monday=week))
                                for u in reg["agents"].values()), return_exceptions=True)
         bus.emit("sunday_check", monday=week.isoformat(), agents=sorted(reg["agents"]))
+        app.state.sunday_at = asyncio.get_running_loop().time()
         return {}
 
     @app.post("/demo/run")
     async def run(body: dict | None = None) -> dict:
         wait = float((body or {}).get("wait", 0))
+        # demo: students tap "Find a trade" a moment after the Sunday check; don't start the rounds before they land
+        since = getattr(app.state, "sunday_at", None)
+        if since is not None:
+            settle = float(os.environ.get("TAGOUT_AUTO_DELAY", "1.5")) + 1.0
+            wait = max(wait, since + settle - asyncio.get_running_loop().time())
 
         async def go() -> None:
             if wait:
@@ -259,6 +265,13 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
                 if any(e["type"] in ("org_done", "org_overdue") for e in bus.history[n:]):
                     return
                 await asyncio.sleep(0.1)
+
+        if which == "morning":  # a fresh Saturday: the story clock, every rung and every Dining or Rec mascot
+            for t in list(org_runs):
+                t.cancel()
+            await asyncio.gather(*(net.post(f"{u}/admin/reset") for r, u in reg.get("org", {}).items()
+                                   if r != "steward"), return_exceptions=True)
+            bus.emit("org_reset")
 
         async def go() -> None:
             for key in (ORG_DEMO if which == "morning" else [which]):

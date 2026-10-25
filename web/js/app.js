@@ -882,7 +882,7 @@
     $("#meCompose").addEventListener("submit", (e) => { e.preventDefault(); const i = $("#meInput"); const t = i.value.trim(); i.value = ""; sendMe(t); });
     $("#mgrExtra").addEventListener("submit", async (e) => {
       e.preventDefault();
-      await post("/manager/extra", { date: $("#exDay").value, start: +$("#exStart").value, end: +$("#exEnd").value }).catch(() => {});
+      await post("/manager/extra", { date: $("#exDay").value, start: +$("#exStart").value, end: +$("#exEnd").value }).catch((err) => toast(err.message));
       setTimeout(renderMgr, 400);
     });
     $("#mgrMeeting").addEventListener("click", async () => { await post("/manager/meeting", {}).catch(() => {}); setTimeout(renderMgr, 400); });

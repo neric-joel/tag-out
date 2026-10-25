@@ -83,6 +83,7 @@ ASKS_RE = re.compile(r"^\s*(?:can|could|may|am|is|are|do|does|will|would|should|
 ISSUE_RE = re.compile(
     r"\b(broken|not working|(?:isn'?t|doesn'?t|won'?t) work(?:ing)?|jammed|out of (?:paper|toner|order)|"
     r"leak(?:ing|s)?|unsafe|blocked|spill(?:ed)?|report (?:an? )?(?:issue|problem)|problem with)\b", re.I)
+SWAP_RE = re.compile(r"\b(swap|trade|switch)\b.*\bshifts?\b|\bshifts?\b.*\b(swap|trade|switch)\b", re.I)
 # a question about visa status goes to ISSC, never answered by the mascot
 VISA_RE = re.compile(r"\b(f-?1|j-?1|visa|i-?20|opt|cpt|sevis|dso|issc|immigration)\b", re.I)
 MEETING_RE = re.compile(r"\b(meet(?:ing)?|1:1|one[- ]on[- ]one|talk)\b.*\b(supervisor|manager|boss)\b", re.I)
@@ -100,6 +101,8 @@ def intent(text: str) -> str | None:
     wanting more hours."""
     if VISA_RE.search(text) and ("?" in text or ASKS_RE.search(text)):
         return "visa"
+    if SWAP_RE.search(text):
+        return "trade"
     if ISSUE_RE.search(text):
         return "issue"
     if MEETING_RE.search(text):
@@ -185,16 +188,17 @@ ROUTE_TOOL = {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "intent": {"type": "string", "enum": ["callout", "visa_question", "issue_report", "meeting_request",
-                                                  "more_hours", "calendar"],
-                       "description": "callout: they can't work a shift they're scheduled for (sick, emergency, "
-                                      "can't come in); visa_question: a question about F-1/J-1, OPT, CPT or work "
+            "intent": {"type": "string", "enum": ["callout", "trade_request", "visa_question", "issue_report",
+                                                  "meeting_request", "more_hours", "calendar"],
+                       "description": "callout: they can't work a shift they're scheduled for today or soon (sick, "
+                                      "emergency, can't come in); trade_request: they'd like to swap or trade a "
+                                      "shift, no emergency; visa_question: a question about F-1/J-1, OPT, CPT or work "
                                       "authorization; issue_report: a problem at work (broken equipment, a mess, "
                                       "something unsafe); meeting_request: they want a meeting with their "
                                       "supervisor; more_hours: they want extra shifts; calendar: anything else "
                                       "(events, appointments, preferences)."},
             "weekday": {"type": ["integer", "null"], "minimum": 0, "maximum": 6,
-                        "description": "for a callout: the day they named (0=Monday), else null"},
+                        "description": "for a callout or trade request: the day they named (0=Monday), else null"},
             "hour": {"type": ["integer", "null"], "minimum": 0, "maximum": 23,
                      "description": "for a callout: the hour they named, 24h, else null"},
             "category": {"type": ["string", "null"], "enum": ["equipment", "facilities", "safety", "schedule", "other",
@@ -207,7 +211,7 @@ ROUTE_TOOL = {
 ROUTE_SYSTEM = ("You route short texts a student worker sends to their own scheduling assistant. Pick the one intent "
                 "that fits best. Resolve 'today' and 'tomorrow' against the date given. You only route; the "
                 "assistant's own code checks every work rule.")
-ROUTES = {"callout": "callout", "visa_question": "visa", "issue_report": "issue", "meeting_request": "meeting",
+ROUTES = {"callout": "callout", "trade_request": "trade", "visa_question": "visa", "issue_report": "issue", "meeting_request": "meeting",
           "more_hours": "hours", "calendar": "calendar"}
 
 
@@ -221,7 +225,7 @@ def route(text: str, monday: date, today: date | None = None) -> tuple[dict, str
         if out and out.get("intent") in ROUTES:
             r = {"intent": ROUTES[out["intent"]], "weekday": out.get("weekday"), "hour": out.get("hour"),
                  "category": out.get("category")}
-            if r["intent"] == "callout" and r["weekday"] is None:  # the words may still name a day
+            if r["intent"] in ("callout", "trade") and r["weekday"] is None:  # the words may still name a day
                 r.update({k: v for k, v in (callout(text, monday, today) or {}).items() if v is not None})
             if r["intent"] == "issue" and not r["category"]:
                 r["category"] = issue_category(text)
@@ -230,7 +234,8 @@ def route(text: str, monday: date, today: date | None = None) -> tuple[dict, str
     if c is not None:
         return {"intent": "callout", **c, "category": None}, "regex"
     k = intent(text)
-    return {"intent": k or "calendar", "weekday": None, "hour": None,
+    day = DAY_RE.search(text) if k == "trade" else None
+    return {"intent": k or "calendar", "weekday": _day_index(day.group(1)) if day else None, "hour": None,
             "category": issue_category(text) if k == "issue" else None}, "regex"
 
 

@@ -263,6 +263,8 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
                 reply = await brain.draft_issue(body.text, r["category"] or text_intake.issue_category(body.text))
             elif kind == "visa":
                 reply = await brain.draft_question(body.text)
+            elif kind == "trade":
+                reply = await brain.offer_trade(r["weekday"], planning_monday())
             elif kind == "meeting":
                 reply = await brain.ask_meeting(planning_monday())
             else:
@@ -275,6 +277,13 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
         store.add_busy(blocks)
         store.save_student(merge_prefs(store.student(), parsed.get("preferences") or {}))
         await brain.schedule_changed()
+        prefs = parsed.get("preferences") or {}
+        if not blocks and not prefs.get("wants_more_hours") and not prefs.get("never_weekdays"):
+            reply = ("I didn't find a time or a request in that, so nothing changed. You can tell me things like "
+                     "\"dentist Thu 3pm\", \"I'm sick, can't make my Saturday shift\", \"can I swap my Tue shift?\" "
+                     "or \"I want more hours\".")
+            store.send({"kind": "reply", "text": reply, "buttons": [], "engine": engine})
+            return {"reply": reply, "engine": engine, "events": 0}
         got = ", ".join(f"{b.label} {fmt_span(b.start, b.end)}" for b in blocks) or "your preferences"
         reply = f"Noted: {got}. Only 'busy' ever leaves me."
         store.send({"kind": "reply", "text": reply, "buttons": [], "engine": engine})

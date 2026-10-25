@@ -138,6 +138,19 @@ class Brain:
                           kind="ask")
         return "Which shift? Tap one."
 
+    async def offer_trade(self, weekday: int | None, monday: date) -> str:
+        """'Can I swap my Sat shift?': offer the same Find a trade button the Sunday check does, for that shift."""
+        mine = sorted((s for s in self.store.shifts() if week_start(s.start.date()) == monday),
+                      key=lambda s: s.start)
+        if weekday is not None:
+            mine = [s for s in mine if s.start.weekday() == weekday]
+        if not mine:
+            return "I couldn't find a shift of yours then. Which day is it?"
+        buttons = [(f"Find a trade for {s.label}", f"trade:yes:{s.id}") for s in mine[:3]] + [("Not now", "trade:no:-")]
+        await self.notify("Want me to look for a swap? I'll ask coworkers' mascots with the shift id only; nobody is "
+                          "told why, and nothing moves until you confirm.", buttons, kind="ask")
+        return "Tap the shift you'd like to swap."
+
     async def tag_out(self, shift_id: str) -> str:
         s = next((x for x in self.store.shifts() if x.id == shift_id), None)
         if s is None:

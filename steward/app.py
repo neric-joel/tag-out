@@ -200,6 +200,8 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     async def post_extra(body: dict) -> dict:
         day = datetime.fromisoformat(str(body["date"])).date()
         start, end = int(body.get("start", 18)), int(body.get("end", 22))
+        if not 0 < end - start <= 12:
+            raise HTTPException(400, "An extra shift has to end after it starts, and last 12 hours at most.")
         st = datetime(day.year, day.month, day.day, start, tzinfo=PHX)
         ref = ShiftRef(shift_id=f"library-extra-{st:%m%d-%H%M}", employer=EMPLOYER, start=st,
                        end=st + timedelta(hours=end - start), owner="open")

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/web/css/app.css?v=10">
+<link rel="stylesheet" href="/web/css/app.css?v=11">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23121212'/%3E%3Cpath d='M9 11h14M16 11v12' stroke='%23fff' stroke-width='3.2' stroke-linecap='round'/%3E%3Ccircle cx='23.5' cy='21.5' r='3' fill='%231d5fbf'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -42,7 +42,7 @@
   <section class="kpis" aria-label="This week">
     <div class="kpi lead"><span class="label">Collisions fixed</span><span class="value num" id="kFixed">0<small> of 0</small></span></div>
     <div class="kpi"><span class="label">Pay kept by trading</span><span class="value num" id="kPay">$0</span></div>
-    <div class="kpi"><span class="label">Rule breaks</span><span class="value num" id="kBreaks">0</span></div>
+    <div class="kpi"><span class="label">Private limit re-checks</span><span class="value num" id="kChecks">0</span></div>
     <div class="kpi"><span class="label">Open, no safe trade</span><span class="value num" id="kOpen">0</span></div>
   </section>
 
@@ -93,7 +93,8 @@
         </div>
       </header>
       <div class="board-grid" id="board" role="table" aria-label="Shifts by person and day"></div>
-      <p class="board-note">Everyone on the roster sees who works which shift. Nobody sees why a shift is up for trade.</p>
+      <p class="board-note">Everyone on the roster sees who works which shift. Nobody sees why a shift is up for trade.
+        For your scheduler: <a href="/roster.csv">CSV</a> or <a href="/roster.ics">calendar file</a>.</p>
     </section>
 
     <section class="panel log" aria-labelledby="logTitle">
@@ -124,6 +125,7 @@
       <table class="limits" id="limits"><caption class="sr-only">Hours and limits per student</caption></table>
       <div class="forecast" id="forecast"></div>
     </div>
+    <div class="baseline" id="baseline"></div>
   </section>
 </main>
 
@@ -146,8 +148,8 @@
   <p class="credits" id="credits">Mascots from Codex Pets.</p>
 </footer>
 
-<script src="/web/js/world.js?v=10"></script>
-<script src="/web/js/sprites.js?v=10"></script>
-<script src="/web/js/app.js?v=10"></script>
+<script src="/web/js/world.js?v=11"></script>
+<script src="/web/js/sprites.js?v=11"></script>
+<script src="/web/js/app.js?v=11"></script>
 </body>
 </html>

@@ -275,7 +275,10 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 .limits td { padding: 8px 8px 8px 0; border-top: 1px solid var(--rule); vertical-align: top; }
 .limits td .sub { display: block; color: var(--muted); font-size: 12px; }
 .limits .over { color: var(--negative); font-weight: 500; }
-.forecast h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.forecast h3, .baseline h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.baseline { margin-top: 24px; }
+.baseline .limits { margin-top: 10px; }
+.board-note a { color: var(--text); }
 .forecast ul { margin: 0; padding: 0; list-style: none; }
 .forecast li { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--rule); font-size: 13px; }
 

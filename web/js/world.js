@@ -1,4 +1,5 @@
-/* Tag Out pet world. Codex Pets atlases: 192 x 208 cells, eight columns (MIT). */
+/* Tag Out pet world. Codex Pets sprite layout (192 x 208 cells, eight columns) follows the MIT-licensed
+   codex-pet-share code; the pet art itself has no reuse licence and is downloaded at setup, not shipped. */
 (function () {
   "use strict";
   const STATES = {
@@ -379,7 +380,6 @@
     }
     function draw() {
       ctx.clearRect(0, 0, width, height); ctx.fillStyle = "#f6f4f0"; ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = "#efece6"; ctx.fillRect(0, 0, width, 36);
       ellipse(width * 0.5, top + band * 0.52, Math.min(width * 0.21, 205), Math.min(48, band * 0.21), "#efece6");
       drawLinks();
       const list = Array.from(pets.values()).sort((a, b) => a.y - b.y || a.order - b.order);

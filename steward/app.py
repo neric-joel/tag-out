@@ -5,11 +5,14 @@ crunch forecast with counts only. Run: uvicorn steward.app:app --port 8701
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+import icalendar
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 
 from core.net import Net, registry
@@ -40,7 +43,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     reg = reg or registry()
     app.state.net = net or Net()
     names = {s["id"]: s["name"] for s in STUDENTS}
-    state = {"roster": load_roster(), "version": 1, "holds": {}, "ballots": {}, "phone": [],
+    state = {"roster": load_roster(), "version": 1, "holds": {}, "ballots": {}, "changed": {}, "phone": [],
              "auto": os.environ.get("TAGOUT_MODE", "auto") == "auto",
              "delay": float(os.environ.get("TAGOUT_AUTO_DELAY", "1.5")) + 0.5, "open": []}
     app.state.s = state
@@ -92,8 +95,9 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         state["ballots"][p.txn_id] = p.ballot
         lines = [f"{names[m.from_agent]}'s {fmt_span(state['roster'][m.shift_id].start, state['roster'][m.shift_id].end)}"
                  f" -> {names[m.to_agent]}" for m in p.moves]
-        text = ("Trade request: " + "; ".join(lines) + ". Each student's mascot checked its own student's work "
-                "limits privately and said eligible. It goes through only if every student confirms and you approve.")
+        text = ("Trade request: " + "; ".join(lines) + ". Each student's mascot privately checked the trade "
+                "against the shifts and other jobs it knows about for its student and said eligible; no reasons are "
+                "shared. It goes through only if every student confirms and you approve.")
         await to_manager(text, [("Approve", f"approve:{p.txn_id}"), ("Deny", f"deny:{p.txn_id}")])
         return {"vote": None}
 
@@ -101,11 +105,54 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     async def decide(d: Decision) -> dict:
         moves = state["holds"].pop(d.txn_id, None)
         if moves and d.outcome == "commit":
+            done = []
             for m in map(lambda x: Move(**x), moves):
                 ref = state["roster"][m.shift_id]
                 state["roster"][m.shift_id] = ref.model_copy(update={"owner": m.to_agent})
+                state["changed"][m.shift_id] = d.txn_id
+                done.append(f"{names[m.to_agent]} now works {fmt_span(ref.start, ref.end)}")
             state["version"] += 1
+            state["phone"].append({"kind": "info", "buttons": [], "text": "Roster updated: " + "; ".join(done)
+                                   + ". Download it for your scheduler (CSV or calendar file) from the Library "
+                                     "roster on the Tag Out page. Students enter their time in Workday as usual."})
         return {}
+
+    def export_rows() -> list[dict]:
+        rows = []
+        for r in sorted(state["roster"].values(), key=lambda x: x.start):
+            rows.append({"date": f"{r.start:%Y-%m-%d}", "start": f"{r.start:%H:%M}", "end": f"{r.end:%H:%M}",
+                         "position": "Library front desk", "worker": names.get(r.owner, r.owner),
+                         "changed_by_trade": "yes" if r.shift_id in state["changed"] else "",
+                         "shift_id": r.shift_id})
+        return rows
+
+    @app.get("/export.csv")
+    async def export_csv() -> Response:
+        """The approved roster for the manager's own scheduler or shared sheet (When I Work, Sling, Excel)."""
+        out = io.StringIO()
+        w = csv.DictWriter(out, fieldnames=["date", "start", "end", "position", "worker", "changed_by_trade",
+                                            "shift_id"])
+        w.writeheader()
+        w.writerows(export_rows())
+        return Response(out.getvalue(), media_type="text/csv",
+                        headers={"Content-Disposition": "attachment; filename=library-roster.csv"})
+
+    @app.get("/export.ics")
+    async def export_ics() -> Response:
+        cal = icalendar.Calendar()
+        cal.add("prodid", "-//Tag Out//Library roster//EN")
+        cal.add("version", "2.0")
+        for r in sorted(state["roster"].values(), key=lambda x: x.start):
+            ev = icalendar.Event()
+            ev.add("uid", f"{r.shift_id}@tagout")
+            ev.add("summary", f"Library front desk - {names.get(r.owner, r.owner)}")
+            ev.add("dtstart", r.start)
+            ev.add("dtend", r.end)
+            if r.shift_id in state["changed"]:
+                ev.add("description", "Changed by an approved Tag Out trade")
+            cal.add_component(ev)
+        return Response(cal.to_ical(), media_type="text/calendar",
+                        headers={"Content-Disposition": "attachment; filename=library-roster.ics"})
 
     @app.post("/open")
     async def post_open(body: OpenShift) -> dict:
@@ -131,7 +178,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     async def reset() -> dict:
         if os.environ.get("TAGOUT_DEBUG") != "1":
             raise HTTPException(403)
-        state.update(roster=load_roster(), version=1, holds={}, ballots={}, phone=[], open=[])
+        state.update(roster=load_roster(), version=1, holds={}, ballots={}, changed={}, phone=[], open=[])
         return {"ok": True}
 
     @app.post("/admin/auto")

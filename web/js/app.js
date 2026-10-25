@@ -10,7 +10,7 @@
 
   const S = {
     debug: false, names: {}, pets: {}, petMeta: [], roster: {}, requested: new Set(), moved: {}, open: new Set(),
-    votes: {}, summary: null, committed: [], gathered: new Set(),
+    votes: {}, summary: null, committed: [], gathered: new Set(), checks: 0, passed: 0,
   };
   let world = null;
   const BOOT = Date.now();
@@ -63,7 +63,7 @@
     live = live || Date.parse(ev.ts) > BOOT - 1500;
     switch (ev.type) {
       case "reset":
-        Object.assign(S, { requested: new Set(), moved: {}, open: new Set(), votes: {}, summary: null, committed: [] });
+        Object.assign(S, { requested: new Set(), moved: {}, open: new Set(), votes: {}, summary: null, committed: [], checks: 0, passed: 0 });
         requesters.clear();
         $("#events").innerHTML = ""; $("#logCount").textContent = "0 events";
         W.clear(); W.release(PEOPLE); PEOPLE.forEach((a) => { W.badge(a, null); W.status(a, ""); W.face(a, null); });
@@ -113,6 +113,8 @@
           : `A cover chain formed through ${listNames([helper, ...ev.moves.map((m) => m.from_agent)])}.`);
         break;
       }
+      case "validated":
+        S.checks += ev.checks || 0; S.passed += ev.passed || 0; renderKpis(); break;
       case "selected":
         setStatus(`Every member re-checked the exact trade privately. CP-SAT kept <b>${ev.proposals.length}</b> (${ev.status.toLowerCase()}).`); break;
       case "prepare":
@@ -176,7 +178,7 @@
     const s = S.summary;
     $("#kFixed").innerHTML = `${s ? s.fixed : 0}<small> of ${s ? s.asked : S.requested.size}</small>`;
     $("#kPay").textContent = money(s ? s.pay_kept : 0);
-    $("#kBreaks").textContent = "0";
+    $("#kChecks").innerHTML = S.checks ? `${S.passed}<small> of ${S.checks} passed</small>` : "0";
     const open = s ? s.open : 0;
     $("#kOpen").textContent = String(open); $("#kOpen").classList.toggle("bad", open > 0);
   }
@@ -281,7 +283,7 @@
   }
   function openChat(who) {
     chat.who = who; chat.count = -1; store.set("tagout.chat", who);
-    $("#assistantSub").textContent = who === "manager" ? "The Library manager approves trades here with one tap." : `Private: only ${S.names[who]} sees this chat. It arrives on Telegram too.`;
+    $("#assistantSub").textContent = who === "manager" ? "Demo: the Library manager's approval cards." : `Demo with synthetic students: you're viewing ${S.names[who]}'s private chat. In real use only ${S.names[who]} can open it (on Telegram or through Cubbie).`;
     $("#compose").hidden = who === "manager";
     renderTabs(); pollChat();
   }
@@ -387,6 +389,18 @@
         <td class="${cover < 0 ? "over" : ""}">${cover < 0 ? "would break it" : "fits"}</td></tr>`;
     }).join("");
     $("#limits").innerHTML = `<thead><tr><th>Student</th><th class="num">This week</th><th>Limit that binds first</th><th class="num">Room left</th><th>One more 4 h shift</th></tr></thead><tbody>${rows}</tbody>`;
+    try {
+      const b = await get("/admin/baseline");
+      const rule = { f1_weekly_20: "F-1 20 h", aca_25_avg: "25 h average", fws_award: "Work-Study award", weekly_40: "40 h" };
+      $("#baseline").innerHTML = b.rows.length ? `<h3>The same week with a Library-only scheduler</h3>
+        <p class="muted small">It sees availability and Library hours, like a typical shift app, but not other jobs or anyone's limits. It covers each shift with the free coworker who has the fewest Library hours.</p>
+        <table class="limits"><thead><tr><th>Shift</th><th>Covered by</th><th class="num">Library sees</th><th class="num">Really</th><th>Breaks</th></tr></thead><tbody>
+        ${b.rows.map((r) => `<tr><td>${name(r.owner)}'s ${shiftLabel(r.shift_id)}</td><td>${r.to ? name(r.to) : "nobody free"}</td>
+          <td class="num">${r.library_view != null ? r.library_view + " h" : "–"}</td><td class="num">${r.real != null ? r.real + " h" : "–"}</td>
+          <td class="${r.breaks && r.breaks.length ? "over" : ""}">${r.breaks && r.breaks.length ? r.breaks.map((x) => rule[x] || x).join(", ") : r.to ? "fits" : "–"}</td></tr>`).join("")}
+        </tbody></table>
+        <p class="sim-note">Library-only scheduler: ${b.violations} limit break${b.violations === 1 ? "" : "s"}, ${money(b.pay_lost)} of pay moved off the students who asked. Tag Out: 0 breaks found by any private re-check${S.summary ? `, ${money(S.summary.pay_kept)} of pay kept by trading` : ""}.</p>` : "";
+    } catch (_) { /* not yet */ }
     try {
       const f = await get("/forecast");
       const lab = (slot) => { const m = slot.match(/^(\w{3}) (\d+)-(\d+)$/); if (!m) return slot; const h = (x) => (+x % 12) || 12; return `${m[1]} ${h(m[2])}–${h(m[3])} ${+m[3] >= 12 ? "PM" : "AM"}`; };

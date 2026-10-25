@@ -10,17 +10,19 @@ import json
 import mimetypes
 import os
 import re
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 from broker.engine import Engine, Timing
 from core.events import Bus
 from core.net import RUNTIME, Net, registry
+from core.timeutil import PHX
 from core.wire import SundayCheck, TradeRequest, Vote
 from seeds.scenario import BREAK_IT_EDIT, DEMO_MONDAY, STUDENTS
 
@@ -232,6 +234,68 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         bus.emit("pet_changed", agent=agent, pet_id=pet_id)
         return {"ok": True, "agent": agent, "pet_id": pet_id}
 
+    @app.get("/roster.csv")
+    async def roster_csv():
+        r = await net.client.get(f"{reg['steward']}/export.csv")
+        return Response(r.content, media_type="text/csv",
+                        headers={"Content-Disposition": "attachment; filename=library-roster.csv"})
+
+    @app.get("/roster.ics")
+    async def roster_ics():
+        r = await net.client.get(f"{reg['steward']}/export.ics")
+        return Response(r.content, media_type="text/calendar",
+                        headers={"Content-Disposition": "attachment; filename=library-roster.ics"})
+
+    @app.get("/admin/baseline")
+    async def baseline() -> dict:
+        """Judge view: the same week handled by a Library-only scheduler that sees availability and Library hours,
+        like a typical shift app, but not other jobs or anyone's limits. Uses the synthetic students' private
+        numbers only to show what that scheduler would break."""
+        if not debug():
+            raise HTTPException(403)
+        roster = {r["shift_id"]: r for r in await net.get(f"{reg['steward']}/roster")}
+        requested = engine.requests or {}
+        if not requested:
+            return {"rows": [], "note": "Run the Sunday check first."}
+        private = {a: await net.get(f"{u}/admin/debug") for a, u in reg["agents"].items()}
+        library_hours = {a: 0.0 for a in reg["agents"]}
+        for r in roster.values():
+            if DEMO_MONDAY.isoformat() <= r["start"][:10] < (DEMO_MONDAY + timedelta(days=7)).isoformat():
+                library_hours[r["owner"]] = library_hours.get(r["owner"], 0) + 4
+        rows, taken = [], set()
+        for sid, owner in sorted(requested.items(), key=lambda kv: roster[kv[0]]["start"]):
+            ref = roster[sid]
+            slots = {"s": (ref["start"], ref["end"])}
+            free = []
+            for a, u in reg["agents"].items():
+                if a == owner or a in taken:
+                    continue
+                if any(o["owner"] == a and o["start"] < ref["end"] and ref["start"] < o["end"] for o in roster.values()):
+                    continue
+                bits = await net.post(f"{u}/busybits", {"slots": slots})
+                if not bits["slots"]["s"]:
+                    lib_cap = 20 if private[a]["f1"] else 40  # the Library only knows its own hours
+                    if library_hours[a] + 4 <= lib_cap:
+                        free.append(a)
+            if not free:
+                rows.append({"shift_id": sid, "owner": owner, "to": None, "library_view": None, "real": None,
+                             "breaks": None})
+                continue
+            pick = min(free, key=lambda a: (library_hours[a], a))  # fewest Library hours first
+            taken.add(pick)
+            p = private[pick]
+            real_total = p["week_hours"] + 4
+            breaks = []
+            for room in p["rooms"]:
+                left = room["room"] - (64 if room["unit"] == "$" else 4)
+                if left < 0:
+                    breaks.append(room["rule_id"])
+            rows.append({"shift_id": sid, "owner": owner, "to": pick, "library_view": library_hours[pick] + 4,
+                         "real": real_total, "breaks": breaks})
+            library_hours[pick] += 4
+        return {"rows": rows, "pay_lost": 64 * sum(1 for r in rows if r["to"]),
+                "violations": sum(1 for r in rows if r["breaks"])}
+
     @app.get("/sim")
     async def sim() -> JSONResponse:
         path = WEB.parent / "docs" / "simulation.json"
@@ -251,6 +315,28 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
     @app.get("/judge")
     async def judge_page() -> FileResponse:
         return FileResponse(WEB / "index.html")
+
+    @app.on_event("startup")
+    async def sunday_scheduler() -> None:
+        """Every Sunday at 6 PM Arizona time: the Sunday check, then trade rounds 10 minutes later.
+        On by default in live mode; TAGOUT_SCHEDULE=0 turns it off, =1 forces it on."""
+        on = os.environ.get("TAGOUT_SCHEDULE", "1" if os.environ.get("TAGOUT_MODE") == "live" else "0") == "1"
+        if not on:
+            return
+
+        async def loop() -> None:
+            last = None
+            while True:
+                now = datetime.now(PHX)
+                if now.weekday() == 6 and now.hour == 18 and last != now.date():
+                    last = now.date()
+                    bus.emit("scheduled", what="sunday_check")
+                    await sunday()
+                    await asyncio.sleep(600)
+                    await engine.run()
+                await asyncio.sleep(30)
+
+        spawn(loop())
 
     if WEB.exists():
         app.mount("/web", StaticFiles(directory=WEB), name="web")

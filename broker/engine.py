@@ -209,7 +209,8 @@ class Engine:
         p.ok = {a: ok for a, ok, _ in res}
         p.versions = {a: v for a, _, v in res}
         p.versions["steward"] = (await self.net.get(f"{self.reg['steward']}/version"))["version"]
-        self.bus.emit("validated", proposal=p.id, kind=p.kind, ok=p.valid)
+        self.bus.emit("validated", proposal=p.id, kind=p.kind, ok=p.valid, checks=len(p.ok),
+                      passed=sum(1 for v in p.ok.values() if v))
 
     # ---------- two-phase commit ----------
     async def two_phase(self, p: Proposal) -> bool:

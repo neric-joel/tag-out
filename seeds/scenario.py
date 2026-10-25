@@ -29,7 +29,7 @@ STUDENTS: list[dict] = [
     },
     {
         "id": "ben", "name": "Ben", "pet_id": "tide-kraken", "port": 8712,
-        "limits": {"f1_or_j1": True, "other_employer_hours": {"dining": 9.0}, "non_asu_employers": ["dining"],
+        "limits": {"f1_or_j1": True, "other_employer_hours": {"dining": 9.0}, "non_asu_employers": ["dining"], "f1_continuing": True,
                    "hours_history": [8, 8, 8, 9, 8, 8, 8, 8], "hire_date": "2026-01-12"},
         "prefs": {},
         "library_shifts": [(0, 10, 14), (3, 14, 18)],
@@ -51,7 +51,8 @@ STUDENTS: list[dict] = [
     },
     {
         "id": "priya", "name": "Priya", "pet_id": "moon-phoenix", "port": 8714,
-        "limits": {"f1_or_j1": True, "hours_history": [12, 12, 12, 12, 12, 12, 12, 12], "hire_date": "2026-05-18"},
+        "limits": {"f1_or_j1": True, "f1_continuing": True, "hours_history": [12, 12, 12, 12, 12, 12, 12, 12],
+                   "hire_date": "2026-05-18"},
         "prefs": {"wants_more_hours": True},
         "library_shifts": [(0, 14, 18), (2, 14, 18), (4, 14, 18)],
         "classes": [("BME 300", [1, 3], (10, 30), (11, 45)), ("ENG 301", [1], (18, 0), (20, 45)),

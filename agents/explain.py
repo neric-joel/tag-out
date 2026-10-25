@@ -12,7 +12,7 @@ from core.models import BusyBlock, Collision, Shift, Student
 from core.timeutil import week_start
 from core.wire import Move
 from ingest import llm
-from rulebook.rules import f1_cap, week_hours
+from rulebook.rules import f1_cap_for, week_hours
 
 SOURCE_WORDS = {"canvas": "Canvas", "calendar": "your calendar", "text": "your text", "asu": "ASU's calendar",
                 "class": "your class schedule", "seed": "your calendar"}
@@ -71,7 +71,7 @@ def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move
         monday = week_start((adds or drops)[0].start.date())
         after = [s for s in shifts if s.id not in {d.id for d in drops}] + adds
         other = ", ".join(f"{h:g} h at {k}" for k, h in st.limits.other_employer_hours.items())
-        parts.append(f"You'd be at {week_hours(st, after, monday):g} of your {f1_cap(monday):g} hours across all "
+        parts.append(f"You'd be at {week_hours(st, after, monday):g} of your {f1_cap_for(st, monday):g} hours across all "
                      f"on-campus jobs" + (f", counting the {other} you told me about." if other else "."))
     return polish(" ".join(parts) + " Confirm?")
 

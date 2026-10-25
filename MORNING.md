@@ -38,12 +38,12 @@ For real Telegram taps instead of the synthetic auto-taps: `python -m scripts.ru
 
 | | Plain covers | Group chat that also swaps (if everyone knew everyone's limits) | Tag Out |
 |---|---|---|---|
-| Collisions fixed | 73.8% | 83.5% | 83.7% |
-| Pay lost per week | $671 | $326 | $285 |
+| Collisions fixed | 72.8% | 82.7% | 83.1% |
+| Pay lost per week | $662 | $323 | $283 |
 
 Honest framing (the judges pushed on this): most of the gain over plain covers comes from two-person swaps, which a
 well-run group chat could also arrange. Tag Out's edge is that it does this on its own every Sunday, privately, and
-blocks about 1.4 limit-breaking covers a week that an unchecked group chat would make. In the demo week a
+blocks about 1.5 limit-breaking covers a week that an unchecked group chat would make. In the demo week a
 Library-only scheduler would have put Ben at 21 of 20 F-1 hours and Dev over the 25 h average (judge view).
 
 ## Demo week (what the video shows)

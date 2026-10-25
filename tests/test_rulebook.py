@@ -45,12 +45,23 @@ def test_a_swap_keeps_f1_student_where_they_were():
 def test_break_week_raises_f1_limit_to_40():
     assert in_break_week(date(2026, 12, 14)) and in_break_week(date(2027, 3, 8))
     assert not in_break_week(MON)
-    s = Student(id="p", name="P", limits=Limits(f1_or_j1=True, hours_history=[12] * 8))
+    s = Student(id="p", name="P", limits=Limits(f1_or_j1=True, f1_continuing=True, hours_history=[12] * 8))
     winter = date(2026, 12, 14)
     shifts = [Shift(id=f"w{i}", employer="library", start=at(winter + timedelta(days=i), 9),
                     end=at(winter + timedelta(days=i), 15)) for i in range(5)]  # 30 h
     v = evaluate(s, shifts, [], winter)
     assert any(f.rule_id == "f1_break_40" and f.status == "eligible" for f in v.findings)
+
+
+def test_break_week_40_needs_next_term_enrollment_and_ends_at_completion():
+    from rulebook.rules import f1_cap_for
+    winter = date(2026, 12, 14)
+    unknown = Student(id="u", name="U", limits=Limits(f1_or_j1=True))
+    assert f1_cap_for(unknown, winter) == 20  # not confirmed as continuing: stay at 20
+    done = Student(id="d", name="D", limits=Limits(f1_or_j1=True, f1_continuing=False, program_end=date(2026, 12, 13)))
+    assert f1_cap_for(done, winter) == 0  # after the program completion date, no on-campus work
+    cont = Student(id="c", name="C", limits=Limits(f1_or_j1=True, f1_continuing=True))
+    assert f1_cap_for(cont, winter) == 40 and f1_cap_for(cont, MON) == 20
 
 
 def test_missing_history_is_unverified_never_safe():

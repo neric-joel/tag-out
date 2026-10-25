@@ -84,6 +84,8 @@ class Limits(_Private):
     hours_history: list[float] | None = None  # ASU hours per Mon-Sun week (Workday time)
     hours_history_weeks: list[date] | None = None  # the Monday of each week in hours_history
     hire_date: date | None = None  # Workday hire date: starts the 25 h average's initial 12-month period
+    f1_continuing: bool | None = None  # enrolled for the next term: needed for 40 h in a break week (unknown = 20)
+    program_end: date | None = None  # program completion date: no on-campus work after it
 
 
 class Student(_Private):

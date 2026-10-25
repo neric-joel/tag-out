@@ -119,7 +119,8 @@ def near_f1_limit(student: Student, shifts_after: list[Shift], monday: date) -> 
     if not student.limits.f1_or_j1:
         return False
     total = week_hours(student, shifts_after, monday)
-    return f1_cap(monday) - f1_buffer() < total <= f1_cap(monday)
+    cap = f1_cap_for(student, monday)
+    return cap - f1_buffer() < total <= cap
 
 
 def week_pay(shifts: list[Shift], monday: date) -> float:
@@ -127,9 +128,21 @@ def week_pay(shifts: list[Shift], monday: date) -> float:
 
 
 def f1_cap(monday: date) -> float:
+    """The weekly limit for a continuing F-1/J-1 student in this week (see f1_cap_for for one student)."""
     if in_break_week(monday):
         return float(config()["f1_break_40"]["weekly_hours"])
     return float(config()["f1_weekly_20"]["weekly_hours"])
+
+
+def f1_cap_for(student: Student, monday: date) -> float:
+    """ISSC: 40 h in a listed break only if enrolled (or planning to enroll) for the next term, and no on-campus
+    work after the program completion date. Unknown enrollment stays at the safer 20 h."""
+    lim = student.limits
+    if lim.program_end and monday > lim.program_end:
+        return 0.0
+    if in_break_week(monday) and not lim.f1_continuing:
+        return float(config()["f1_weekly_20"]["weekly_hours"])
+    return f1_cap(monday)
 
 
 def rooms(student: Student, shifts: list[Shift], monday: date) -> list[Room]:
@@ -139,7 +152,7 @@ def rooms(student: Student, shifts: list[Shift], monday: date) -> list[Room]:
     out = [Room("weekly_40", total, float(config()["weekly_40"]["weekly_hours"]),
                 config()["weekly_40"]["weekly_hours"] - total)]
     if lim.f1_or_j1:
-        cap = f1_cap(monday)
+        cap = f1_cap_for(student, monday)
         out.append(Room("f1_break_40" if in_break_week(monday) else "f1_weekly_20", total, cap, cap - total))
     if lim.hours_history:
         avg_cap = float(config()["aca_25_avg"]["average_hours"])
@@ -183,8 +196,8 @@ def evaluate(
     findings.append(Finding("weekly_40", "blocked" if total > cap40 else "eligible", f"{total:g} h of {cap40} h"))
 
     if lim.f1_or_j1:
-        cap = f1_cap(monday)
-        rid = "f1_break_40" if in_break_week(monday) else "f1_weekly_20"
+        cap = f1_cap_for(student, monday)
+        rid = "f1_break_40" if in_break_week(monday) and cap > 20 else "f1_weekly_20"
         findings.append(Finding(rid, "blocked" if total > cap else "eligible",
                                 f"{total:g} h this week across all on-campus jobs, limit {cap:g}"))
 

@@ -45,6 +45,7 @@ class Params:
     f1_share: float = 0.10  # docs/DESIGN.md s7: 10% F-1
     f1_other_hours: tuple[int, int] = (0, 9)  # task brief: 0-9 h/week at another on-campus employer
     fws_share: float = 0.20  # docs/DESIGN.md s7: 20% Federal Work-Study (domestic only; DESIGN s3)
+    f1_continuing_share: float = 0.85  # assumption: most F-1 student workers in fall continue into spring
     fws_award_remaining: tuple[float, float] = (0.0, 400.0)  # task brief: $0-$400 left after the week's own shifts
     history_weeks: int = 8  # task brief: 8 weeks of hours history for everyone
     history_noise: float = 2.0  # assumption: past weekly totals vary +-2 h around the usual load
@@ -384,9 +385,12 @@ def make_roster(p: Params, seed: int, i: int, monday: date, in_session: bool) ->
             cannot.add((4, 18))
         other: dict[str, float] = {}
         n = rng.randint(*p.shifts_per_student)
+        continuing = pid in f1 and rng.random() < p.f1_continuing_share
         if pid in f1:
             other = {"other on-campus job": float(rng.randint(*p.f1_other_hours))}
             n = min(n, int(20 - other["other on-campus job"]) // p.shift_hours)
+            if not in_session and not continuing:
+                n, other = 0, {}  # graduated in fall: no on-campus work after the program completion date
         open_slots = [s for s in all_slots if s not in cannot]
         mine = rng.sample(open_slots, min(n, len(open_slots)))
         if pid in near_cap:
@@ -395,7 +399,9 @@ def make_roster(p: Params, seed: int, i: int, monday: date, in_session: bool) ->
         ceiling = 20 if pid in f1 else 25  # everyone is inside every limit before the week starts
         history = [round(min(ceiling, max(0.0, usual + rng.uniform(-p.history_noise, p.history_noise))), 1)
                    for _ in range(p.history_weeks)]
-        limits = Limits(f1_or_j1=pid in f1, fws=pid in fws, other_employer_hours=other, hours_history=history,
+        limits = Limits(f1_or_j1=pid in f1, f1_continuing=continuing if pid in f1 else None,
+                        program_end=None if continuing or pid not in f1 else date(2026, 12, 13),
+                        fws=pid in fws, other_employer_hours=other, hours_history=history,
                         fws_award_remaining=float(round(p.wage * p.shift_hours * len(mine)
                                                         + rng.uniform(*p.fws_award_remaining))) if pid in fws else None)
         prefs = Preferences(wants_more_hours=pid in wants, soft_avoid=[
@@ -473,7 +479,8 @@ def make_week(p: Params, seed: int, rate: float, i: int) -> Week:
 
 
 def make_break_week(p: Params, seed: int, i: int) -> Week:
-    """A winter-break week: no classes, half the domestic students go home, every F-1 student stays and wants hours."""
+    """A winter-break week: no classes, half the domestic students go home, F-1 students continuing into spring stay
+    and want hours (up to 40); graduating F-1 students can't work after their program completion date."""
     monday = p.break_mondays[i % len(p.break_mondays)]
     week = make_roster(p, seed, i, monday, in_session=False)
     rng = _rng(seed, "break", i)
@@ -484,7 +491,8 @@ def make_break_week(p: Params, seed: int, i: int) -> Week:
             _add_busy(week, p, pid, BusyBlock(id=f"{pid}-home", start=at(monday, 0),
                                               end=at(monday + timedelta(days=7), 0), kind="vacation",
                                               label="home for the break", source="calendar"))
-        wants = pid not in home and (person.wants_hours or person.student.limits.f1_or_j1)
+        lim = person.student.limits
+        wants = pid not in home and (person.wants_hours or bool(lim.f1_or_j1 and lim.f1_continuing))
         person.student = person.student.model_copy(update={"prefs": person.student.prefs.model_copy(
             update={"wants_more_hours": wants})})
     _extra_events(week, p, rng)
@@ -717,7 +725,8 @@ def report(p: Params, res: dict, weeks: int, seed: int, took: float, workers: in
         L.append(f"**Go/no-go: go.** At a {rate} conflict rate with {adopt} of the roster on Tag Out, rings and "
                  f"chains fix {central['extra'][0]:.1f} percentage points more of the week's conflicts than plain "
                  f"covers (95% CI ± {central['extra'][1]:.1f}), above the {p.go_points:g}-point bar in "
-                 "docs/DESIGN.md section 7. Rings can lead the pitch."
+                 "docs/DESIGN.md section 7. Most of that gain comes from two-person swaps, which a well-run group chat "
+                 "could also arrange (stronger baseline below), so rings should not lead the pitch on their own."
                  + (f" The lower end of the confidence interval ({ci_low:.1f}) is under {p.go_points:g}, so the "
                     "margin is thin." if ci_low < p.go_points else "")
                  + (" The margin depends on assumptions: changed one at a time, these push it under "

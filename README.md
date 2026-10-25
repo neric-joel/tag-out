@@ -206,12 +206,12 @@ Every limit is data in `config/rules.yaml`. The quotes below come from `docs/rul
 
 | | Plain covers only | Group chat with two-person swaps (everyone's limits known) | Tag Out |
 |---|---|---|---|
-| Conflicts fixed | 73.8% | 83.5% | 83.7% |
-| Pay lost per week | $671 | $326 | $285 |
+| Conflicts fixed | 72.8% | 82.7% | 83.1% |
+| Pay lost per week | $662 | $323 | $283 |
 
-The honest reading: most of the gain over plain covers comes from simple two-person swaps, which a well-run group chat could also arrange. Tag Out adds only 0.2 points (± 0.3) of conflicts fixed over that stronger baseline and $41 a week less pay lost (rings of three or more and cover chains). What it changes is how the result is reached: the swaps happen on their own every Sunday instead of through a group chat; nobody posts a reason; and every move is checked against limits that no coworker or manager can see. An unchecked group chat makes about 1.4 limit-breaking covers a week on this roster (1.44 ± 0.09), and Tag Out blocks those. The `docs/DESIGN.md` go/no-go (rings must add 10 points over plain covers) is borderline at 9.8 ± 0.5, so rings are not the headline; the Sunday check, private limit checks and pay kept are ([docs/SIMULATION.md](docs/SIMULATION.md)).
+The honest reading: most of the gain over plain covers comes from simple two-person swaps, which a well-run group chat could also arrange. Tag Out adds only 0.4 points (± 0.3) of conflicts fixed over that stronger baseline and $40 a week less pay lost (rings of three or more and cover chains). What it changes is how the result is reached: the swaps happen on their own every Sunday instead of through a group chat; nobody posts a reason; and every move is checked against limits that no coworker or manager can see. An unchecked group chat makes about 1.5 limit-breaking covers a week on this roster (1.49), and Tag Out blocks those. The `docs/DESIGN.md` go/no-go (rings must add 10 points over plain covers) is met only narrowly (10.3 ± 0.5, and the gain mostly comes from two-person swaps), so rings are not the headline; the Sunday check, private limit checks and pay kept are ([docs/SIMULATION.md](docs/SIMULATION.md)).
 
-Winter Break Handoff, per simulated break week (Dec 14 2026 to Jan 10 2027, when the F-1 limit is 40 hours): students going home want 54.0 shifts gone, 34.6 of them are handed off to students who stay, and $2,215 of pay stays on campus. Accepted handoffs break 0 rules; an unchecked group chat would break about 3 a week (3.05).
+Winter Break Handoff, per simulated break week (Dec 14 2026 to Jan 10 2027, when the F-1 limit is 40 hours for students continuing into spring; graduating F-1 students can't work after their completion date): students going home want 53.8 shifts gone, 32.3 of them are handed off to students who stay, and $2,066 of pay stays on campus. Accepted handoffs break 0 rules; an unchecked group chat would break about 3.7 a week.
 
 ![Conflicts fixed and pay lost per week, plain covers vs Tag Out at 25%, 50% and 100% adoption, by conflict rate](docs/img/simulation.png)
 
@@ -223,7 +223,7 @@ The survey of ASU student workers that would set the real conflict rate is pendi
 
 **Is the demo week rigged?** Yes, it is a tour, tuned so each path shows once: a ring after a counter-offer, a cover, an honest open shift, and (in the break-it beat, a live edit) a stale abort. The simulator runs the same TTC, chain and Rulebook functions (`broker/ttc.py`, `rulebook/`) on 1,000 random 40-person rosters, without the processes, counter-offers or two-phase commit, and those are the numbers we quote.
 
-**Why not a group chat that swaps?** If everyone knew everyone's limits, a careful group chat would fix about as many collisions (83.5% vs 83.7%). Nobody knows them, so an unchecked group chat makes about 1.4 limit-breaking covers a week on that roster, everyone has to post why they need out, and someone has to organize it. Tag Out does it on Sunday without anyone asking or explaining.
+**Why not a group chat that swaps?** If everyone knew everyone's limits, a careful group chat would fix about as many collisions (82.7% vs 83.1%). Nobody knows them, so an unchecked group chat makes about 1.5 limit-breaking covers a week on that roster, everyone has to post why they need out, and someone has to organize it. Tag Out does it on Sunday without anyone asking or explaining.
 
 **Who adopts it first?** The manager, per roster: the Sunday check works for a single student, the crunch forecast and the export are for managers, and rings need most of a roster on board (only 1.9 points at 25% adoption). For students, Cubbie is the distribution: the Skill makes a student's existing Cubbie their mascot's front door.
 

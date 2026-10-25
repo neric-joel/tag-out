@@ -27,7 +27,7 @@ from core.wire import (
     TradeRequest,
     Vote,
 )
-from rulebook.rules import binding, check_change, f1_cap, near_f1_limit, week_hours
+from rulebook.rules import binding, check_change, f1_cap_for, near_f1_limit, week_hours
 
 Avail = Literal["yes", "unsure", "no"]
 WAGE = 16.0
@@ -175,7 +175,7 @@ class Brain:
         else:
             monday = week_start(ref.start.date())
             after = [s for s in self.store.shifts() if s.id not in {d.id for d in drop or []}] + [to_shift(ref)]
-            hours, cap = week_hours(st, after, monday), f1_cap(monday)
+            hours, cap = week_hours(st, after, monday), f1_cap_for(st, monday)
             self.store.note(f"Passed for now: {label} would put you at {hours:g} of {cap:g} on-campus hours. Asked you.")
             text, keep = explain.ask_limit(label, hours, cap), "Leave room"
         buttons = [("Take it", f"ask:yes:{ref.shift_id}"), (keep, f"ask:no:{ref.shift_id}")]

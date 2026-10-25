@@ -10,7 +10,7 @@ Each ASU student worker gets a mascot agent that spots next week's shift collisi
 
 ## Three sentences
 
-Tag Out gives each ASU student worker a mascot agent that privately holds their calendar, shifts and work-hour limits, and texts them on Sunday only when a shift next week collides with an exam, an interview or an appointment. The mascots trade shifts in rings and cover chains through a broker that sees shift ids, picks and yes/no answers but never reasons or hours; each mascot re-checks the exact trade against ASU's cited limits, including the F-1 limit of 20 hours across every on-campus job that no single employer can see, and nothing moves until every student confirms and the manager approves. On a simulated 40-person roster, Tag Out fixes about as many collisions as a group chat that swaps would if everyone knew everyone's limits (83.7% vs 83.5%), but on its own every Sunday, with no one posting a reason, and it blocks about 1.4 covers a week that would break a limit nobody else can see.
+Tag Out gives each ASU student worker a mascot agent that privately holds their calendar, shifts and work-hour limits, and texts them on Sunday only when a shift next week collides with an exam, an interview or an appointment. The mascots trade shifts in rings and cover chains through a broker that sees shift ids, picks and yes/no answers but never reasons or hours; each mascot re-checks the exact trade against ASU's cited limits, including the F-1 limit of 20 hours across every on-campus job that no single employer can see, and nothing moves until every student confirms and the manager approves. On a simulated 40-person roster, Tag Out fixes about as many collisions as a group chat that swaps would if everyone knew everyone's limits (83.1% vs 82.7%), but on its own every Sunday, with no one posting a reason, and it blocks about 1.5 covers a week that would break a limit nobody else can see.
 
 ## 150 words
 
@@ -19,7 +19,7 @@ About 10,000 students work at ASU each year, and when a shift collides with scho
 ## Sources for the numbers above
 
 - 10,000 students and the coverage quote: `docs/rule_quotes.json` (`stats`, `coverage_on_student`), verbatim in `docs/RULES.md`.
-- 84% vs 74%, the group-chat-with-swaps comparison and 1.4 limit-breaking covers a week: `docs/simulation.json` (1,000 weeks, seed 7, 15% conflicts, full adoption). Tag Out adds only 0.2 points over the swap-capable group chat; the gain is privacy, automation and the blocked limit breaks, not more fixes. See `docs/SIMULATION.md`.
+- 83.1% vs 82.7% vs 72.8% (Tag Out, a group chat that swaps, plain covers) and 1.5 limit-breaking covers a week: `docs/simulation.json` (1,000 weeks, seed 7, 15% conflicts, full adoption). Tag Out adds only 0.4 points over the swap-capable group chat; the gain is privacy, automation and the blocked limit breaks, not more fixes. See `docs/SIMULATION.md`.
 - 21 of 20 hours: the judge view's Library-only scheduler comparison and `tests/test_baseline.py` (Ben's 9 Aramark Dining hours are invisible to the Library).
 - 20 hours across every on-campus job: `f1_weekly_20` in `docs/RULES.md`.
 

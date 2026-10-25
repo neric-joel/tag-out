@@ -304,16 +304,29 @@ def tag_out(week: Week, adopters: set[str], cap: int | None, plain: Plan,
     return rings(fallback, [c for c in agents if c not in fallback.fixed], cap, release_passers), True
 
 
-def group_chat_breaks(week: Week, cap: int | None) -> list[str]:
-    """The same group chat with nobody checking limits: the first free coworker who wants hours takes the shift.
-    Returns the helper of every cover that broke a limit (the Rulebook would have said no)."""
+def hand_check(plan: Plan, pid: str, add: list[str]) -> bool:
+    """What a careful volunteer checks by hand: this job's hours this week stay under 20 (F-1/J-1) or 40. It
+    misses hours at other jobs, the rolling 25-hour average and Work-Study dollars."""
+    w = plan.week
+    hours = sum(w.shift[s].hours for s in [*plan.held[pid], *add])
+    return hours <= (20 if w.people[pid].student.limits.f1_or_j1 else 40)
+
+
+def group_chat_breaks(week: Week, cap: int | None, by_hand: bool = False,
+                      rules: list[str] | None = None) -> list[str]:
+    """The same group chat with nobody checking limits (or, with by_hand, each volunteer checking only this job's
+    weekly hours): the first free coworker who wants hours takes the shift. Returns the helper of every cover that
+    broke a limit (the Rulebook would have said no), and appends the rule each one broke to `rules`."""
     plan, out = Plan(week), []
     for c in week.conflicts:
         owner = plan.holder[c]
         for h in week.replies[c]:
-            if h != owner and free(plan, h, [c], [], cap):
-                if not verdict(plan, h, [c], []).ok:
+            if h != owner and free(plan, h, [c], [], cap) and (not by_hand or hand_check(plan, h, [c])):
+                v = verdict(plan, h, [c], [])
+                if not v.ok:
                     out.append(h)
+                    if rules is not None:
+                        rules.append(v.deciding.rule_id)
                 plan.held[h].append(c)
                 plan.held[owner].remove(c)
                 plan.holder[c] = h
@@ -519,9 +532,12 @@ def run_week(p: Params, seed: int, rate: float, i: int) -> dict:
     week = make_week(p, seed, rate, i)
     plain, tag, breaks = play_week(p, week)
     swaps = swap_baseline(p, week)
+    rules: list[str] = []
+    group_chat_breaks(week, p.helper_extra_shifts, rules=rules)
     row = {"shifts": len(week.shift), "conflicts": len(week.conflicts), "plain_fixed": plain.count(),
            "plain_pay": plain.pay_lost(), "problems": len(recheck(plain)), "breaks": len(breaks), "oracle": None,
-           "swap_fixed": swaps.count(), "swap_pay": swaps.pay_lost()}
+           "swap_fixed": swaps.count(), "swap_pay": swaps.pay_lost(), "by_rule": dict(Counter(rules)),
+           "hand_breaks": len(group_chat_breaks(week, p.helper_extra_shifts, by_hand=True))}
     for a, (plan, fell_back) in tag.items():
         adopters = week.adopters(a)
         row[a] = {"fixed": plan.count(), "pay": plan.pay_lost(), "ring": plan.count("ring"),
@@ -616,6 +632,9 @@ def summary(rows: list[dict], a: float) -> dict:
         "extra_vs_swap": mean_ci(pct(rows, lambda r: r[a]["fixed"] - r["swap_fixed"])),
         "tag_pay": mean_ci([r[a]["pay"] for r in rows]),
         "prevented": mean_ci([r[a]["prevented"] for r in rows]),
+        "hand_breaks": mean_ci([r["hand_breaks"] for r in rows]),
+        "by_rule": {k: statistics.fmean(r["by_rule"].get(k, 0) for r in rows)
+                    for k in sorted({k for r in rows for k in r["by_rule"]})},
         "fallback": sum(r[a]["fallback"] for r in rows),
         "problems": sum(r[a]["problems"] + r["problems"] for r in rows),
         "ring_sizes": sizes,
@@ -757,8 +776,16 @@ def report(p: Params, res: dict, weeks: int, seed: int, took: float, workers: in
     L += ["", f"**Against a stronger baseline** where the group chat also arranges two-person swaps before anyone "
           f"covers (no app needed): it fixes {_pm(central['swap'])} of conflicts and loses "
           f"{_pm(central['swap_pay'], '$')} of pay a week. Tag Out fixes {_pm(central['extra_vs_swap'], ' points')} "
-          f"more than that and loses {_pm(central['tag_pay'], '$')}. What a group chat can't do is the rest: rings of "
-          "three or more, cover chains, and checking every move against limits it can't see."]
+          f"more than that and loses {_pm(central['tag_pay'], '$')}. That baseline assumes every volunteer checks "
+          "every one of their own limits correctly; nobody has to know anyone else's."]
+    names = {"f1_weekly_20": "F-1 20 h across jobs", "fws_award": "Work-Study award", "aca_25_avg": "25 h average",
+             "weekly_40": "40 h a week", "class_time": "class time"}
+    split = ", ".join(f"{names.get(k, k)} {v:.2f}" for k, v in sorted(central["by_rule"].items(), key=lambda kv: -kv[1]))
+    L += ["", f"**Where the limit checks matter.** With nobody checking limits, the same group chat makes "
+          f"{_pm(central['prevented'], '', 2)} limit-breaking covers a week ({split}). If each volunteer checks by "
+          f"hand the way most would (this job's hours under 20 or 40), it still makes "
+          f"{_pm(central['hand_breaks'], '', 2)}: what people miss is hours at other jobs, the rolling 25-hour "
+          "average and Work-Study dollars. Tag Out's mascots check all of them, so its plans make none."]
     L += ["",
           f"- Typical case ({rate} conflicts, {adopt} adoption, {central['weeks']:,} weeks): plain covers fix "
           f"{_pm(central['plain'])} of conflicts; Tag Out fixes {_pm(central['tag'])}; rings and chains add "
@@ -776,9 +803,10 @@ def report(p: Params, res: dict, weeks: int, seed: int, took: float, workers: in
           "of a roster on board.",
           f"- Pitch line (synthetic): \"On a simulated 40-person roster, plain covers fix "
           f"{central['plain'][0]:.0f}% of conflicts. A group chat that also arranged two-person swaps would reach "
-          f"{central['swap'][0]:.0f}% if everyone knew everyone's limits. Tag Out reaches {central['tag'][0]:.0f}% on "
-          f"its own every Sunday, without anyone sharing a reason, and blocks about "
-          f"{central['prevented'][0]:.1f} limit-breaking covers a week.\"",
+          f"{central['swap'][0]:.0f}% if every volunteer checked every one of their own limits correctly. Tag Out "
+          f"reaches {central['tag'][0]:.0f}% on its own every Sunday, without anyone sharing a reason, while a chat "
+          f"where volunteers check by hand makes about {central['hand_breaks'][0]:.1f} limit-breaking covers a "
+          "week.\"",
           "",
           f"![Conflicts fixed and pay lost by conflict rate and adoption](img/{IMG.name})", ""]
 
@@ -941,6 +969,8 @@ def main() -> None:
         "swap_pct": round(c["swap"][0], 1), "swap_pay_lost": round(c["swap_pay"][0]),
         "extra_vs_swap": round(c["extra_vs_swap"][0], 1), "extra_vs_swap_ci": round(c["extra_vs_swap"][1], 1),
         "rule_breaks_prevented_per_week": round(c["prevented"][0], 2),
+        "rule_breaks_hand_checked_per_week": round(c["hand_breaks"][0], 2),
+        "rule_breaks_by_rule": {k: round(v, 2) for k, v in c["by_rule"].items()},
         "winter": {"wanted": round(winter["wanted"], 1), "handed": round(winter["handed"], 1),
                    "kept": round(winter["kept"]), "rule_breaks": sum(row["problems"] for row in b),
                    "unchecked_breaks": round(winter["unchecked_breaks"], 2)},

@@ -166,6 +166,31 @@ def rooms(student: Student, shifts: list[Shift], monday: date) -> list[Room]:
     return out
 
 
+def next_break(monday: date) -> date | None:
+    """The first day of the next ASU-listed break after this Monday."""
+    starts = sorted(b["start"] if isinstance(b["start"], date) else date.fromisoformat(str(b["start"]))
+                    for b in config()["f1_break_40"]["break_periods"])
+    return next((d for d in starts if d > monday), None)
+
+
+def term_weeks_left(monday: date) -> int | None:
+    """Whole weeks from this Monday to the next ASU-listed break."""
+    nxt = next_break(monday)
+    return (nxt - monday).days // 7 if nxt else None
+
+
+def fws_runway(student: Student, shifts: list[Shift], monday: date) -> tuple[float, float, int] | None:
+    """When a Work-Study award runs out before the next break at this week's scheduled pay:
+    (weeks it lasts, this week's pay, weeks to the break). None when it lasts, or can't be known."""
+    lim = student.limits
+    weeks_left = term_weeks_left(monday)
+    paid = week_pay(shifts, monday)
+    if not lim.fws or lim.fws_award_remaining is None or not paid or weeks_left is None:
+        return None
+    lasts = lim.fws_award_remaining / paid
+    return (lasts, paid, weeks_left) if lasts < weeks_left else None
+
+
 def binding(student: Student, shifts: list[Shift], monday: date, wage: float = 16.0) -> Room:
     """The limit that binds first, comparing dollars as hours at this wage."""
     def as_hours(r: Room) -> float:

@@ -58,7 +58,7 @@ class ImportedEvent(BaseModel):
 
 
 class EventImport(BaseModel):
-    source: Literal["canvas", "calendar"]
+    source: Literal["canvas", "calendar", "gmail"]
     events: list[ImportedEvent]
 
 
@@ -153,7 +153,12 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
     @app.post("/round/none")
     async def no_trade(body: NoTrade) -> dict:
         s = store.shift(body.shift_id)
-        if s:
+        if s and s.id in store.get("called_out", []):
+            store.note(f"Nobody could take {s.label} safely; you're still on the schedule.")
+            await brain.notify(f"Nobody could take your {s.label} safely, so you're still on the schedule. Contact "
+                               "your supervisor now to call out; I've told them it's open, with no reason.",
+                               kind="info")
+        elif s:
             store.note(f"No safe trade for {s.label} this week; it stays on your schedule.")
             await brain.notify(f"No trade worked for your {s.label} shift this week, so it's still yours. If you "
                                "can't work it, ask your manager for the time off; I've told them it's open for a "

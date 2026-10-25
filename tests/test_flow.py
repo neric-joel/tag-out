@@ -81,3 +81,14 @@ async def test_editing_a_week_before_commit_aborts_and_retries(system):
     assert "library-tue-1027-1800-d1" in shift_ids(system, "ben")
     assert "library-fri-1030-1000-d1" in shift_ids(system, "ana")
     assert "library-fri-1030-1000-d1" not in shift_ids(system, "dev")
+
+
+async def test_swaps_go_through_on_the_managers_standing_rule_covers_still_ask(system):
+    await system.sunday_and_run()
+    manager = system.steward.state.s["phone"]
+    ring = next(m for m in manager if m["text"].startswith("Approved under your standing rule"))
+    assert "Ben's Thu 2-6 PM -> Dev" in ring["text"] and ring["buttons"][0]["data"] == "rule:swaps:off"
+    cover = next(m for m in manager if m["text"].startswith("Trade request: Zoe's Sat"))
+    assert [b["label"] for b in cover["buttons"]] == ["Approve", "Deny"], "a cover changes hours: the manager decides"
+    r = await system.net.post(f"{system.reg['steward']}/tap", {"data": "rule:swaps:off"})
+    assert "every trade" in r["reply"] and system.steward.state.s["swap_rule"] is False

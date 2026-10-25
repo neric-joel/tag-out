@@ -25,7 +25,7 @@ async def test_a_library_only_scheduler_breaks_limits_it_cannot_see(system):
     assert ana_tue["library_view"] == 12 and ana_tue["real"] == 21  # the Library sees 12 h; Ben is really at 21
     assert "f1_weekly_20" in ana_tue["breaks"]
     ben_thu = rows["library-thu-1029-1400-d1"]
-    assert ben_thu["to"] == "dev" and "aca_25_avg" in ben_thu["breaks"]  # Dev's rec center hours are invisible too
+    assert ben_thu["to"] == "dev" and "aca_25_avg" in ben_thu["breaks"]  # Dev's rec center hours are in Workday, not in the Library's scheduler
     assert r.json()["violations"] >= 2
 
 

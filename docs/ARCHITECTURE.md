@@ -100,7 +100,7 @@ Demo and admin: `POST /admin/reset` (reseed from `seeds/`, keep the owner token)
 
 ### Telegram bot relay (`bot/telegram_bot.py`, port 8702)
 
-`POST /send` (`{"student_id", "kind", "text", "buttons"}`) delivers a message (plain text and buttons only; the mascots live on the website) to the chat linked to that mascot or to the manager, for collision, ask, confirm, commit and abort messages. `GET /links` lists who is linked. Telegram commands: `/start`, `/join <name>`, `/pet`, `/week`, `/diary`, `/sunday`, `/trade`, `/help`. Plain texts go to the mascot's `/intake` and button taps to its `/tap`, both with the owner token.
+`POST /send` (`{"student_id", "kind", "text", "buttons"}`) delivers a message (plain text and buttons only; the mascots live on the website) to the chat linked to that mascot or to the manager, for collision, ask, confirm, commit and abort messages. `GET /links` lists who is linked. Telegram commands: `/start`, `/join <name> <code>` (the join codes `scripts/run_all.py` prints), `/cubbie` (sends that student's mascot address and owner token, for the Cubbie Skill), `/pet`, `/week`, `/diary`, `/sunday`, `/trade`, `/help`. Plain texts go to the mascot's `/intake` and button taps to its `/tap`, both with the owner token.
 
 ## Message types
 
@@ -137,7 +137,7 @@ The private models (`Student`, `Limits`, `Preferences`, `SoftAvoid`, `BusyBlock`
 4. Counter-offer window. If at least 2 owners are still unmatched and the ask window is above zero, the broker waits that long. Students answer their mascot's question, and the answer is stored privately for that shift. Then swap rounds run again over what is left. This is where Ana's "Take it" turns her pass into a pick.
 5. Cover chains. Every mascot that doesn't own a remaining item gets a `PickRequest` with `phase="cover"`. A mascot whose student doesn't want more hours passes at once. For each helper who picks (in name order), the owner who just lost a shift gets `phase="extend"` with the remaining shifts of people not yet in the chain and `you_give` set to the shift they are losing. If they pick one they keep their hours and the chain grows; the last person in the chain drops their shift.
 6. Validation. Every member of every proposal gets a `RingCheck` with the exact moves and answers with one ok bit from its own Rulebook check on that final ring. The broker also reads every member's `/version` and the Steward's. The public `validated` event carries only the proposal's overall ok.
-7. Selection with CP-SAT (`broker/cpsat.py`). One boolean per proposal. A proposal with any member who said no is fixed to 0. At most one chosen proposal per person and per shift. The objective is 1000 per conflict fixed, plus 100 per owner who also takes a shift back (keeps their pay), minus 1 per move. The solver runs with one worker, seed 7 and a 2-second limit, so results repeat. Choosing nothing is a valid answer.
+7. Selection with CP-SAT (`broker/cpsat.py`). One boolean per proposal. A proposal with any member who said no is fixed to 0. At most one chosen proposal per person and per shift. The objective is 1000 per conflict fixed, plus 100 per owner who also takes a shift back (keeps their pay), minus 1 per move. The solver runs with one worker, seed 7 and a 2-second limit, so results repeat. Choosing nothing is a valid answer. TTC cycles can't share a person, and neither can the chains of one cover round, so in most weeks CP-SAT just keeps everything that passed its re-checks. It matters when the second cover round (after the counter-offer window) builds a chain through someone already in a ring, or when proposals compete for one shift.
 8. Two-phase commit, one chosen proposal at a time (next section).
 9. If any commit aborted, the next attempt starts from step 2 with whatever is still open. Otherwise, or after the third attempt, the broker posts each unfixed shift to the Steward's `/open` and emits `summary` with `asked`, `fixed`, `open`, `by_ring`, `by_chain`, `pay_kept` and `open_shifts`.
 
@@ -146,9 +146,13 @@ Timing (`Timing` in `broker/engine.py`):
 | | Default | Fast (`TAGOUT_FAST=1`, tests) | Live (`TAGOUT_MODE=live`) |
 |---|---|---|---|
 | `pick_deadline`: replies held until then | 1.0 s | 0 | 2.0 s |
-| `ask_window`: counter-offer wait | 3.0 s | 0.05 s | 60 s |
-| `vote_timeout`: confirmations | 30 s | 5 s | 300 s |
+| `ask_window`: counter-offer wait | 3.0 s | 0.3 s | 60 s |
+| `vote_timeout`: confirmations (students and manager) | 30 s | 5 s | 1,800 s |
 | `between`: pacing for the arena | 0.6 s | 0 | 1.0 s |
+
+What happens when someone doesn't answer: a trade that isn't fully confirmed before `vote_timeout` aborts, nothing moves, and every student keeps the shift they were scheduled for (the owners are told the shift is still theirs, and an unfixed shift reaches the manager as open). The Steward has a standing rule, on by default: a swap, where every member gives and takes the same hours, needs no manager approval because coverage and hours don't change; the manager's card says so and has an "Ask me each time" button. Covers always wait for the manager. Only one run happens at a time, so a call-out that arrives while Sunday's run waits for confirmations starts when that run ends.
+
+Same-day call-outs: a mascot's `TradeRequest` with `urgent: true` makes the broker send the Steward a `CallOut` (the manager gets "Same-day request: Ben can't work Mon 10 AM-2 PM… still on the schedule. No reason given.") and open a `callout` run half a second later. It runs the same rounds, re-checks and two-phase commit; if nobody can take the shift, `OpenShift` carries `urgent: true` and the manager's card says it's their call under the department's call-out policy.
 
 Public events on `/events`, in the order a week emits them: `sunday_check`, `trade_request`, `round_open`, `round`, `picks`, `released`, `counter_window`, `cycle`, `chain`, `validated`, `selected`, `prepare`, `vote`, `commit` or `abort`, `summary`. The demo adds `schedule_edited` and `reset`.
 

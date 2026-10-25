@@ -14,6 +14,12 @@
  "extra_vs_swap": 0.4,
  "extra_vs_swap_ci": 0.3,
  "rule_breaks_prevented_per_week": 1.49,
+ "rule_breaks_hand_checked_per_week": 1.45,
+ "rule_breaks_by_rule": {
+  "aca_25_avg": 0.26,
+  "f1_weekly_20": 0.73,
+  "fws_award": 0.5
+ },
  "winter": {
   "wanted": 53.8,
   "handed": 32.3,

@@ -52,7 +52,7 @@ class BusyBlock(_Private):
     end: datetime
     kind: BusyKind
     label: str
-    source: Literal["canvas", "calendar", "text", "asu", "class", "seed"]
+    source: Literal["canvas", "calendar", "gmail", "text", "asu", "class", "seed"]
 
 
 class SoftAvoid(_Private):

@@ -102,3 +102,30 @@ async def test_owner_phone_does_get_the_reason(ran):
 
 def test_busy_labels_are_private_models():
     assert BusyBlock.model_config.get("extra") == "forbid"
+
+
+async def test_a_mascot_only_vouches_for_shifts_it_picked(tmp_path):
+    """A broker can't use a mascot as an oracle ("would one more shift fit Zoe?"): checks for moves the mascot
+    never asked for get a plain no, whatever the student's room."""
+    from core.wire import Move, PickRequest, RingCheck
+
+    s = System(tmp=tmp_path)
+    try:
+        await s.post("/demo/sunday")
+        await s.engine.load_roster()
+        zoe = s.reg["agents"]["zoe"]
+        mon = next(r for r in s.engine.roster.values() if r.owner == "ben" and r.start.weekday() == 0)
+        sun = next(r for r in s.engine.roster.values() if r.owner == "dev" and r.start.weekday() == 6)
+        pick = await s.net.post(f"{zoe}/round/pick", PickRequest(round_id="probe", iteration=1, phase="cover",
+                                                                  items=[mon, sun]))
+        assert pick["shift_id"] in (mon.shift_id, sun.shift_id), "Zoe has room and picks one of them"
+        other = sun if pick["shift_id"] == mon.shift_id else mon
+
+        def check(ref):
+            return RingCheck(ring_id="probe", moves=[Move(shift_id=ref.shift_id, from_agent=ref.owner, to_agent="zoe")])
+
+        assert (await s.net.post(f"{zoe}/ring/check", check(other)))["ok"] is False, "never picked: no answer"
+        assert (await s.net.post(f"{zoe}/ring/check", check(next(r for r in (mon, sun) if r is not other))))["ok"]
+        assert any("never asked for" in e["text"] for e in s.store("zoe").diary())
+    finally:
+        await s.close()

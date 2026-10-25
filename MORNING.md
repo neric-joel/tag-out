@@ -27,7 +27,7 @@ cd "D:\Projects\Dev Hacks\Track 2\tag-out"
 
 Then open http://127.0.0.1:8700 (commons) or http://127.0.0.1:8700/judge (adds phones, private limits, Break it).
 Buttons: Run Sunday check, then Start trade rounds. Or in a second terminal: `.venv\Scripts\python -m scripts.demo --all`.
-For real Telegram taps instead of the synthetic auto-taps: `python -m scripts.run_all --mode live` (60 s counter-offer window, 5 min to confirm).
+For real Telegram taps instead of the synthetic auto-taps: `python -m scripts.run_all --mode live` (60 s counter-offer window, 30 min for everyone, the manager included, to confirm).
 
 ## What is real, what is synthetic
 
@@ -37,14 +37,14 @@ For real Telegram taps instead of the synthetic auto-taps: `python -m scripts.ru
 
 ## The headline numbers (docs/simulation.json, 1,000 synthetic weeks, 40-person roster, 15% conflicts)
 
-| | Plain covers | Group chat that also swaps (if everyone knew everyone's limits) | Tag Out |
+| | Plain covers | Group chat that also swaps (every volunteer checks all of their own limits correctly) | Tag Out |
 |---|---|---|---|
 | Collisions fixed | 72.8% | 82.7% | 83.1% |
 | Pay lost per week | $662 | $323 | $283 |
 
 Honest framing (the judges pushed on this): most of the gain over plain covers comes from two-person swaps, which a
 well-run group chat could also arrange. Tag Out's edge is that it does this on its own every Sunday, privately, and
-blocks about 1.5 limit-breaking covers a week that an unchecked group chat would make. In the demo week a
+blocks the limit-breaking covers a chat makes even when volunteers check their hours by hand (about 1.45 a week: other jobs, the 25-hour average, Work-Study dollars). In the demo week a
 Library-only scheduler would have put Ben at 21 of 20 F-1 hours and Dev over the 25 h average (judge view).
 
 ## Demo week (what the video shows)

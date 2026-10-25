@@ -101,7 +101,7 @@ def main() -> None:
     s = sub.add_parser("setup")
     s.add_argument("--mascot-url", required=False)
     s = sub.add_parser("sync")
-    s.add_argument("--source", choices=["canvas", "calendar"], required=True)
+    s.add_argument("--source", choices=["canvas", "calendar", "gmail"], required=True)
     s.add_argument("--events")
     sub.add_parser("inbox")
     s = sub.add_parser("answer")

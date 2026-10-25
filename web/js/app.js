@@ -369,7 +369,7 @@
     try { d = await get("/sim"); } catch (_) { $("#sim").innerHTML = '<p class="muted">Run <code>python -m sim.simulate</code> to fill this in.</p>'; return; }
     $("#simMeta").textContent = `${d.weeks.toLocaleString("en-US")} synthetic weeks, ${Math.round(d.conflict_rate * 100)}% of shifts collide`;
     const rows = [["Plain covers only", d.plain_pct, d.plain_pay_lost, ""],
-      ["Group chat that also swaps, if everyone knew everyone's limits", d.swap_pct ?? d.plain_pct, d.swap_pay_lost ?? d.plain_pay_lost, ""],
+      ["Group chat that also swaps, every volunteer checking all of their own limits", d.swap_pct ?? d.plain_pct, d.swap_pay_lost ?? d.plain_pay_lost, ""],
       ["Tag Out, automatically every Sunday", d.tagout_pct, d.tagout_pay_lost, "hue"]];
     const maxPay = Math.max(...rows.map((r) => r[2]));
     const bars = (i, max, fmt) => rows.map((r) => `<span class="muted">${r[0]}</span><span class="track"><span class="fill ${r[3]}" style="width:${100 * r[i] / max}%"></span></span><span class="v num">${fmt(r[i])}</span>`).join("");
@@ -377,7 +377,7 @@
       <div><div class="bars wide" role="img" aria-label="Collisions fixed">
         <span>Collisions fixed</span><span></span><span></span>${bars(1, 100, (v) => v.toFixed(1) + "%")}
       </div>
-      <p class="sim-note">Most of the gain over plain covers comes from two-person swaps; Tag Out adds ${d.extra_vs_swap != null ? d.extra_vs_swap.toFixed(1) : "–"} points over a perfectly informed group chat. What it adds is doing it privately and on its own, and checking each move: an unchecked group chat makes about ${d.rule_breaks_prevented_per_week != null ? d.rule_breaks_prevented_per_week.toFixed(1) : "1.4"} limit-breaking covers a week on this roster.</p></div>
+      <p class="sim-note">Most of the gain over plain covers comes from two-person swaps; Tag Out adds ${d.extra_vs_swap != null ? d.extra_vs_swap.toFixed(1) : "–"} points over a chat where every volunteer checks all of their own limits correctly. What it adds is doing it privately and on its own, and checking each move: volunteers who check their hours by hand still make about ${(d.rule_breaks_hand_checked_per_week ?? d.rule_breaks_prevented_per_week ?? 1.4).toFixed(1)} limit-breaking covers a week on this roster, mostly from hours at other jobs, the 25-hour average and Work-Study dollars.</p></div>
       <div><div class="bars wide" role="img" aria-label="Pay lost per week">
         <span>Pay lost a week</span><span></span><span></span>${bars(2, maxPay, money)}
       </div>
@@ -402,7 +402,7 @@
     $("#limits").innerHTML = `<thead><tr><th>Student</th><th class="num">This week</th><th>Limit that binds first</th><th class="num">Room left</th><th>One more 4 h shift</th></tr></thead><tbody>${rows}</tbody>`;
     try {
       const b = await get("/admin/baseline");
-      const rule = { f1_weekly_20: "F-1 20 h", aca_25_avg: "25 h average", fws_award: "Work-Study award", weekly_40: "40 h" };
+      const rule = { f1_weekly_20: "F-1 20 h", aca_25_avg: "pushes 25 h average over", fws_award: "Work-Study award", weekly_40: "40 h" };
       $("#baseline").innerHTML = b.rows.length ? `<h3>The same week with a Library-only scheduler</h3>
         <p class="muted small">It sees availability and Library hours, like a typical shift app, but not other jobs or anyone's limits. It covers each shift with the free coworker who has the fewest Library hours.</p>
         <table class="limits"><thead><tr><th>Shift</th><th>Covered by</th><th class="num">Library sees</th><th class="num">Really</th><th>Breaks</th></tr></thead><tbody>

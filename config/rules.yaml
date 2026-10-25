@@ -21,7 +21,7 @@ rules:
     applies_to: f1_or_j1
     kind: raise
     weekly_hours: 40
-    summary: In ASU-listed break weeks the F-1/J-1 limit rises to 40 hours.
+    summary: In ASU-listed break weeks the F-1/J-1 limit rises to 40 hours, only for students enrolled (or planning to enroll) for the next term; no on-campus work after the program completion date.
     # From the Student Employment hourly-limits chart (fetched 2026-10-24). Summer is 40 h except a first or final
     # semester (20 h); Tag Out can't know which, so summer is left out and stays at the safer 20 h.
     break_periods:

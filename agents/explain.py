@@ -14,7 +14,7 @@ from core.wire import Move
 from ingest import llm
 from rulebook.rules import f1_cap_for, week_hours
 
-SOURCE_WORDS = {"canvas": "Canvas", "calendar": "your calendar", "text": "your text", "asu": "ASU's calendar",
+SOURCE_WORDS = {"canvas": "Canvas", "calendar": "your calendar", "gmail": "an email", "text": "your text", "asu": "ASU's calendar",
                 "class": "your class schedule", "seed": "your calendar"}
 
 SYSTEM = ("You rewrite one short text message from a student's scheduling assistant so it sounds natural and kind, "
@@ -43,6 +43,13 @@ def collision(name: str, c: Collision) -> str:
 def ask(shift_label: str, avoid_label: str) -> str:
     return polish(f"A {shift_label} Library shift could come to you in a trade, but that's your {avoid_label} "
                   f"slot. Take it so you keep your pay this week?")
+
+
+def fws_runway(lasts: float, paid: float, weeks_left: int, remaining: float) -> str:
+    span = "only this week" if lasts < 1.5 else f"about {lasts:.0f} more weeks"
+    return (f"Heads up: you're scheduled for ${paid:.0f} this week, so the ${remaining:.0f} left on your Work-Study "
+            f"award covers {span}, and the next break is {weeks_left} weeks away. Ask your supervisor or Financial "
+            "Aid now what happens when it runs out. I won't take extra shifts that go past it.")
 
 
 def ask_limit(shift_label: str, hours: float, cap: float) -> str:

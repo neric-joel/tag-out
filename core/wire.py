@@ -102,6 +102,13 @@ class SlotQuery(Wire):
 
 class OpenShift(Wire):
     shift_id: str
+    urgent: bool = False  # it was a same-day call-out
+
+
+class CallOut(Wire):
+    """Sent to the Steward the moment a student calls out of a shift today. No reason, ever."""
+
+    shift_id: str
 
 
 class NoTrade(Wire):

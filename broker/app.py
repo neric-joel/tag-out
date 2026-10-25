@@ -23,7 +23,7 @@ from broker.engine import Engine, Timing
 from core.events import Bus
 from core.net import RUNTIME, Net, registry
 from core.timeutil import PHX, coming_monday, planning_monday
-from core.wire import SundayCheck, TradeRequest, Vote
+from core.wire import CallOut, SundayCheck, TradeRequest, Vote
 from seeds.scenario import BREAK_IT_EDIT, STUDENTS
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -56,6 +56,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
     async def trade(t: TradeRequest) -> dict:
         engine.request(t.agent_id, t.shift_id, urgent=t.urgent)
         if t.urgent:
+            spawn(net.post(f"{reg['steward']}/callout", CallOut(shift_id=t.shift_id)))  # the manager hears now
             spawn(callout_round())
         return {}
 

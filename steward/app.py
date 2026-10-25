@@ -16,8 +16,8 @@ from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 
 from core.net import Net, registry
-from core.timeutil import fmt_span, planning_monday
-from core.wire import BusyBits, Decision, Move, OpenShift, Prepare, ShiftRef, SlotQuery, Vote
+from core.timeutil import PHX, fmt_span, planning_monday
+from core.wire import BusyBits, CallOut, Decision, Move, OpenShift, Prepare, ShiftRef, SlotQuery, Vote
 from ingest.ics import read, shifts_from_ics
 from seeds.scenario import EMPLOYER, STUDENTS
 
@@ -39,6 +39,11 @@ def load_roster() -> dict[str, ShiftRef]:
     return roster
 
 
+def swap_rule_default() -> bool:
+    """The manager's standing rule: swaps (same hours each way, every shift still covered) need no approval."""
+    return os.environ.get("TAGOUT_SWAP_RULE", "on") != "off"
+
+
 def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     app = FastAPI(title="Tag Out steward (Library)")
     reg = reg or registry()
@@ -46,23 +51,30 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     names = {s["id"]: s["name"] for s in STUDENTS}
     state = {"roster": load_roster(), "version": 1, "holds": {}, "ballots": {}, "changed": {}, "phone": [],
              "auto": os.environ.get("TAGOUT_MODE", "auto") == "auto",
-             "delay": float(os.environ.get("TAGOUT_AUTO_DELAY", "1.5")) + 0.5, "open": []}
+             "delay": float(os.environ.get("TAGOUT_AUTO_DELAY", "1.5")) + 0.5, "open": [],
+             "swap_rule": swap_rule_default()}
     app.state.s = state
 
-    async def to_manager(text: str, buttons: list[tuple[str, str]]) -> None:
-        msg = {"kind": "approve", "text": text, "buttons": [{"label": a, "data": b} for a, b in buttons]}
+    async def to_manager(text: str, buttons: list[tuple[str, str]], kind: str = "approve") -> None:
+        msg = {"kind": kind, "text": text, "buttons": [{"label": a, "data": b} for a, b in buttons]}
         state["phone"].append(msg)
         try:
             await app.state.net.post(f"{reg['bot']}/send", {"student_id": "manager", **msg})
         except Exception:
             pass
-        if state["auto"] and buttons:
+        if state["auto"] and buttons and kind == "approve":
             async def later() -> None:
                 await asyncio.sleep(state["delay"])
                 await handle_tap(buttons[0][1])
             asyncio.create_task(later())
 
     async def handle_tap(data: str) -> str:
+        if data.startswith("rule:swaps:"):
+            state["swap_rule"] = data.endswith(":on")
+            reply = ("OK: swaps that keep every shift covered go through without you again." if state["swap_rule"]
+                     else "OK: I'll ask you about every trade, swaps included.")
+            state["phone"].append({"kind": "reply", "text": reply, "buttons": []})
+            return reply
         verb, _, txn = data.partition(":")
         if txn not in state["holds"]:
             return "That request is closed."
@@ -96,11 +108,44 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         state["ballots"][p.txn_id] = p.ballot
         lines = [f"{names[m.from_agent]}'s {fmt_span(state['roster'][m.shift_id].start, state['roster'][m.shift_id].end)}"
                  f" -> {names[m.to_agent]}" for m in p.moves]
+        if state["swap_rule"] and is_swap(p.moves):
+            # the manager's standing rule: a swap changes who works, not coverage or anyone's hours
+            await to_manager("Approved under your standing rule for swaps: " + "; ".join(lines) + ". Every shift "
+                             "stays covered and nobody's hours change. It still needs every student to confirm.",
+                             [("Ask me each time", "rule:swaps:off")], kind="info")
+            return {"vote": Vote(txn_id=p.txn_id, agent_id="steward", vote="yes", ballot=p.ballot).model_dump()}
         text = ("Trade request: " + "; ".join(lines) + ". Each student's mascot privately checked the trade "
                 "against the shifts and other jobs it knows about for its student and said eligible; no reasons are "
-                "shared. It goes through only if every student confirms and you approve.")
+                "shared. It goes through only if every student confirms and you approve. If you don't answer in "
+                "time, nothing moves and everyone keeps the shift they were scheduled for.")
         await to_manager(text, [("Approve", f"approve:{p.txn_id}"), ("Deny", f"deny:{p.txn_id}")])
         return {"vote": None}
+
+    def is_swap(moves: list[Move]) -> bool:
+        """Every member gives and takes the same hours, so coverage and everyone's hours are unchanged."""
+        net: dict[str, float] = {}
+        for m in moves:
+            ref = state["roster"][m.shift_id]
+            h = (ref.end - ref.start).total_seconds() / 3600
+            net[m.from_agent] = net.get(m.from_agent, 0.0) - h
+            net[m.to_agent] = net.get(m.to_agent, 0.0) + h
+        return all(abs(v) < 1e-9 for v in net.values())
+
+    def when(ref: ShiftRef) -> str:
+        left = (ref.start - datetime.now(PHX)).total_seconds() / 3600
+        day = f"{fmt_span(ref.start, ref.end)} ({ref.start:%b} {ref.start.day})"
+        return f"{day}, starting in {left:.0f} h" if 0 < left < 24 else day
+
+    @app.post("/callout")
+    async def callout(body: CallOut) -> dict:
+        """A same-day call-out: the manager hears at once, before any round finishes. No reason attached."""
+        ref = state["roster"].get(body.shift_id)
+        if ref is not None:
+            who = names[ref.owner]
+            await to_manager(f"Same-day request: {who} can't work {when(ref)}. A cover round is running now; if a "
+                             f"coworker takes it you'll get a card to approve. Until then {who} is still on the "
+                             "schedule. No reason given.", [], kind="info")
+        return {}
 
     @app.post("/txn/decide")
     async def decide(d: Decision) -> dict:
@@ -162,9 +207,15 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         if sid in state["roster"] and sid not in state["open"]:
             state["open"].append(sid)
             ref = state["roster"][sid]
-            await to_manager(f"No safe trade for {names[ref.owner]}'s {fmt_span(ref.start, ref.end)} this week. "
-                             f"{names[ref.owner]} is still scheduled and asked for a trade, with no reason given. "
-                             "Approve time off and post the shift, or keep them on.", [])
+            who = names[ref.owner]
+            if body.urgent:
+                await to_manager(f"Nobody could take {who}'s same-day {when(ref)} safely. {who} asked to be out, "
+                                 "with no reason given. It's your call under your department's call-out policy: "
+                                 "excuse them and post the shift, or cover the desk.", [], kind="info")
+            else:
+                await to_manager(f"No safe trade for {who}'s {fmt_span(ref.start, ref.end)} this week. {who} is "
+                                 "still scheduled and asked for a trade, with no reason given. Approve time off and "
+                                 "post the shift, or keep them scheduled.", [], kind="info")
         return {}
 
     @app.post("/tap")
@@ -180,7 +231,8 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     async def reset() -> dict:
         if os.environ.get("TAGOUT_DEBUG") != "1":
             raise HTTPException(403)
-        state.update(roster=load_roster(), version=1, holds={}, ballots={}, changed={}, phone=[], open=[])
+        state.update(roster=load_roster(), version=1, holds={}, ballots={}, changed={}, phone=[], open=[],
+                     swap_rule=swap_rule_default())
         return {"ok": True}
 
     @app.post("/admin/auto")

@@ -2,12 +2,14 @@
 
 **Go/no-go: go.** At a 15% conflict rate with 100% of the roster on Tag Out, rings and chains fix 10.3 percentage points more of the week's conflicts than plain covers (95% CI ± 0.5), above the 10-point bar in docs/DESIGN.md section 7. Most of that gain comes from two-person swaps, which a well-run group chat could also arrange (stronger baseline below), so rings should not lead the pitch on their own. The lower end of the confidence interval (9.8) is under 10, so the margin is thin. The margin depends on assumptions: changed one at a time, these push it under 10 points: helpers take any number of shifts the rules allow (8.4); no clustering (every conflict is an individual event) (4.2); single TTC pass (passers' shifts stay in the pool) (9.5) (see Sensitivity).
 
-**Against a stronger baseline** where the group chat also arranges two-person swaps before anyone covers (no app needed): it fixes 82.7% ± 0.9 of conflicts and loses $323 ± 8 of pay a week. Tag Out fixes 0.4 points ± 0.3 more than that and loses $283 ± 7. What a group chat can't do is the rest: rings of three or more, cover chains, and checking every move against limits it can't see.
+**Against a stronger baseline** where the group chat also arranges two-person swaps before anyone covers (no app needed): it fixes 82.7% ± 0.9 of conflicts and loses $323 ± 8 of pay a week. Tag Out fixes 0.4 points ± 0.3 more than that and loses $283 ± 7. That baseline assumes every volunteer checks every one of their own limits correctly; nobody has to know anyone else's.
+
+**Where the limit checks matter.** With nobody checking limits, the same group chat makes 1.49 ± 0.09 limit-breaking covers a week (F-1 20 h across jobs 0.73, Work-Study award 0.50, 25 h average 0.26). If each volunteer checks by hand the way most would (this job's hours under 20 or 40), it still makes 1.45 ± 0.09: what people miss is hours at other jobs, the rolling 25-hour average and Work-Study dollars. Tag Out's mascots check all of them, so its plans make none.
 
 - Typical case (15% conflicts, 100% adoption, 1,000 weeks): plain covers fix 72.8% ± 0.9 of conflicts; Tag Out fixes 83.1% ± 0.9; rings and chains add 10.3 points ± 0.5. Pay lost per week drops from $662 ± 10 to $283 ± 7.
 - Worst case, same scenario: in at least 1 week in 20, rings and chains add nothing. The simulated broker never fixes fewer than plain covers, because it keeps the plain-cover plan when that plan is better (the live broker in broker/engine.py runs rings first and does not yet make that comparison).
 - Worst case in the whole sweep: 5% conflicts with 25% adoption, where rings and chains add 0.4 points ± 0.1. At 15% conflicts with only 25% of the roster on Tag Out they add 2.1 points ± 0.2: rings need most of a roster on board.
-- Pitch line (synthetic): "On a simulated 40-person roster, plain covers fix 73% of conflicts. A group chat that also arranged two-person swaps would reach 83% if everyone knew everyone's limits. Tag Out reaches 83% on its own every Sunday, without anyone sharing a reason, and blocks about 1.5 limit-breaking covers a week."
+- Pitch line (synthetic): "On a simulated 40-person roster, plain covers fix 73% of conflicts. A group chat that also arranged two-person swaps would reach 83% if every volunteer checked every one of their own limits correctly. Tag Out reaches 83% on its own every Sunday, without anyone sharing a reason, while a chat where volunteers check by hand makes about 1.4 limit-breaking covers a week."
 
 ![Conflicts fixed and pay lost by conflict rate and adoption](img/simulation.png)
 
@@ -157,7 +159,7 @@ Limits of this model:
 python -m sim.simulate --weeks 1000 --seed 7
 ```
 
-1,000 weeks per cell, seed 7, 6 worker processes, 118 s. Every week is seeded on its own, so the numbers do not depend on the worker count.
+1,000 weeks per cell, seed 7, 6 worker processes, 122 s. Every week is seeded on its own, so the numbers do not depend on the worker count.
 
 ---
 

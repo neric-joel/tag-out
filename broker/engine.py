@@ -46,8 +46,9 @@ class Timing:
 
     @classmethod
     def live(cls) -> Timing:
-        """Real people: a minute to answer their mascot's question, five minutes to confirm."""
-        return cls(2.0, 60.0, 300.0, 1.0)
+        """Real people: a minute to answer their mascot's question, 30 minutes for everyone (the manager too) to
+        confirm. A trade nobody finishes confirming aborts: every student keeps the shift they were scheduled for."""
+        return cls(2.0, 60.0, 1800.0, 1.0)
 
 
 @dataclass
@@ -67,6 +68,7 @@ class Engine:
         self.requests: dict[str, str] = {}  # shift_id -> owner (from trade requests)
         self.resolved: dict[str, str] = {}  # shift_id -> how ("ring-1", "chain-2")
         self.closed: set[str] = set()  # requests a finished run already settled (fixed, or sent to the manager)
+        self.urgent: set[str] = set()  # requests that came in as same-day call-outs
         self.roster: dict[str, ShiftRef] = {}
         self.txns: dict[str, Txn] = {}
         self.proposals: list[Proposal] = []
@@ -80,6 +82,8 @@ class Engine:
         if shift_id not in self.resolved:
             self.requests[shift_id] = agent
             self.closed.discard(shift_id)
+            if urgent:
+                self.urgent.add(shift_id)
             self.bus.emit("trade_request", agent=agent, shift_id=shift_id, urgent=urgent)
 
     async def vote(self, v: Vote) -> None:
@@ -327,7 +331,7 @@ class Engine:
         self.closed |= set(fresh)
         for s in open_:
             try:
-                await self.net.post(f"{self.reg['steward']}/open", OpenShift(shift_id=s))
+                await self.net.post(f"{self.reg['steward']}/open", OpenShift(shift_id=s, urgent=s in self.urgent))
                 await self.net.post(f"{self.reg['agents'][self.requests[s]]}/round/none", NoTrade(shift_id=s))
             except Exception:
                 pass
@@ -353,6 +357,7 @@ class Engine:
         self.requests.clear()
         self.resolved.clear()
         self.closed.clear()
+        self.urgent.clear()
         self.txns.clear()
         self.proposals.clear()
         self.summary = {}

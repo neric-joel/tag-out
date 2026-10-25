@@ -27,7 +27,15 @@ from core.wire import (
     TradeRequest,
     Vote,
 )
-from rulebook.rules import binding, check_change, f1_cap_for, near_f1_limit, week_hours
+from rulebook.rules import (
+    binding,
+    check_change,
+    f1_cap_for,
+    fws_runway,
+    near_f1_limit,
+    next_break,
+    week_hours,
+)
 
 Avail = Literal["yes", "unsure", "no"]
 WAGE = 16.0
@@ -83,6 +91,11 @@ class Brain:
         found = self.collisions(monday)
         st = self.store.student()
         self.store.put("collisions", [c.model_dump(mode="json") for c in found])
+        runway = fws_runway(st, self.store.shifts(), monday)
+        if runway and self.store.get("fws_warned") != str(next_break(monday)):
+            self.store.put("fws_warned", str(next_break(monday)))  # once before each break, not every Sunday
+            self.store.note(f"Work-Study award lasts about {runway[0]:.1f} weeks at this week's pay. Told you.")
+            await self.notify(explain.fws_runway(*runway, st.limits.fws_award_remaining or 0), kind="info")
         if not found:
             self.store.note(f"Sunday check for the week of {monday:%b %d}: no collisions, stayed quiet.")
             return 0
@@ -117,13 +130,16 @@ class Brain:
         if s is None:
             return "That shift isn't yours any more."
         self.store.put("called_out", [*self.store.get("called_out", []), shift_id])
+        self.remember("requested", shift_id)
         self.store.add_busy([BusyBlock(id=f"out-{shift_id}", start=s.start, end=s.end, kind="other",
                                        label="Called out", source="text")])
         await self.schedule_changed()
         await self.send_trade(TradeRequest(agent_id=self.me, shift_id=shift_id, urgent=True))
         self.store.note(f"You called out of {s.label}. Asked for a round now; only the shift id left, no reason.")
-        return (f"Tagging you out of {s.label}. Your reason stays with me; the other mascots only see the shift. "
-                "I'll text you before anything moves. If nobody can take it, your manager decides.")
+        return (f"Asking your coworkers to cover your {s.label} now. You're still on the schedule until someone "
+                "confirms and your manager approves, so also follow your department's call-out rule (usually: tell "
+                "your supervisor directly). Your reason stays with me; your manager only hears it's a same-day "
+                "request.")
 
     # ---------- availability (private) ----------
     def availability(self, ref: ShiftRef, giving: str | None = None) -> Avail:
@@ -169,6 +185,7 @@ class Brain:
             (yes if a == "yes" else unsure).append(ref)
         if yes:
             choice = yes[0]
+            self.remember("picked", choice.shift_id)
             self.store.note(f"Round {req.iteration} ({req.phase}): picked {to_shift(choice).label}.")
             return Pick(round_id=req.round_id, iteration=req.iteration, agent_id=self.me, shift_id=choice.shift_id)
         if unsure:
@@ -222,7 +239,20 @@ class Brain:
         drops = [s for m in moves if m.from_agent == self.me and (s := self.store.shift(m.shift_id))]
         return adds, drops
 
+    def remember(self, key: str, shift_id: str) -> None:
+        self.store.put(key, sorted({*self.store.get(key, []), shift_id}))
+
+    def asked_for(self, moves: list[Move]) -> bool:
+        """A mascot only vouches for moves it asked for: shifts it picked, and shifts its student asked to trade.
+        Anything else is a probe ("would one more 4-hour shift fit?") and gets the same plain no as a real no."""
+        picked, requested = set(self.store.get("picked", [])), set(self.store.get("requested", []))
+        return (all(m.shift_id in picked for m in moves if m.to_agent == self.me)
+                and all(m.shift_id in requested for m in moves if m.from_agent == self.me))
+
     def ring_ok(self, moves: list[Move]) -> bool:
+        if not self.asked_for(moves):
+            self.store.note("A check came in for a trade I never asked for. Answered no; nothing about you left.")
+            return False
         adds, drops = self.my_moves(moves)
         wanted = [m for m in moves if m.to_agent == self.me]
         if len(adds) != len(wanted):
@@ -257,6 +287,7 @@ class Brain:
         parts = data.split(":")
         if parts[0] == "trade" and len(parts) == 3:
             if parts[1] == "yes":
+                self.remember("requested", parts[2])
                 await self.send_trade(TradeRequest(agent_id=self.me, shift_id=parts[2]))
                 self.store.note("You asked me to find a trade. Request sent: only the shift id left.")
                 return "Looking for a trade. I'll text you when one works."

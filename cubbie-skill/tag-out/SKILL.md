@@ -1,6 +1,6 @@
 ---
 name: tag-out
-description: Checks next week's campus job shifts against Canvas and the calendar every Sunday and lets the student's Tag Out mascot trade a colliding shift without saying why. Use when the student works an on-campus job and asks to check next week for work conflicts, to find someone to take or swap a shift, or to set up the Sunday shift check.
+description: Checks next week's campus job shifts against Canvas, the calendar and Gmail every Sunday and lets the student's Tag Out mascot trade a colliding shift without saying why. Use when the student works an on-campus job and asks to check next week for work conflicts, to find someone to take or swap a shift, to call out of a shift today, or to set up the Sunday shift check.
 ---
 
 # Tag Out
@@ -23,7 +23,7 @@ Once per student:
 3. Offer a **weekly check-in every Sunday at 6 PM** in the student's time zone and create it only after they say yes.
 
 To try it without an account: add `--sample` to any command. It uses `assets/sample_canvas.json`,
-`assets/sample_calendar.json` and `assets/sample_inbox.json` and never touches the network.
+`assets/sample_calendar.json`, `assets/sample_gmail.json` and `assets/sample_inbox.json` and never touches the network.
 
 ## Steps for the Sunday check (or "check my week for work conflicts")
 
@@ -32,15 +32,19 @@ To try it without an account: add `--sample` to any command. It uses `assets/sam
    `kind` one of `exam` or `due`. If Canvas is not connected, say so, skip it and continue.
 2. With Cubbie's **Google Calendar** ability, get next week's events the same way into `calendar.json` (`kind`
    can be `appointment`, `interview`, `class`, `vacation` or `other`; leave it `other` when unsure).
-3. Run `python scripts/tagout.py sync --source canvas --events canvas.json`, then the same with
-   `--source calendar --events calendar.json`. The titles go only to the student's own mascot; coworkers and the
-   employer only ever see that the student is busy.
-4. Run `python scripts/tagout.py inbox`. For each new message, text the student the message as written and its
+3. With Cubbie's **Gmail** ability, look for next week's interview invitations, appointment confirmations and
+   event tickets that aren't on the calendar yet (an interview invite often arrives only by email). Save each one
+   with its time into `gmail.json` (`kind` `interview`, `appointment` or `other`). Skip anything without a clear
+   date and time, and never send the email body: a short title is enough.
+4. Run `python scripts/tagout.py sync --source canvas --events canvas.json`, then the same with
+   `--source calendar --events calendar.json` and `--source gmail --events gmail.json`. The titles go only to the
+   student's own mascot; coworkers and the employer only ever see that the student is busy.
+5. Run `python scripts/tagout.py inbox`. For each new message, text the student the message as written and its
    choices as a short numbered list. If there is nothing new, send nothing (the mascot only speaks up when a shift
    collides).
-5. When the student answers, run `python scripts/tagout.py answer <choice code>` with the code the inbox printed
+6. When the student answers, run `python scripts/tagout.py answer <choice code>` with the code the inbox printed
    for that choice, and text back the one-line reply the script prints.
-6. While a trade is open (the inbox said it is waiting for confirmations), create a **background task** that runs
+7. While a trade is open (the inbox said it is waiting for confirmations), create a **background task** that runs
    `inbox` every 2 minutes for up to 30 minutes and texts any new message, so the confirm step reaches the student
    quickly.
 
@@ -48,6 +52,10 @@ To try it without an account: add `--sample` to any command. It uses `assets/sam
 
 - "dentist Thu 3pm", "I got the Amazon interview Thu 2pm", "never schedule me Fridays": run
   `python scripts/tagout.py tell "<their words>"` and text back the reply.
+- "I'm sick, can't make my shift today" (a same-day call-out): run `tell` with their words the same way. The mascot
+  asks coworkers to cover right away and tells the manager it's a same-day request, with no reason. Text back its
+  reply as written: the student stays on the schedule until a cover is approved, so they should also follow their
+  department's call-out rule.
 - "Find someone to take my Tue shift": run `inbox`; if no trade is open, tell them the mascot will look in its next
   round and offer to run the check now.
 

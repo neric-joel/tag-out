@@ -120,3 +120,14 @@ def test_eligible_changes_never_break_a_limit(f1, other, base, hist, add_days):
         if f1:
             assert total <= 20
         assert (sum(hist) + total) / (len(hist) + 1) <= 25
+
+
+def test_work_study_award_running_out_before_the_break_is_flagged():
+    from rulebook.rules import fws_runway
+
+    ana = Student(id="a", name="A", limits=Limits(fws=True, fws_award_remaining=300, hours_history=[8] * 8))
+    week = [shift(1, 18, sid="tue"), shift(4, 10, sid="fri")]  # 8 h x $16 = $128
+    lasts, paid, weeks_left = fws_runway(ana, week, MON)
+    assert paid == 128 and round(lasts, 1) == 2.3 and weeks_left == 7  # winter break starts Dec 14
+    rich = Student(id="r", name="R", limits=Limits(fws=True, fws_award_remaining=2000, hours_history=[8] * 8))
+    assert fws_runway(rich, week, MON) is None

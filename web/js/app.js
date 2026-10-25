@@ -89,7 +89,7 @@
         picks.forEach(([a, sid]) => {
           const owner = sid && S.roster[sid] ? S.roster[sid].owner : null;
           if (owner) { W.play(a, "jumping", { then: "idle" }); W.status(a, "picked " + shortLabel(sid)); W.face(a, owner); W.link(a, owner, { style: "pick", label: shortLabel(sid) }); }
-          else { W.play(a, "waiting"); W.status(a, "passed"); }
+          else { W.play(a, "waiting"); W.status(a, JUDGE && S.debug ? "passed" : ""); }
         });
         const n = picks.filter(([, s]) => s).length;
         setStatus(`Round ${ev.iteration}: <b>${n} pick${n === 1 ? "" : "s"}</b>, ${picks.length - n} pass${picks.length - n === 1 ? "" : "es"}. A pass looks the same whatever the reason.`);
@@ -124,7 +124,7 @@
         setStatus(`Waiting for ${listNames(ev.members)} and the manager to confirm. Shifts are on hold.`); break;
       case "vote":
         (S.votes[ev.txn_id] = S.votes[ev.txn_id] || {})[ev.agent] = ev.vote;
-        if (ev.agent === "steward") break;
+        if (ev.agent === "steward" || (ev.vote === "no" && !(JUDGE && S.debug))) break;  // a "no" stays anonymous on the commons
         W.badge(ev.agent, ev.vote === "yes" ? "yes" : "no");
         W.status(ev.agent, { yes: "confirmed", no: "declined", stale: "week changed", timeout: "no answer" }[ev.vote]);
         if (ev.vote === "yes") W.play(ev.agent, "jumping", { then: "idle" });
@@ -200,7 +200,9 @@
         const p = Object.entries(ev.picks);
         const picked = p.filter(([, s]) => s).map(([a, s]) => `${name(a)} → ${shiftLabel(s)}`);
         const passed = p.filter(([, s]) => !s).map(([a]) => name(a));
-        return `${cap(ev.phase)} round ${ev.iteration}: ${picked.length ? picked.join(", ") : "no picks"}${passed.length ? `; passed: ${passed.join(", ")}` : ""}.`;
+        // the commons only counts passes: who passed is judge-view detail, so a coworker can't read a "no" off the log
+        const passes = JUDGE && S.debug ? `passed: ${passed.join(", ")}` : `${passed.length} passed`;
+        return `${cap(ev.phase)} round ${ev.iteration}: ${picked.length ? picked.join(", ") : "no picks"}${passed.length ? `; ${passes}` : ""}.`;
       }
       case "counter_window": return `No ring closed. Counter-offer window, ${ev.seconds} s.`;
       case "cycle": return `<span class="tr">Ring closed</span>: ${ev.moves.map(m).join("; ")}.`;
@@ -209,7 +211,8 @@
       case "prepare": return `Prepare ${ev.txn_id}: holds placed, asking ${listNames(ev.members)} and the manager.`;
       case "vote": {
         const word = { yes: "confirmed", no: "declined", stale: "week changed (stale)", timeout: "timed out" }[ev.vote];
-        return `${cap(name(ev.agent))} <span class="${ev.vote === "yes" ? "ok" : "bad"}">${word}</span>.`;
+        const who = ev.vote !== "no" || (JUDGE && S.debug) ? cap(name(ev.agent)) : "Someone in the trade";
+        return `${who} <span class="${ev.vote === "yes" ? "ok" : "bad"}">${word}</span>.`;
       }
       case "commit": return `<span class="ok">Committed</span> ${ev.txn_id}: ${ev.moves.map(m).join("; ")}.`;
       case "abort": return `<span class="bad">Aborted</span> ${ev.txn_id}. Holds released, shifts unchanged.`;

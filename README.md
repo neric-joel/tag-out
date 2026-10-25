@@ -229,6 +229,8 @@ The survey of ASU student workers that would set the real conflict rate is pendi
 
 **Why not a group chat that swaps?** If everyone knew everyone's limits, a careful group chat would fix about as many collisions (82.7% vs 83.1%). Nobody knows them, so an unchecked group chat makes about 1.5 limit-breaking covers a week on that roster, everyone has to post why they need out, and someone has to organize it. Tag Out does it on Sunday without anyone asking or explaining.
 
+**What about the morning someone wakes up sick?** That is the call-out path above: a text to the mascot, a cover round within seconds, the same private re-checks and confirms, and the manager gets the shift as an open shift if nobody can take it. The reason stays in the mascot; the broker only learns the shift is urgent.
+
 **Who adopts it first?** The manager, per roster: the Sunday check works for a single student, the crunch forecast and the export are for managers, and rings need most of a roster on board (only 1.9 points at 25% adoption). For students, Cubbie is the distribution: the Skill makes a student's existing Cubbie their mascot's front door.
 
 **Where does an approval land?** The Steward's roster updates and the manager downloads it as CSV or a calendar file for their scheduler or shared sheet. Students enter their time in Workday as they already do; nothing writes to Workday, which ASU controls.

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
@@ -128,16 +128,19 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
 
     # ----- public -----
     @app.get("/events")
-    async def events():
+    async def events(last_event_id: str | None = Header(None)):
         q = bus.subscribe()
+        seen = int(last_event_id) if last_event_id and last_event_id.isdigit() else 0
+        if seen > len(bus.history):
+            seen = 0  # the demo was reset since: send everything
 
         async def gen():
             try:
-                for ev in list(bus.history):
-                    yield {"data": json.dumps(ev, default=str)}
+                for ev in list(bus.history)[seen:]:
+                    yield {"id": str(ev["n"]), "data": json.dumps(ev, default=str)}
                 while True:
                     ev = await q.get()
-                    yield {"data": json.dumps(ev, default=str)}
+                    yield {"id": str(ev["n"]), "data": json.dumps(ev, default=str)}
             finally:
                 bus.unsubscribe(q)
 

@@ -442,3 +442,10 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
   .who-pill { padding: 5px 9px; }
   .tabs { overflow-x: auto; }
 }
+
+/* hosted replay */
+.static-banner { background: var(--hue-soft); color: var(--text); padding: 9px var(--edge); font-size: 13px; line-height: 19px; }
+.static-banner a { color: var(--hue); }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(560px, calc(100% - 32px));
+  background: var(--text); color: #fff; padding: 10px 16px; border-radius: var(--radius-control); font-size: 13px; line-height: 19px; z-index: 50; }
+.toast[hidden] { display: none; }

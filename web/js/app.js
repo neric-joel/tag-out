@@ -48,9 +48,76 @@
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (_) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* private mode */ } } };
 
+  // ---------- hosted replay: a recording of the real system (scripts/record.py) instead of a live broker ----------
+  const STATIC = !!window.TAGOUT_STATIC;
+  const R = { recs: {}, cur: null, i: 0, clock: "", timer: 0 };
+  async function loadRec(name) {
+    if (!R.recs[name]) R.recs[name] = await fetch(`data/${name}.json`).then((r) => r.json());
+    return R.recs[name];
+  }
+  function staticGet(path) {
+    const p = path.split("?")[0];
+    const m = p.match(/^\/phone\/(\w+)$/);
+    if (m) {
+      const all = (R.cur && R.cur.phones[m[1]]) || [], now = R.clock ? Date.parse(R.clock) + 999 : -1;
+      return { messages: all.filter((x) => Date.parse(x.ts) <= now) };
+    }
+    let snap = R.cur.checkpoints[0].snap;
+    R.cur.checkpoints.forEach((c) => { if (c.n <= R.i) snap = c.snap; });
+    if (!(p in snap)) throw new Error(p + " is not in the recording");
+    return snap[p];
+  }
+  // what a judge's action replays: the recorded real run of that same action
+  const REPLAY = { "/demo/sunday": ["tour"], "/demo/run": ["tour"], "/demo/break": ["breakit"], "/demo/snoop": ["tour", "supervisor-meeting"],
+    "/manager/extra": ["tour", "callout", "Replaying the recorded run: the manager posted Thu 6-10 PM and every mascot was offered it."],
+    "/manager/meeting": ["tour", "issue", "Replaying the recorded run: the manager looked for a team meeting time."] };
+  const CHIP = { sick: ["tour", "week", "Replaying the recorded call-out: Ben texted that he woke up sick."],
+    printer: ["tour", "extra", "Replaying the recorded report: Ana told her mascot the printer was broken."],
+    supervisor: ["tour", "team-meeting", "Replaying the recorded request: Priya asked for a meeting with her supervisor."] };
+  function staticPost(path, body) {
+    if (REPLAY[path]) { const [name, from, note] = REPLAY[path]; if (note) toast(note); return play(name, from); }
+    if (path === "/admin/reset") return play(null);
+    const text = ((body && body.text) || "").toLowerCase();
+    const chip = text.includes("sick") ? CHIP.sick : text.includes("printer") || text.includes("broken") ? CHIP.printer : text.includes("supervisor") ? CHIP.supervisor : null;
+    if (chip) { toast(chip[2]); return play(chip[0], chip[1]); }
+    toast("This hosted page replays a recording of the real agents. To type and tap yourself, run it locally: python -m scripts.run_all");
+    return {};
+  }
+  async function play(name, from) {
+    clearTimeout(R.timer);
+    if (name) R.cur = await loadRec(name);
+    const evs = R.cur.events, start = from ? (R.cur.checkpoints.find((c) => c.label === from) || { n: 0 }).n : 0;
+    R.i = 0; R.clock = "";
+    live = false;
+    onEvent({ type: "reset", n: 0, ts: evs[0] ? evs[0].ts : new Date().toISOString() });
+    for (; R.i < start; R.i++) { R.clock = evs[R.i].ts; onEvent(evs[R.i]); } // fast-forward without animation
+    live = true;
+    if (name) tick();
+    return {};
+  }
+  function tick() {
+    const evs = R.cur.events;
+    if (R.i >= evs.length) return;
+    const ev = evs[R.i]; R.clock = ev.ts; R.i++;
+    onEvent(ev);
+    const next = evs[R.i];
+    if (next) R.timer = setTimeout(tick, Math.min(2200, Math.max(25, Date.parse(next.ts) - Date.parse(ev.ts))));
+  }
+  let toastTimer = 0;
+  function toast(text) {
+    let el = $("#toast");
+    if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+    el.textContent = text; el.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.hidden = true; }, 6000);
+  }
+
   // ---------- API ----------
-  async function get(path) { const r = await fetch(path); if (!r.ok) throw new Error(path + " " + r.status); return r.json(); }
+  async function get(path) {
+    if (STATIC) return staticGet(path);
+    const r = await fetch(path); if (!r.ok) throw new Error(path + " " + r.status); return r.json();
+  }
   async function post(path, body) {
+    if (STATIC) return staticPost(path, body);
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(data.detail || path + " " + r.status), { status: r.status });
@@ -166,7 +233,10 @@
         renderTabs(); renderBoard(); break;
       case "summary":
         (ev.open_shifts || []).forEach((s) => S.open.add(s));
-        if (ev.kind === "callout") {
+        if (ev.kind === "extra") {
+          setStatus(ev.taker ? `Extra shift taken by <b>${name(ev.taker)}</b>, whose mascot checked every limit in private.` : "Nobody could take the extra shift safely.");
+          renderBoard();
+        } else if (ev.kind === "callout") {
           setStatus(ev.fixed ? `Call-out covered: <b>${ev.fixed} of ${ev.asked}</b>, confirmed by everyone and the manager.` : "Nobody could take the call-out safely. It went to the manager as an open shift.");
           renderBoard();
         } else {
@@ -314,7 +384,7 @@
     const answered = msgs.slice(lastButtons + 1).some((m) => m.kind === "reply");
     return msgs.map((m, i) => {
       const cls = m.kind === "student" ? "msg me" : m.kind === "reply" ? "msg reply" : "msg";
-      const live = i === lastButtons && !answered;
+      const live = !STATIC && i === lastButtons && !answered;
       const btns = (m.buttons || []).length ? `<div class="btns">${m.buttons.map((b) => `<button type="button" data-data="${esc(b.data)}"${live ? "" : " disabled"}>${esc(b.label)}</button>`).join("")}</div>` : "";
       return `<div class="${cls}${fresh && i === msgs.length - 1 ? " flash" : ""}">${esc(m.text)}${btns}</div>`;
     }).join("");
@@ -698,7 +768,7 @@
     $("#btnRun").addEventListener("click", () => post("/demo/run").catch(() => {}));
     $("#btnReset").addEventListener("click", () => post("/admin/reset").catch(() => {}));
     $("#btnBreak").addEventListener("click", () => post("/demo/break").catch(() => {}));
-    $("#btnPets").addEventListener("click", () => openPets(chat.who === "manager" ? "ana" : chat.who));
+    if ($("#btnPets")) $("#btnPets").addEventListener("click", () => openPets(chat.who === "manager" ? "ana" : chat.who));
     $("#petSearch").addEventListener("click", searchPets);
     $("#petQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); searchPets(); } });
     $("#petFor").addEventListener("change", searchPets);
@@ -727,6 +797,7 @@
 
   function connect() {
     const live = $("#live"), text = $("#liveText");
+    if (STATIC) { live.className = "live on"; text.textContent = "Recording"; return; }
     const es = new EventSource("/events");
     es.onopen = () => { live.className = "live on"; text.textContent = "Live"; };
     es.onerror = () => { live.className = "live off"; text.textContent = "Reconnecting"; };
@@ -734,6 +805,17 @@
   }
 
   async function boot() {
+    if (STATIC) {
+      R.cur = await loadRec("tour");
+      $("#btnSunday").textContent = $("#agSunday").textContent = "Play the week";
+      $("#btnRun").textContent = $("#agRun").textContent = "Break it";
+      $("#btnReset").textContent = "Restart";
+      $("#btnPets").remove();
+      const note = document.createElement("div");
+      note.className = "static-banner";
+      note.innerHTML = 'Hosted demo: a recording of the real system, where six mascot processes, a broker and the Library Steward really traded these messages. Press <b>Play the week</b>, then sign in as a student or the manager. Run it live with one command: <a href="https://github.com/neric-joel/tag-out">github.com/neric-joel/tag-out</a>.';
+      document.body.prepend(note);
+    }
     const [st, ag] = await Promise.all([get("/state"), get("/agents")]);
     S.debug = !!st.debug; S.names = ag.names; S.petMeta = st.pets;
     Object.values(st.agents).forEach((a) => { S.pets[a.agent_id] = a.pet_id; });

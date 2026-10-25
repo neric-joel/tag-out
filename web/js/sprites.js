@@ -19,7 +19,7 @@
     const entry = { img, ok: false, failed: false };
     img.onload = () => { entry.ok = true; };
     img.onerror = () => { entry.failed = true; };
-    img.src = `/web/pets/${petId}/spritesheet.webp`;
+    img.src = window.TAGOUT_PET_URL ? window.TAGOUT_PET_URL(petId) : `/web/pets/${petId}/spritesheet.webp`;
     cache.set(petId, entry);
     return entry;
   }

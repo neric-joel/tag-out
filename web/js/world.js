@@ -60,7 +60,8 @@
           entry.v2 = entry.img.naturalHeight === 2288;
         };
         entry.img.onerror = () => { entry.ready = false; };
-        entry.img.src = `/web/pets/${encodeURIComponent(p.petId)}/spritesheet.webp`;
+        entry.img.src = window.TAGOUT_PET_URL ? window.TAGOUT_PET_URL(p.petId)
+          : `/web/pets/${encodeURIComponent(p.petId)}/spritesheet.webp`;
       }
     }
     function dimensions(p) {

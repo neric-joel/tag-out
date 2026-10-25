@@ -74,9 +74,12 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
              "swap_rule": swap_rule_default(), "issues": {}, "meetings": {}, "extras": []}
     app.state.s = state
 
+    def phone_add(msg: dict) -> None:
+        state["phone"].append({"ts": datetime.now(PHX).isoformat(timespec="seconds"), **msg})
+
     async def to_manager(text: str, buttons: list[tuple[str, str]], kind: str = "approve") -> None:
         msg = {"kind": kind, "text": text, "buttons": [{"label": a, "data": b} for a, b in buttons]}
-        state["phone"].append(msg)
+        phone_add(msg)
         try:
             await app.state.net.post(f"{reg['bot']}/send", {"student_id": "manager", **msg})
         except Exception:
@@ -96,7 +99,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
             if it["agent_id"]:
                 await app.state.net.post(f"{reg['agents'][it['agent_id']]}/issue/ack", IssueAck(issue_id=data[4:]))
             reply = "Acknowledged." + (f" {names[it['agent_id']]}'s mascot will let them know." if it["agent_id"] else "")
-            state["phone"].append({"kind": "reply", "text": reply, "buttons": []})
+            phone_add({"kind": "reply", "text": reply, "buttons": []})
             return reply
         if data.startswith("meet:"):
             _, mid, i = data.split(":")
@@ -104,19 +107,19 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
             if not m or m["chosen"] is not None:
                 return "That meeting is already set."
             m["chosen"] = int(i)
-            s, e = m["options"][int(i)]["slot"]
+            s, e = (datetime.fromisoformat(x) for x in m["options"][int(i)]["slot"])
             inv = MeetingInvite(meeting_id=mid, start=s, end=e, title="Library team meeting")
             await asyncio.gather(*(app.state.net.post(f"{u}/meeting/invite", inv) for u in reg["agents"].values()),
                                  return_exceptions=True)
             reply = (f"Invites sent to {len(reg['agents'])} students for {fmt_span(s, e)}. I'll tell you who can "
                      "come, never why.")
-            state["phone"].append({"kind": "reply", "text": reply, "buttons": []})
+            phone_add({"kind": "reply", "text": reply, "buttons": []})
             return reply
         if data.startswith("rule:swaps:"):
             state["swap_rule"] = data.endswith(":on")
             reply = ("OK: swaps that keep every shift covered go through without you again." if state["swap_rule"]
                      else "OK: I'll ask you about every trade, swaps included.")
-            state["phone"].append({"kind": "reply", "text": reply, "buttons": []})
+            phone_add({"kind": "reply", "text": reply, "buttons": []})
             return reply
         verb, _, txn = data.partition(":")
         if txn not in state["holds"]:
@@ -124,7 +127,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         vote = "yes" if verb == "approve" else "no"
         await app.state.net.post(f"{reg['broker']}/txn/vote", Vote(txn_id=txn, agent_id="steward", vote=vote,
                                                                     ballot=state["ballots"].get(txn, "")))
-        state["phone"].append({"kind": "reply", "text": "Approved." if vote == "yes" else "Denied.", "buttons": []})
+        phone_add({"kind": "reply", "text": "Approved." if vote == "yes" else "Denied.", "buttons": []})
         return "Approved." if vote == "yes" else "Denied."
 
     @app.get("/roster", response_model=list[ShiftRef])
@@ -197,7 +200,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
                        end=st + timedelta(hours=end - start), owner="open")
         state["roster"][ref.shift_id] = ref
         state["extras"].append(ref.shift_id)
-        state["phone"].append({"kind": "info", "buttons": [], "text": f"Posted an extra shift: {fmt_span(ref.start, ref.end)}. "
+        phone_add({"kind": "info", "buttons": [], "text": f"Posted an extra shift: {fmt_span(ref.start, ref.end)}. "
                                "Every student's mascot gets offered it; only those who want hours and fit every limit "
                                "will pick it, and you won't see why anyone passed."})
         await app.state.net.post(f"{reg['broker']}/extra", ref)
@@ -246,7 +249,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
             if len(m["rsvp"]) == len(reg["agents"]):
                 going = sum(m["rsvp"].values())
                 s, e = m["options"][m["chosen"]]["slot"]
-                state["phone"].append({"kind": "info", "buttons": [], "text": f"Team meeting {fmt_span(datetime.fromisoformat(s), datetime.fromisoformat(e))}: "
+                phone_add({"kind": "info", "buttons": [], "text": f"Team meeting {fmt_span(datetime.fromisoformat(s), datetime.fromisoformat(e))}: "
                                        f"{going} coming, {len(m['rsvp']) - going} can't make it (no reasons)."})
         return {}
 
@@ -265,7 +268,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
 
     @app.post("/meeting/book")
     async def meeting_book(b: MeetingBook) -> dict:
-        state["phone"].append({"kind": "info", "buttons": [], "text": f"{names[b.agent_id]} booked a "
+        phone_add({"kind": "info", "buttons": [], "text": f"{names[b.agent_id]} booked a "
                                f"{int((b.end - b.start).total_seconds() // 60)}-minute meeting with you: "
                                f"{fmt_span(b.start, b.end)} ({b.start:%b} {b.start.day}). Topic not shared."})
         return {}
@@ -311,7 +314,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
                 state["changed"][m.shift_id] = d.txn_id
                 done.append(f"{names[m.to_agent]} now works {fmt_span(ref.start, ref.end)}")
             state["version"] += 1
-            state["phone"].append({"kind": "info", "buttons": [], "text": "Roster updated: " + "; ".join(done)
+            phone_add({"kind": "info", "buttons": [], "text": "Roster updated: " + "; ".join(done)
                                    + ". Download it for your scheduler (CSV or calendar file) from the Library "
                                      "roster on the Tag Out page. Students enter their time in Workday as usual."})
         return {}

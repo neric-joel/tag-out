@@ -19,8 +19,11 @@ RUNTIME = Path(os.environ.get("TAGOUT_RUNTIME", ROOT / "runtime"))
 
 
 class Net:
-    def __init__(self, mounts: dict[str, Any] | None = None, timeout: float = 30.0):
-        if mounts:
+    def __init__(self, mounts: dict[str, Any] | None = None, timeout: float = 30.0,
+                 client: httpx.AsyncClient | None = None):
+        if client is not None:  # share another Net's transport (one process, several agents)
+            self.client = client
+        elif mounts:
             transports = {k: httpx.ASGITransport(app=v) for k, v in mounts.items()}
             self.client = httpx.AsyncClient(mounts=transports, timeout=timeout)
         else:

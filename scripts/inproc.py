@@ -19,7 +19,10 @@ from agents.mascot import create_app as mascot_app
 from broker.app import create_app as broker_app
 from broker.engine import Timing
 from core.net import Net
-from core.wiretap import SCHEMAS
+from core.wiretap import SCHEMAS, describe
+from org.app import Clock
+from org.app import create_app as org_app
+from seeds.org import DEPARTMENTS, ORG_STUDENTS, ROLES, members
 from seeds.scenario import STUDENTS
 from steward.app import create_app as steward_app
 
@@ -47,19 +50,40 @@ class Wiretap:
 
 
 class System:
-    def __init__(self, timing: Timing | None = None, auto_delay: float = 0.05, tmp: Path | None = None):
+    def __init__(self, timing: Timing | None = None, auto_delay: float = 0.05, tmp: Path | None = None,
+                 org_minute: float = 0.002):
         os.environ["TAGOUT_DEBUG"] = "1"
         os.environ["TAGOUT_MODE"] = "auto"
         os.environ["TAGOUT_AUTO_DELAY"] = str(auto_delay)
         self.tmp = tmp or Path(tempfile.mkdtemp(prefix="tagout-"))
+        roles = [r for r in ROLES if r != "steward"]  # the Library manager is the Steward itself
+        org = ({s["id"]: f"http://{s['id']}.mascot" for s in ORG_STUDENTS} | {r: f"http://{r}.org" for r in roles}
+               | {"steward": "http://steward.local"})
+        coordinators = {f"org-{r}-": f"http://{r}.org" for r in roles}
         self.reg = {"agents": {s["id"]: f"http://{s['id']}.mascot" for s in STUDENTS},
-                    "broker": "http://broker.local", "steward": "http://steward.local", "bot": "http://bot.local"}
+                    "broker": "http://broker.local", "steward": "http://steward.local", "bot": "http://bot.local",
+                    "org": org, "coordinators": coordinators}
         self.tap = Wiretap()
         self.net = Net()
         self.apps = {s["id"]: mascot_app(s["id"], self.tmp / f"{s['id']}.db", self.net, self.reg) for s in STUDENTS}
+        for s in ORG_STUDENTS:
+            # a Dining or Rec mascot's "broker" is its shift lead and its "steward" is its department manager
+            d = DEPARTMENTS[s["dept"]]
+            dreg = {"agents": {m: org.get(m) or self.reg["agents"][m] for m in members(s["dept"])},
+                    "broker": org[d["lead"]], "steward": org[d["manager"]], "bot": self.reg["bot"], "org": org,
+                    "coordinators": coordinators}
+            self.apps[s["id"]] = mascot_app(s["id"], self.tmp / f"{s['id']}.db", self.net, dreg)
         self.steward = steward_app(self.net, self.reg)
         self.broker = broker_app(self.net, self.reg, timing or Timing.fast(), log=self.tmp / "events.jsonl")
+        self.clock = Clock(org_minute)
+        self.org_nets = {r: Net() for r in roles}
+        for r, n in self.org_nets.items():
+            n.hook = (lambda m, u, p, st, b, r=r:
+                      self.bus.emit("wire", **describe(self.reg, m, u, p, st, b, sender=r)))
+        self.org = {r: org_app(r, self.org_nets[r], self.reg, self.bus.emit, self.clock) for r in roles}
         mounts = {u: self.apps[a] for a, u in self.reg["agents"].items()}
+        mounts |= {org[s["id"]]: self.apps[s["id"]] for s in ORG_STUDENTS}
+        mounts |= {org[r]: self.org[r] for r in roles}
         mounts[self.reg["steward"]] = self.steward
         mounts[self.reg["broker"]] = self.broker
         self.sent: list[dict] = []
@@ -75,6 +99,8 @@ class System:
         self.net.client = httpx.AsyncClient(mounts=transports, timeout=30,
                                             event_hooks={"request": [self.tap.on_request],
                                                          "response": [self.tap.on_response]})
+        for n in self.org_nets.values():
+            n.client = self.net.client  # one transport for every agent in this process
 
     @property
     def engine(self):

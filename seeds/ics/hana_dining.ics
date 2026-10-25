@@ -1,0 +1,19 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Tag Out synthetic fixtures//EN
+X-WR-CALNAME:Hana - Dining (Aramark, Memorial Union) shifts (synthetic)
+BEGIN:VEVENT
+SUMMARY:Dining (Aramark\, Memorial Union) shift
+DTSTART;TZID=America/Phoenix:20261028T160000
+DTEND;TZID=America/Phoenix:20261028T200000
+DTSTAMP:20261024T190000Z
+UID:dining-wed-1028-1600-d1@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Dining (Aramark\, Memorial Union) shift
+DTSTART;TZID=America/Phoenix:20261101T140000
+DTEND;TZID=America/Phoenix:20261101T180000
+DTSTAMP:20261024T190000Z
+UID:dining-sun-1101-1400-d1@tagout
+END:VEVENT
+END:VCALENDAR

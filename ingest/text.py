@@ -77,11 +77,13 @@ RELATIVE_RE = re.compile(r"\b(today|tonight|tomorrow)\b", re.I)
 
 ISSUE_RE = re.compile(
     r"\b(broken|not working|(?:isn'?t|doesn'?t|won'?t) work(?:ing)?|jammed|out of (?:paper|toner|order)|"
-    r"leak(?:ing|s)?|unsafe|spill(?:ed)?|report (?:an? )?(?:issue|problem)|problem with)\b", re.I)
+    r"leak(?:ing|s)?|unsafe|blocked|spill(?:ed)?|report (?:an? )?(?:issue|problem)|problem with)\b", re.I)
+# a question about visa status goes to ISSC, never answered by the mascot
+VISA_RE = re.compile(r"\b(f-?1|j-?1|visa|i-?20|opt|cpt|sevis|dso|issc|immigration)\b", re.I)
 MEETING_RE = re.compile(r"\b(meet(?:ing)?|1:1|one[- ]on[- ]one|talk)\b.*\b(supervisor|manager|boss)\b", re.I)
 HOURS_RE = re.compile(r"\b(more hours|extra (?:hours|shifts?)|need (?:more )?hours|pick up (?:a |more |extra )?shifts?)\b",
                       re.I)
-CATEGORIES = [("safety", r"unsafe|harass|threat|injur|hurt|fire|danger"),
+CATEGORIES = [("safety", r"unsafe|harass|threat|injur|hurt|fire|danger|exit"),
               ("facilities", r"leak|spill|bathroom|restroom|clean|air condition|\bheat|\blights?\b"),
               ("equipment", r"printer|computer|scanner|laptop|register|card reader|phone|desk|chair|key|door|badge|"
                             r"toner|paper"),
@@ -89,7 +91,10 @@ CATEGORIES = [("safety", r"unsafe|harass|threat|injur|hurt|fire|danger"),
 
 
 def intent(text: str) -> str | None:
-    """Work-life requests that aren't calendar items: an issue report, a meeting, or wanting more hours."""
+    """Work-life requests that aren't calendar items: a visa question (for ISSC), an issue report, a meeting, or
+    wanting more hours."""
+    if VISA_RE.search(text) and "?" in text:
+        return "visa"
     if ISSUE_RE.search(text):
         return "issue"
     if MEETING_RE.search(text):

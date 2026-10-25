@@ -22,6 +22,7 @@ from core.models import BusyBlock
 from core.net import RUNTIME, Net, registry
 from core.timeutil import PHX, fmt_span, overlaps, planning_monday
 from core.wire import (
+    Answer,
     BusyBits,
     Decision,
     Eligibility,
@@ -41,7 +42,7 @@ from core.wire import (
 )
 from ingest import text as text_intake
 from ingest.ics import _bid, classify, exam_eves
-from seeds.scenario import STUDENTS
+from seeds.org import everyone
 
 
 class Tap(BaseModel):
@@ -86,7 +87,7 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
         app.state.net.report_to(reg["broker"])  # the judge view's agent graph
     app.state.auto = {"enabled": os.environ.get("TAGOUT_MODE", "auto") == "auto",
                       "delay": float(os.environ.get("TAGOUT_AUTO_DELAY", "1.5"))}
-    names = {s["id"]: s["name"] for s in STUDENTS} | {"steward": "Library manager"}
+    names = everyone()
     if store.get("student") is None:
         seed(store, sid)
     owner_token = store.get("owner_token") or secrets.token_urlsafe(16)
@@ -115,7 +116,9 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
             store.send({"kind": "reply", "text": reply, "buttons": [], "from": "auto"})
 
     async def send_vote(v: Vote) -> None:
-        await app.state.net.post(f"{reg['broker']}/txn/vote", v)
+        # a cover the campus hierarchy set up (org/app.py) is voted on with whoever ran it, not the Library broker
+        to = next((u for p, u in reg.get("coordinators", {}).items() if v.txn_id.startswith(p)), reg["broker"])
+        await app.state.net.post(f"{to}/txn/vote", v)
 
     async def send_trade(t: TradeRequest) -> None:
         await app.state.net.post(f"{reg['broker']}/trade", t)
@@ -123,7 +126,10 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
     async def to_steward(path: str, body) -> dict:
         return await app.state.net.post(f"{reg['steward']}{path}", body)
 
-    brain = Brain(store, to_phone, send_vote, send_trade, lambda: names, to_steward)
+    async def to_org(role: str, path: str, body) -> dict:
+        return await app.state.net.post(f"{reg['org'][role]}{path}", body)
+
+    brain = Brain(store, to_phone, send_vote, send_trade, lambda: names, to_steward, to_org)
     app.state.brain, app.state.store = brain, store
 
     def owner(token: str | None) -> None:
@@ -194,6 +200,11 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
         await brain.issue_acked(a.issue_id)
         return {}
 
+    @app.post("/question/answer")
+    async def question_answer(a: Answer) -> dict:
+        await brain.answered(a)
+        return {}
+
     @app.get("/intro")
     async def intro(x_owner_token: str | None = Header(None)) -> dict:
         owner(x_owner_token)
@@ -243,6 +254,8 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
         if kind is not None:
             if kind == "issue":
                 reply = await brain.draft_issue(body.text, text_intake.issue_category(body.text))
+            elif kind == "visa":
+                reply = await brain.draft_question(body.text)
             elif kind == "meeting":
                 reply = await brain.ask_meeting(planning_monday())
             else:

@@ -131,10 +131,18 @@ def aborted() -> str:
 
 
 def issue_draft(text: str, category: str) -> str:
+    safety = ("Safety reports also go straight to Student Employment, so someone above your department sees it at "
+              "once.\n") if category == "safety" else ""
     return (f"Here's the report I'd send your manager ({category}):\n\n\"{text}\"\n\n"
             "Send with my name: they can reply and follow up with you.\n"
-            "Send anonymously: they see the report, not who sent it.\n"
+            "Send anonymously: they see the report, not who sent it.\n" + safety +
             "Nothing else from your week goes with it.")
+
+
+def question_draft(text: str) -> str:
+    return ("That's a visa question, and I don't answer those: your DSO at ISSC (the international students office) "
+            f"does. I can send them just your question, in your words:\n\n\"{text}\"\n\n"
+            "Your hours, jobs and calendar stay with me. Send it?")
 
 
 def meeting_options(slots: list[tuple]) -> str:

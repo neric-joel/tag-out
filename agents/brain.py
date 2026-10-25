@@ -15,6 +15,7 @@ from agents.store import Store
 from core.models import BusyBlock, Collision, Shift
 from core.timeutil import at, fmt_span, overlaps, week_start
 from core.wire import (
+    Answer,
     Decision,
     Eligibility,
     IssueReport,
@@ -27,6 +28,7 @@ from core.wire import (
     PickRequest,
     Prepare,
     PublicFace,
+    Question,
     RingCheck,
     Rsvp,
     ShiftRef,
@@ -61,6 +63,7 @@ class Brain:
         send_trade: Callable[[TradeRequest], Awaitable[None]],
         names: Callable[[], dict[str, str]],
         to_steward: Callable[[str, object], Awaitable[dict]] | None = None,
+        to_org: Callable[[str, str, object], Awaitable[dict]] | None = None,
     ):
         self.store = store
         self._notify = notify
@@ -68,6 +71,7 @@ class Brain:
         self.send_trade = send_trade
         self.names = names
         self.to_steward = to_steward
+        self.to_org = to_org  # the campus hierarchy: ISSC gets F-1 questions the student chose to send
         self.seen: dict[str, ShiftRef] = {}  # public roster facts about shifts offered in rounds
         self.auto_tasks: set[asyncio.Task] = set()
 
@@ -178,6 +182,35 @@ class Brain:
         self.store.note(f"Sent your {it['category']} report to your manager" + ("." if named else ", anonymously."))
         return ("Sent to your manager with your name. I'll tell you when they've seen it." if named
                 else "Sent anonymously. Your manager can't see who sent it, so they can't reply to you.")
+
+    async def draft_question(self, text: str) -> str:
+        qs = self.store.get("questions", {})
+        qid = f"q-{self.me}-{len(qs) + 1}"
+        qs[qid] = {"text": text, "status": "draft"}
+        self.store.put("questions", qs)
+        self.store.note("You asked a visa question. I don't answer those; offered to send it to ISSC.")
+        await self.notify(explain.question_draft(text), [("Send to ISSC", f"issc:yes:{qid}"),
+                                                         ("Don't send", f"issc:no:{qid}")], kind="ask")
+        return "That one is for ISSC. Check the draft and tell me whether to send it."
+
+    async def send_question(self, yes: bool, qid: str) -> str:
+        qs = self.store.get("questions", {})
+        q = qs.get(qid)
+        if not q or q["status"] != "draft":
+            return "That question is already handled."
+        if not yes or self.to_org is None:
+            q["status"] = "dropped"
+            self.store.put("questions", qs)
+            return "OK, not sent."
+        await self.to_org("issc", "/question", Question(question_id=qid, agent_id=self.me, text=q["text"]))
+        q["status"] = "sent"
+        self.store.put("questions", qs)
+        self.store.note("Sent your question to ISSC: only your words, nothing from your week.")
+        return "Sent to ISSC with your name, so an advisor can reply to you. Nothing else from your week went."
+
+    async def answered(self, a: Answer) -> None:
+        if a.question_id in self.store.get("questions", {}):
+            await self.notify(a.text, kind="info")
 
     async def issue_acked(self, iid: str) -> None:
         it = self.store.get("issues", {}).get(iid)
@@ -412,6 +445,8 @@ class Brain:
             return await self.tag_out(parts[1])
         if parts[0] == "issue" and len(parts) == 3:
             return await self.send_issue(parts[1], parts[2])
+        if parts[0] == "issc" and len(parts) == 3:
+            return await self.send_question(parts[1] == "yes", parts[2])
         if parts[0] == "book" and len(parts) == 3:
             return await self.book(parts[1], int(parts[2]))
         if parts[0] == "rsvp" and len(parts) == 3:

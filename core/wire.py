@@ -173,6 +173,38 @@ class BusyBits(Wire):
     slots: dict[str, bool]
 
 
+class Escalation(Wire):
+    """A case handed up one rung of the campus hierarchy (seeds/org.py). It names the rule that moved it and the
+    shift, never the student's reason. If nobody acts by the deadline it moves up again: silence counts as no."""
+
+    case_id: str
+    kind: Literal["uncovered_callout", "safety", "f1_question"]
+    level: int  # 1 shift lead, 2 department manager, 3 backup manager, 4 Student Employment
+    rule: Literal["no_cover_2h", "no_answer_30m", "safety_first"]
+    shift_id: str | None = None
+    deadline: datetime
+
+
+class CaseUpdate(Wire):
+    """Sent to every rung that held a case once it closes, so their timers stop."""
+
+    case_id: str
+    outcome: Literal["covered", "acknowledged", "answered", "closed"]
+
+
+class Question(Wire):
+    """An F-1 question the student chose to send ISSC, in their own words. Hours and calendar never go with it."""
+
+    question_id: str
+    agent_id: str
+    text: str
+
+
+class Answer(Wire):
+    question_id: str
+    text: str
+
+
 class PublicFace(Wire):
     agent_id: str
     name: str

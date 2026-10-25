@@ -29,8 +29,13 @@ SCHEMAS = {
     "/meeting/book": ("MeetingBook", None),
     "/issue": ("IssueReport", None),
     "/issue/ack": ("IssueAck", None),
+    # the campus hierarchy (org/app.py)
+    "/escalate": ("Escalation", None),
+    "/case": ("CaseUpdate", None),
+    "/question": ("Question", None),
+    "/question/answer": ("Answer", None),
 }
-SENDER_IN_BODY = {"/trade", "/txn/vote", "/meeting/rsvp", "/meeting/request", "/meeting/book"}
+SENDER_IN_BODY = {"/trade", "/txn/vote", "/meeting/rsvp", "/meeting/request", "/meeting/book", "/question"}
 FROM_STEWARD = {"/busybits", "/meeting/invite", "/extra", "/issue/ack"}
 
 
@@ -46,13 +51,18 @@ def redact(obj):
     return obj
 
 
-def describe(reg: dict, method: str, url: str, payload: dict | None, status: int, response) -> dict:
-    """One wire event: who sent what to whom, and what came back."""
+def describe(reg: dict, method: str, url: str, payload: dict | None, status: int, response,
+             sender: str | None = None) -> dict:
+    """One wire event: who sent what to whom, and what came back. `sender` is set by agents whose Net knows who
+    they are (the campus hierarchy); otherwise the sender is read from the path."""
     parts = urlsplit(url)
     path, base = parts.path, f"{parts.scheme}://{parts.netloc}"
-    owners = {u: a for a, u in reg["agents"].items()} | {reg["broker"]: "broker", reg["steward"]: "steward"}
+    owners = ({u: a for a, u in reg["agents"].items()} | {u: a for a, u in reg.get("org", {}).items()}
+              | {reg["broker"]: "broker", reg["steward"]: "steward"})
     to = owners.get(base, base)
-    if path in SENDER_IN_BODY and isinstance(payload, dict):
+    if sender:
+        pass
+    elif path in SENDER_IN_BODY and isinstance(payload, dict):
         sender = payload.get("agent_id") or "?"
     elif path == "/issue":
         sender = (payload or {}).get("agent_id") or "a mascot (anonymous)"

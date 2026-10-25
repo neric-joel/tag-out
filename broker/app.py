@@ -59,6 +59,8 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         engine.request(t.agent_id, t.shift_id, urgent=t.urgent)
         if t.urgent:
             spawn(net.post(f"{reg['steward']}/callout", CallOut(shift_id=t.shift_id)))  # the manager hears now
+            if "jordan" in reg.get("org", {}):  # and the Library's shift lead, who sees the case on the org chart
+                spawn(net.post(f"{reg['org']['jordan']}/callout", CallOut(shift_id=t.shift_id)))
             spawn(callout_round())
         return {}
 
@@ -167,6 +169,47 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
     async def agents() -> dict:
         return {"agents": reg["agents"], "steward": reg["steward"], "names": {s["id"]: s["name"] for s in STUDENTS}}
 
+    def who_url(who: str) -> str:
+        if who == "manager":
+            return reg["steward"]
+        url = reg["agents"].get(who) or reg.get("org", {}).get(who)
+        if url is None:
+            raise HTTPException(404)
+        return url
+
+    @app.get("/org")
+    async def org() -> dict:
+        """The campus hierarchy (seeds/org.py) for the org chart: people, rungs, open cases and each inbox."""
+        from seeds.org import ALSO, DEPARTMENTS, ORG_STUDENTS, ROLES
+
+        urls = reg.get("org", {})
+        roles = {}
+        for r, spec in ROLES.items():
+            if r == "steward" or r not in urls:
+                continue
+            try:
+                roles[r] = await net.get(f"{urls[r]}/state")
+            except Exception:
+                roles[r] = {"id": r, **spec, "cases": [], "phone": []}
+        try:
+            mgr = (await net.get(f"{reg['steward']}/phone"))["messages"]
+        except Exception:
+            mgr = []
+        roles["steward"] = {"id": "steward", **ROLES["steward"], "cases": [], "phone": mgr}
+
+        async def face(sid: str, url: str) -> dict:
+            try:
+                return await net.get(f"{url}/public")
+            except Exception:
+                return {"agent_id": sid, "name": sid.title(), "pet_id": "debug-duck-v2"}
+        lib = [{"id": s["id"], "dept": "library", "also": ALSO.get(s["id"], [])} for s in STUDENTS]
+        new = [{"id": s["id"], "dept": s["dept"], "also": []} for s in ORG_STUDENTS if s["id"] in urls]
+        people = []
+        for p in lib + new:
+            f = await face(p["id"], reg["agents"].get(p["id"]) or urls[p["id"]])
+            people.append({**p, "name": f["name"], "pet_id": f["pet_id"]})
+        return {"departments": DEPARTMENTS, "students": people, "roles": roles}
+
     # ----- demo controls (synthetic roster) -----
     @app.post("/demo/sunday")
     async def sunday(monday: str | None = None) -> dict:
@@ -205,8 +248,9 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         engine.reset()
         app.state.baseline = None
         bus.clear()
+        others = [u for r, u in reg.get("org", {}).items() if r != "steward"]  # the campus hierarchy and its mascots
         await asyncio.gather(*(net.post(f"{u}/admin/reset") for u in list(reg["agents"].values())
-                               + [reg["steward"]]), return_exceptions=True)
+                               + [reg["steward"]] + others), return_exceptions=True)
         bus.emit("reset")
         return {"ok": True}
 
@@ -247,15 +291,14 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         """Judge view relays each phone from its own mascot (synthetic demo only)."""
         if not debug():
             raise HTTPException(403)
-        url = reg["steward"] if who == "manager" else reg["agents"][who]
-        return JSONResponse(await net.get(f"{url}/phone?since={since}"))
+        return JSONResponse(await net.get(f"{who_url(who)}/phone?since={since}"))
 
     @app.get("/me/{who}")
     async def me(who: str) -> JSONResponse:
         """A student's own page (synthetic demo: relayed from their mascot's owner channel)."""
-        if not debug() or who not in reg["agents"]:
+        if not debug() or who == "manager":
             raise HTTPException(403)
-        return JSONResponse(await net.get(f"{reg['agents'][who]}/diary"))
+        return JSONResponse(await net.get(f"{who_url(who)}/diary"))
 
     @app.get("/quotes")
     async def quotes() -> JSONResponse:
@@ -265,14 +308,13 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
     async def phone_tap(who: str, body: dict) -> dict:
         if not debug():
             raise HTTPException(403)
-        url = reg["steward"] if who == "manager" else reg["agents"][who]
-        return await net.post(f"{url}/tap", {"data": body["data"]})
+        return await net.post(f"{who_url(who)}/tap", {"data": body["data"]})
 
     @app.post("/phone/{who}/text")
     async def phone_text(who: str, body: dict) -> dict:
         if not debug():
             raise HTTPException(403)
-        return await net.post(f"{reg['agents'][who]}/intake", {"text": body["text"]})
+        return await net.post(f"{who_url(who)}/intake", {"text": body["text"]})
 
     # ----- pet gallery (Codex Pets): search, download on demand, assign to a student -----
     gallery = "https://codex-pets.net"

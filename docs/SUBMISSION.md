@@ -6,26 +6,26 @@ Track: `agents`
 
 ## One-line pitch
 
-Each ASU student worker gets a mascot agent that spots next week's shift collisions and trades shifts with coworkers' mascots, checking work-hour limits privately and never sharing why.
+Your Cubbie negotiates with your coworkers' Cubbies: each ASU student worker's mascot spots next week's shift collisions and trades shifts, checking work-hour limits nobody else can see.
 
 ## Three sentences
 
-Tag Out gives each ASU student worker a mascot agent that privately holds their calendar and shifts, knows which work-hour limits apply to them, and texts them on Sunday when a shift next week collides with something. The mascots then trade shifts in Top Trading Cycles rings through a broker that only sees which shift each one would take, each mascot re-checks the final ring against its own rulebook, and a two-phase commit needs every student's Telegram confirm and the manager's approval. In a simulated 40-person roster, trades fixed 10.0 more percentage points of conflicts than plain covers (95% CI 9.5 to 10.5) and cut pay lost per week from $673 to $284.
+Tag Out gives each ASU student worker a mascot agent that privately holds their calendar, shifts and work-hour limits, and texts them on Sunday only when a shift next week collides with an exam, an interview or an appointment. The mascots trade shifts in rings and cover chains through a broker that sees shift ids, picks and yes/no answers but never reasons or hours; each mascot re-checks the exact trade against ASU's cited limits, including the F-1 limit of 20 hours across every on-campus job that no single employer can see, and nothing moves until every student confirms and the manager approves. On a simulated 40-person roster, Tag Out reaches what a group chat could only reach if everyone knew everyone's limits (84% of collisions fixed, against 74% with plain covers) and blocks about 1.4 limit-breaking covers a week.
 
 ## 150 words
 
-About 10,000 students work at ASU each year, and when a shift collides with school, ASU's advice is to "be proactive about finding shift coverage". Tag Out gives each student worker a mascot agent (its own process and SQLite file) that imports their Canvas feed, calendars, shift exports and texts. Every Sunday it texts only about real collisions. The mascots trade shifts in Top Trading Cycles rings and cover chains through a broker that sees only picks. Each mascot checks the exact final ring in private against ASU's cited limits, including the F-1 limit of 20 hours across every on-campus job, which no single employer sees. CP-SAT picks trades, and a two-phase commit needs every student's Telegram confirm and the manager's approval; a stale schedule aborts it. Closed message schemas and a no-leak test keep reasons private. In a simulated 40-person roster, trades cut pay lost per week by 58%.
+About 10,000 students work at ASU each year, and when a shift collides with school, ASU's advice is to "be proactive about finding shift coverage". Tag Out gives each student worker a mascot agent, its own process and database, that reads their Canvas feed, calendars, Workday-style hours and texts. Every Sunday it texts only about real collisions. Mascots trade shifts in Top Trading Cycles rings and cover chains through a broker that never sees reasons or hours. Each mascot checks the exact trade in private against ASU's cited limits, including the F-1 limit across all on-campus jobs, and asks its student before going near a limit. A two-phase commit needs every student's confirm and the manager's approval; a changed schedule aborts it. Students see their mascots live on the website and chat with them on Telegram or, through the included Skill, Cubbie. A Library-only scheduler would have put an F-1 student at 21 of 20 hours that week.
 
 ## Sources for the numbers above
 
 - 10,000 students and the coverage quote: `docs/rule_quotes.json` (`stats`, `coverage_on_student`), verbatim in `docs/RULES.md`.
-- 10.0 points, 9.5 to 10.5, $673, $284 and 58%: `docs/simulation.json` (1,000 weeks, seed 7, 15% conflicts, full adoption). The go/no-go against the 10-point bar is borderline; see `docs/SIMULATION.md`.
+- 84% vs 74%, the group-chat-with-swaps comparison and 1.4 limit-breaking covers a week: `docs/simulation.json` (1,000 weeks, seed 7, 15% conflicts, full adoption). Tag Out adds only 0.2 points over the swap-capable group chat; the gain is privacy, automation and the blocked limit breaks, not more fixes. See `docs/SIMULATION.md`.
+- 21 of 20 hours: the judge view's Library-only scheduler comparison and `tests/test_baseline.py` (Ben's 9 Aramark Dining hours are invisible to the Library).
 - 20 hours across every on-campus job: `f1_weekly_20` in `docs/RULES.md`.
 
 ## Still to do before submitting
 
-- [ ] Merge the dashboard (`web/`) and the docs PR into `main`, then run the README quick start from a fresh clone, including `python -m scripts.demo --all`.
-- [ ] Record the 3-minute demo video (the six beats in `docs/DESIGN.md` section 8) and add its link near the top of the README.
+- [ ] Record the 3-minute demo video and add its link near the top of the README (a silent draft: `python -m scripts.capture video --all`).
 - [ ] Survey results are pending. Add the numbers from the ASU student worker survey to the README and the pitch only once they are collected. Until then nothing in the repo or the submission claims a survey result.
 - [ ] Make `neric-joel/tag-out` public, then check on GitHub that the simulator chart, the Mermaid diagrams and the CI badge render.
 - [ ] Submit on the Cubbie site with the kit CLI, track `agents`, before 12:00 PM Arizona on Sun Oct 25 2026.

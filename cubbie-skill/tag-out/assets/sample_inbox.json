@@ -1,0 +1,5 @@
+[
+  {"n": 1, "kind": "collision", "text": "Your Tue 6-10 PM Library shift hits CSE 310 Midterm 2 prep (from Canvas). Want me to find a trade that keeps your hours?", "buttons": [{"label": "Find a trade", "data": "trade:yes:library-tue-1027-1800-d1"}, {"label": "Not now", "data": "trade:no:library-tue-1027-1800-d1"}]},
+  {"n": 2, "kind": "ask", "text": "A Fri 10 AM-2 PM Library shift could come to you in a trade, but that's your gym with your roommate slot. Take it so you keep your pay this week?", "buttons": [{"label": "Take it", "data": "ask:yes:library-fri-1030-1000-d1"}, {"label": "Keep my slot", "data": "ask:no:library-fri-1030-1000-d1"}]},
+  {"n": 3, "kind": "confirm", "text": "Ben takes your Tue 6-10 PM. You take Dev's Fri 10 AM-2 PM. You keep your $64. Confirm?", "buttons": [{"label": "Confirm", "data": "confirm:txn-3"}, {"label": "Decline", "data": "decline:txn-3"}]}
+]

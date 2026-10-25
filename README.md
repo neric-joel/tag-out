@@ -1,6 +1,6 @@
 # Tag Out
 
-About 10,000 students work at ASU each year ([ASU Work+](https://workplus.asu.edu/learn-more/impact)). When a shift collides with an exam or an interview, ASU's advice is to "be proactive about finding shift coverage" ([ASU Student Employment](https://studentemployment.asu.edu/students/starting-your-role/developing-schedule)), so finding cover is the student's job, and the coworker who takes the shift has no easy way to check it against limits that count hours from all of their campus jobs. Tag Out gives each student worker a mascot agent that privately holds their calendar and their shifts and knows which work-hour rules apply to them. Every Sunday it checks the coming week and texts its student only when a shift collides with something. Then the mascots trade shifts with each other in rings, through a broker that only ever sees which shift each mascot would take, so the people in a ring keep their hours and their pay and nobody has to say why they said no. Nothing changes until every student in the trade confirms on Telegram and the manager approves.
+About 10,000 students work at ASU each year ([ASU Work+](https://workplus.asu.edu/learn-more/impact)). When a shift collides with an exam or an interview, ASU's advice is to "be proactive about finding shift coverage" ([ASU Student Employment](https://studentemployment.asu.edu/students/starting-your-role/developing-schedule)), so finding cover is the student's job, and the coworker who takes the shift has no easy way to check it against limits that count hours from all of their campus jobs. Tag Out gives each student worker a mascot agent that privately holds their calendar and their shifts and knows which work-hour rules apply to them. In Cubbie terms: your Cubbie negotiates with your coworkers' Cubbies. Every Sunday at 6 PM (in live mode) it checks the coming week and texts its student only when a shift collides with something. Then the mascots trade shifts in rings and cover chains through a broker that sees shift ids, picks, ok bits and votes, and never reasons, hours or which rule applies, so the people in a ring keep their hours and their pay and nobody has to say why they said no. Nothing changes until every student in the trade confirms (on Telegram, or through Cubbie with the included Skill) and the manager approves.
 
 Built for DevHacks S3 x Cubbie, Track 2 (agent-to-agent coordination). Every student, calendar and number in the demo is synthetic.
 
@@ -28,7 +28,7 @@ All five tap "Find a trade". The only thing that leaves each mascot is the shift
 2. Ana taps "Take it". In the round after the counter-offer window, her mascot counter-offers by picking Dev's Friday, and the ring Ana -> Dev -> Ben closes: Ana takes Dev's Fri 10 AM-2 PM, Dev takes Ben's Thu 2-6 PM, and Ben takes Ana's Tue 6-10 PM. All three keep their hours and their $64.
 3. Nobody can swap with Zoe, so her Saturday goes to a cover round. Priya wants more hours and has room, so she covers it. Zoe gives up that shift's pay.
 4. Marco's Wed 2-6 PM has no safe trade, and Tag Out says so. Every coworker is in class or already on shift that afternoon, including Priya, the only one who wants extra hours. The broker hands it to the manager as an open shift with no reason attached: "Open shift: Wed 2-6 PM (was Marco's). No safe trade this week. Post it or cover it?"
-5. Before anything moves, each mascot re-checks the exact ring or chain it is in against its own Rulebook, CP-SAT picks which proposals to run, and the two-phase commit asks each student to confirm on Telegram and the manager to approve.
+5. Before anything moves, each mascot re-checks the exact ring or chain it is in against its own Rulebook, CP-SAT keeps the proposals whose members all said ok and that share no person or shift (this week nothing overlaps, so it keeps both; it matters when a re-check fails or proposals compete), and the two-phase commit asks each student to confirm on Telegram and the manager to approve.
 
 The week ends with 5 asked, 4 fixed (3 by the ring, 1 by Priya's cover), 1 open shift, and $192 of pay kept: the three ring shifts at 4 hours and $16 an hour each. `tests/test_flow.py` checks each of these numbers.
 
@@ -79,6 +79,16 @@ The chat panel next to the commons is each student's private thread with their o
 
 2. Start everything with `python -m scripts.run_all --mode live` so the mascots wait for your taps.
 3. In Telegram, open your bot and send `/start`, then `/join ana`. That chat is now Ana's phone. `/join manager` from another chat gets the manager's approval cards. Telegram carries plain text and buttons only; the mascots themselves live on the website. Other commands: `/week` lists your shifts, `/diary` shows your room before your tightest limit, `/sunday` runs the Sunday check, `/trade` starts the rounds.
+
+## How it plugs into Cubbie
+
+Cubbie already reads a student's Canvas and Google Calendar and texts them. In Tag Out that makes Cubbie the natural front door to the student's mascot, so the repo includes a Cubbie Skill, [`cubbie-skill/tag-out/`](cubbie-skill/tag-out/SKILL.md), that passes the kit's validator (`validate_cubbie_skill.py`):
+
+- Every Sunday at 6 PM (a Cubbie scheduled check-in) Cubbie reads next week's Canvas exams and due dates and calendar events with its own abilities and hands them to the student's mascot through the owner channel (`POST /import`). The titles stay with the student's mascot; coworkers and the employer only ever see "busy".
+- Cubbie relays the mascot's texts (the collision, the "it's your gym slot, take it?" question, the confirm card) to the student by text and taps their answer back (`tagout.py inbox`, `tagout.py answer <code>`). It never answers for the student.
+- `python cubbie-skill/tag-out/scripts/tagout.py --sample inbox` runs the whole walk-through offline. The script uses only the Python standard library, as Cubbie's sandbox expects, and the owner token comes from Cubbie's secure input.
+
+So each student's Cubbie becomes their negotiator: it knows their week, and the mascots behind it trade with coworkers' Cubbies without anyone sharing why. Telegram (`bot/`) is the same owner channel for students who don't use Cubbie.
 
 ## What we took from ASU Workday
 
@@ -194,14 +204,12 @@ Every limit is data in `config/rules.yaml`. The quotes below come from `docs/rul
 
 `sim/simulate.py` plays 1,000 random weeks on a synthetic 40-person Library roster with clustered exam evenings, students who avoid Friday nights, and private limits (10% F-1, 20% Federal Work-Study). The headline case from `docs/simulation.json` is 15% of shifts colliding with something and the whole roster on Tag Out (seed 7):
 
-| | Plain covers | Tag Out |
-|---|---|---|
-| Conflicts fixed | 73.7% | 83.7% |
-| Pay lost per week | $673 | $284 |
+| | Plain covers only | Group chat with two-person swaps (everyone's limits known) | Tag Out |
+|---|---|---|---|
+| Conflicts fixed | 73.8% | 83.5% | 83.7% |
+| Pay lost per week | $671 | $326 | $285 |
 
-Rings and chains add 10.0 percentage points of conflicts fixed (95% CI 9.5 to 10.5) and cut pay lost per week by 58%.
-
-The go/no-go is borderline. `docs/DESIGN.md` set the bar at 10 points, and the interval runs from 9.5 to 10.5, so the result neither clears it nor misses it with confidence. The points figure also moves with the assumptions: 4.5 if no conflicts cluster on shared exam evenings, 19.5 if helpers take at most one extra shift, and 1.9 if only 25% of the roster is on Tag Out ([docs/SIMULATION.md](docs/SIMULATION.md)). What rings clearly change is pay, because a swap fixes a conflict without anyone losing the shift. So the headline is the Sunday check, plain covers and the pay that trades save, with rings as the reason that pay is saved.
+The honest reading: most of the gain over plain covers comes from simple two-person swaps, which a well-run group chat could also arrange. Tag Out adds only 0.2 points (± 0.3) of conflicts fixed over that stronger baseline and $41 a week less pay lost (rings of three or more and cover chains). What it changes is how the result is reached: the swaps happen on their own every Sunday instead of through a group chat; nobody posts a reason; and every move is checked against limits that no coworker or manager can see. An unchecked group chat makes about 1.4 limit-breaking covers a week on this roster (1.44 ± 0.09), and Tag Out blocks those. The `docs/DESIGN.md` go/no-go (rings must add 10 points over plain covers) is borderline at 9.8 ± 0.5, so rings are not the headline; the Sunday check, private limit checks and pay kept are ([docs/SIMULATION.md](docs/SIMULATION.md)).
 
 Winter Break Handoff, per simulated break week (Dec 14 2026 to Jan 10 2027, when the F-1 limit is 40 hours): students going home want 54.0 shifts gone, 34.6 of them are handed off to students who stay, and $2,215 of pay stays on campus. Accepted handoffs break 0 rules; an unchecked group chat would break about 3 a week (3.05).
 
@@ -238,15 +246,18 @@ ruff check .
 pytest
 ```
 
-There are 31 tests. `.github/workflows/ci.yml` runs both commands on every push and pull request with Python 3.12 and `TAGOUT_OFFLINE=1`, so CI never calls an API. The end-to-end tests mount every agent's app on one in-process HTTP client (`scripts/inproc.py`); each mascot keeps its own app and SQLite file, and only the transport changes.
+`.github/workflows/ci.yml` runs both commands on every push and pull request with Python 3.12 and `TAGOUT_OFFLINE=1`, so CI never calls an API. The end-to-end tests mount every agent's app on one in-process HTTP client (`scripts/inproc.py`); each mascot keeps its own app and SQLite file, and only the transport changes.
 
 | Suite | What it proves |
 |---|---|
 | `tests/test_rulebook.py` | Every cited quote is verbatim in `docs/RULES.md`. Ben's 9 Dining hours count, so a cover is blocked at 21 hours while a swap keeps him eligible. Break weeks raise the F-1 limit to 40. Missing history is unverified and blocks added hours. The 25-hour average, the Federal Work-Study award and class time each block. A Hypothesis property: no change the Rulebook allows ever breaks the 40-hour, F-1 or 25-hour-average limit. |
 | `tests/test_ttc.py` | The demo ring needs the second round. Cycle finding matches a brute-force oracle on random pick graphs (Hypothesis). TTC never puts anyone in two cycles, only gives people shifts they picked, and never beats the oracle's bound. Chains end with someone dropping a shift. |
-| `tests/test_twophase.py` | Under every mix of yes, no, stale and silent votes from three mascots and the Steward (Hypothesis), the commit happens only if all say yes, every participant gets the same decision, and an abort leaves the original owners. CP-SAT drops proposals with a no and proposals that overlap. |
+| `tests/test_twophase.py` | Under every mix of yes, no, stale and silent votes from three mascots and the Steward (Hypothesis), the commit happens only if all say yes, every participant gets the same decision, and an abort leaves the original owners. A forged vote without that member's ballot changes nothing. CP-SAT drops proposals with a no and proposals that overlap. |
 | `tests/test_flow.py` | The full demo week end to end: Sunday texts only on collisions, 5 asked, 4 fixed, $192 kept, the counter-offer round, Ben's "17 of your 20 hours", Marco's open shift, and the break-it abort followed by the retry chain. |
 | `tests/test_privacy.py` | The schemas reject a pick with `hours` or `reason`, an eligibility answer with a rule, a vote with a reason, and badges that describe limits. The no-leak scan over a full run with the abort. The reason still reaches its owner's phone. |
+| `tests/test_baseline.py` | The same week through a Library-only scheduler (sees availability and Library hours, not other jobs) puts Ben at 21 of 20 F-1 hours and Dev over the 25-hour average; the manager's CSV and calendar exports mark the traded shifts. |
+| `tests/test_workday.py` | Workday-shaped time rows sum across positions by Mon-Sun week and skip sent-back entries; Aramark hours count for F-1 but not the ASU average; the measurement window starts at the hire date, then runs October to September. |
+| `tests/test_cubbie_skill.py` | The Skill's sample mode runs offline, its description fits Cubbie's 200-character list, and items it imports become private busy time on the mascot (and count as a schedule change, so a held trade goes stale). |
 | `tests/test_simulate.py` | Tag Out never fixes fewer conflicts or loses more pay than plain covers, no accepted move breaks a limit, the recheck catches a move nobody checked, the same seed gives the same results whatever the worker count, and Winter Break Handoff breaks no rule. |
 
 ## Stack

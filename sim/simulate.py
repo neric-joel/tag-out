@@ -218,6 +218,24 @@ def plain_covers(plan: Plan, cap: int | None) -> Plan:
     return plan
 
 
+def pair_swaps(plan: Plan, cap: int | None) -> Plan:
+    """A stronger baseline: the group chat also arranges two-person swaps (A takes B's shift, B takes A's), the
+    first workable pair in posting order, before anyone covers. No adoption needed and no rings of three or more."""
+    w = plan.week
+    for i, c1 in enumerate(w.conflicts):
+        if c1 in plan.fixed:
+            continue
+        o1 = plan.holder[c1]
+        for c2 in w.conflicts[i + 1:]:
+            o2 = plan.holder[c2]
+            if c2 in plan.fixed or o2 == o1:
+                continue
+            if commit(plan, merge([(o1, c2, c1), (o2, c1, c2)]), cap):
+                plan.fixed[c1] = plan.fixed[c2] = "swap"
+                break
+    return plan
+
+
 def swap_prefs(plan: Plan, agents: list[str], cap: int | None) -> dict[str, list[str]]:
     """Each conflicted shift is one TTC agent. Its picks: other conflicted shifts its holder would take instead."""
     prefs = {}
@@ -485,11 +503,17 @@ def play_week(p: Params, week: Week) -> tuple[Plan, dict[float, tuple[Plan, bool
     return plain, tag, group_chat_breaks(week, cap)
 
 
+def swap_baseline(p: Params, week: Week) -> Plan:
+    return plain_covers(pair_swaps(Plan(week), p.helper_extra_shifts), p.helper_extra_shifts)
+
+
 def run_week(p: Params, seed: int, rate: float, i: int) -> dict:
     week = make_week(p, seed, rate, i)
     plain, tag, breaks = play_week(p, week)
+    swaps = swap_baseline(p, week)
     row = {"shifts": len(week.shift), "conflicts": len(week.conflicts), "plain_fixed": plain.count(),
-           "plain_pay": plain.pay_lost(), "problems": len(recheck(plain)), "breaks": len(breaks), "oracle": None}
+           "plain_pay": plain.pay_lost(), "problems": len(recheck(plain)), "breaks": len(breaks), "oracle": None,
+           "swap_fixed": swaps.count(), "swap_pay": swaps.pay_lost()}
     for a, (plan, fell_back) in tag.items():
         adopters = week.adopters(a)
         row[a] = {"fixed": plan.count(), "pay": plan.pay_lost(), "ring": plan.count("ring"),
@@ -579,6 +603,9 @@ def summary(rows: list[dict], a: float) -> dict:
         "ring": mean_ci(pct(rows, lambda r: r[a]["ring"])),
         "chain": mean_ci(pct(rows, lambda r: r[a]["chain"])),
         "plain_pay": mean_ci([r["plain_pay"] for r in rows]),
+        "swap": mean_ci(pct(rows, lambda r: r["swap_fixed"])),
+        "swap_pay": mean_ci([r["swap_pay"] for r in rows]),
+        "extra_vs_swap": mean_ci(pct(rows, lambda r: r[a]["fixed"] - r["swap_fixed"])),
         "tag_pay": mean_ci([r[a]["pay"] for r in rows]),
         "prevented": mean_ci([r[a]["prevented"] for r in rows]),
         "fallback": sum(r[a]["fallback"] for r in rows),
@@ -717,6 +744,11 @@ def report(p: Params, res: dict, weeks: int, seed: int, took: float, workers: in
               f"${central['plain_pay'][0]:,.0f} to ${central['tag_pay'][0]:,.0f} ({pay_cut:.0f}% less), because a "
               "swap fixes a conflict without anyone losing the shift. The points figure moves with the assumptions; "
               f"changed one at a time (see Sensitivity): {moves}."]
+    L += ["", f"**Against a stronger baseline** where the group chat also arranges two-person swaps before anyone "
+          f"covers (no app needed): it fixes {_pm(central['swap'])} of conflicts and loses "
+          f"{_pm(central['swap_pay'], '$')} of pay a week. Tag Out fixes {_pm(central['extra_vs_swap'], ' points')} "
+          f"more than that and loses {_pm(central['tag_pay'], '$')}. What a group chat can't do is the rest: rings of "
+          "three or more, cover chains, and checking every move against limits it can't see."]
     L += ["",
           f"- Typical case ({rate} conflicts, {adopt} adoption, {central['weeks']:,} weeks): plain covers fix "
           f"{_pm(central['plain'])} of conflicts; Tag Out fixes {_pm(central['tag'])}; rings and chains add "
@@ -725,15 +757,18 @@ def report(p: Params, res: dict, weeks: int, seed: int, took: float, workers: in
           "- Worst case, same scenario: "
           + (f"the worst 5% of weeks get {central['extra_p5']:.1f} extra points or fewer"
              if central["extra_p5"] > 0 else "in at least 1 week in 20, rings and chains add nothing")
-          + ". Tag Out never fixes fewer than plain covers, because the broker keeps the plain-cover plan when that "
-          "plan is better.",
+          + ". The simulated broker never fixes fewer than plain covers, because it keeps the plain-cover plan when "
+          "that plan is better (the live broker in broker/engine.py runs rings first and does not yet make that "
+          "comparison).",
           f"- Worst case in the whole sweep: {worst_key[0]:.0%} conflicts with {worst_key[1]:.0%} adoption, where "
           f"rings and chains add {_pm(worst['extra'], ' points')}. At {rate} conflicts with only "
           f"{p.adoption[0]:.0%} of the roster on Tag Out they add {_pm(low['extra'], ' points')}: rings need most "
           "of a roster on board.",
-          f"- Pitch line (synthetic): \"In our simulation of a 40-person roster, plain covers fixed "
-          f"{central['plain'][0]:.0f}% of conflicts; trades fixed {central['extra'][0]:.0f} percentage points "
-          f"more, and students lost {pay_cut:.0f}% less pay.\"",
+          f"- Pitch line (synthetic): \"On a simulated 40-person roster, plain covers fix "
+          f"{central['plain'][0]:.0f}% of conflicts. A group chat that also arranged two-person swaps would reach "
+          f"{central['swap'][0]:.0f}% if everyone knew everyone's limits. Tag Out reaches {central['tag'][0]:.0f}% on "
+          f"its own every Sunday, without anyone sharing a reason, and blocks about "
+          f"{central['prevented'][0]:.1f} limit-breaking covers a week.\"",
           "",
           f"![Conflicts fixed and pay lost by conflict rate and adoption](img/{IMG.name})", ""]
 
@@ -893,6 +928,9 @@ def main() -> None:
         "plain_pct": round(c["plain"][0], 1), "tagout_pct": round(c["tag"][0], 1),
         "extra_points": round(c["extra"][0], 1), "extra_ci": round(c["extra"][1], 1),
         "plain_pay_lost": round(c["plain_pay"][0]), "tagout_pay_lost": round(c["tag_pay"][0]),
+        "swap_pct": round(c["swap"][0], 1), "swap_pay_lost": round(c["swap_pay"][0]),
+        "extra_vs_swap": round(c["extra_vs_swap"][0], 1), "extra_vs_swap_ci": round(c["extra_vs_swap"][1], 1),
+        "rule_breaks_prevented_per_week": round(c["prevented"][0], 2),
         "winter": {"wanted": round(winter["wanted"], 1), "handed": round(winter["handed"], 1),
                    "kept": round(winter["kept"]), "rule_breaks": sum(row["problems"] for row in b),
                    "unchecked_breaks": round(winter["unchecked_breaks"], 2)},

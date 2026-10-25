@@ -1,6 +1,6 @@
 ---
 name: tag-out
-description: Checks the student's campus job shifts for next week against their Canvas due dates, exams and calendar every Sunday, and lets their Tag Out mascot trade a colliding shift with coworkers without saying why. Use when the student works an on-campus job and asks to check next week for work conflicts, to find someone to take or swap a shift, or to set up the Sunday shift check.
+description: Checks next week's campus job shifts against Canvas and the calendar every Sunday and lets the student's Tag Out mascot trade a colliding shift without saying why. Use when the student works an on-campus job and asks to check next week for work conflicts, to find someone to take or swap a shift, or to set up the Sunday shift check.
 ---
 
 # Tag Out
@@ -22,8 +22,8 @@ Once per student:
    `TAGOUT_OWNER_TOKEN` environment variable and saves both under `~/.config/tag-out/` (file mode 600).
 3. Offer a **weekly check-in every Sunday at 6 PM** in the student's time zone and create it only after they say yes.
 
-To try it without an account: add `--sample` to any command. It uses `assets/sample_*.json` and never touches the
-network.
+To try it without an account: add `--sample` to any command. It uses `assets/sample_canvas.json`,
+`assets/sample_calendar.json` and `assets/sample_inbox.json` and never touches the network.
 
 ## Steps for the Sunday check (or "check my week for work conflicts")
 

@@ -321,3 +321,6 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+.bars.wide { grid-template-columns: minmax(150px, 46%) 1fr 56px; }
+.bars.wide > span:first-child { font-weight: 500; }

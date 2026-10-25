@@ -1,13 +1,15 @@
 # Simulation: plain covers vs Tag Out rings and chains
 
-**Go/no-go: borderline.** At a 15% conflict rate with 100% of the roster on Tag Out, rings and chains add 10.00 percentage points over plain covers (95% CI 9.5 to 10.5). The 10-point bar in docs/DESIGN.md section 7 sits inside that interval, so the simulation neither clears it nor misses it with confidence. Recommendation: lead with the Sunday check, plain covers and the pay that trades save (below), and present rings as the reason that pay is saved rather than as a bigger fix rate.
+**Go/no-go: borderline.** At a 15% conflict rate with 100% of the roster on Tag Out, rings and chains add 9.84 percentage points over plain covers (95% CI 9.3 to 10.3). The 10-point bar in docs/DESIGN.md section 7 sits inside that interval, so the simulation neither clears it nor misses it with confidence. Recommendation: lead with the Sunday check, plain covers and the pay that trades save (below), and present rings as the reason that pay is saved rather than as a bigger fix rate.
 
-What rings and chains clearly change is pay: in the same scenario pay lost per week falls from $673 to $284 (58% less), because a swap fixes a conflict without anyone losing the shift. The points figure moves with the assumptions; changed one at a time (see Sensitivity): helpers take at most 1 extra shift: 19.5; helpers take any number of shifts the rules allow: 8.2; no clustering (every conflict is an individual event): 4.5; heavy clustering (80% of conflicts are shared exam evenings): 11.3; single TTC pass (passers' shifts stay in the pool): 9.0.
+What rings and chains clearly change is pay: in the same scenario pay lost per week falls from $671 to $285 (58% less), because a swap fixes a conflict without anyone losing the shift. The points figure moves with the assumptions; changed one at a time (see Sensitivity): helpers take at most 1 extra shift: 19.2; helpers take any number of shifts the rules allow: 8.1; no clustering (every conflict is an individual event): 4.2; heavy clustering (80% of conflicts are shared exam evenings): 11.2; single TTC pass (passers' shifts stay in the pool): 8.9.
 
-- Typical case (15% conflicts, 100% adoption, 1,000 weeks): plain covers fix 73.7% ± 0.9 of conflicts; Tag Out fixes 83.7% ± 0.8; rings and chains add 10.0 points ± 0.5. Pay lost per week drops from $673 ± 10 to $284 ± 7.
-- Worst case, same scenario: in at least 1 week in 20, rings and chains add nothing. Tag Out never fixes fewer than plain covers, because the broker keeps the plain-cover plan when that plan is better.
+**Against a stronger baseline** where the group chat also arranges two-person swaps before anyone covers (no app needed): it fixes 83.5% ± 0.8 of conflicts and loses $326 ± 8 of pay a week. Tag Out fixes 0.2 points ± 0.3 more than that and loses $285 ± 7. What a group chat can't do is the rest: rings of three or more, cover chains, and checking every move against limits it can't see.
+
+- Typical case (15% conflicts, 100% adoption, 1,000 weeks): plain covers fix 73.8% ± 0.9 of conflicts; Tag Out fixes 83.7% ± 0.8; rings and chains add 9.8 points ± 0.5. Pay lost per week drops from $671 ± 10 to $285 ± 7.
+- Worst case, same scenario: in at least 1 week in 20, rings and chains add nothing. The simulated broker never fixes fewer than plain covers, because it keeps the plain-cover plan when that plan is better (the live broker in broker/engine.py runs rings first and does not yet make that comparison).
 - Worst case in the whole sweep: 5% conflicts with 25% adoption, where rings and chains add 0.5 points ± 0.2. At 15% conflicts with only 25% of the roster on Tag Out they add 1.9 points ± 0.2: rings need most of a roster on board.
-- Pitch line (synthetic): "In our simulation of a 40-person roster, plain covers fixed 74% of conflicts; trades fixed 10 percentage points more, and students lost 58% less pay."
+- Pitch line (synthetic): "On a simulated 40-person roster, plain covers fix 74% of conflicts. A group chat that also arranged two-person swaps would reach 83% if everyone knew everyone's limits. Tag Out reaches 84% on its own every Sunday, without anyone sharing a reason, and blocks about 1.4 limit-breaking covers a week."
 
 ![Conflicts fixed and pay lost by conflict rate and adoption](img/simulation.png)
 
@@ -17,21 +19,21 @@ Mean ± 95% confidence interval over the simulated weeks, as a share of each wee
 
 | Conflict rate (measured) | Conflicts / week | On Tag Out | Plain covers fix | Tag Out fixes | Extra (points) | Fixed by a ring | Fixed by a chain |
 |---|---|---|---|---|---|---|---|
-| 5% (5.1%) | 6.1 | 25% | 84.3% ± 1.3 | 84.7% ± 1.3 | 0.5 ± 0.2 | 2.8% ± 0.6 | 1.7% ± 0.5 |
-| 5% (5.1%) | 6.1 | 50% | 84.3% ± 1.3 | 85.7% ± 1.3 | 1.4 ± 0.3 | 10.1% ± 1.1 | 4.7% ± 0.8 |
-| 5% (5.1%) | 6.1 | 100% | 84.3% ± 1.3 | 86.9% ± 1.3 | 2.6 ± 0.4 | 27.9% ± 1.7 | 9.5% ± 1.1 |
-| 10% (10.1%) | 12.1 | 25% | 78.7% ± 1.0 | 79.9% ± 1.0 | 1.2 ± 0.2 | 5.8% ± 0.6 | 1.9% ± 0.4 |
-| 10% (10.1%) | 12.1 | 50% | 78.7% ± 1.0 | 82.0% ± 1.0 | 3.4 ± 0.3 | 17.8% ± 1.0 | 5.5% ± 0.6 |
-| 10% (10.1%) | 12.1 | 100% | 78.7% ± 1.0 | 85.7% ± 1.0 | 7.1 ± 0.5 | 43.8% ± 1.3 | 11.8% ± 0.8 |
-| 15% (15.2%) | 18.1 | 25% | 73.7% ± 0.9 | 75.6% ± 0.8 | 1.9 ± 0.2 | 7.3% ± 0.5 | 1.9% ± 0.3 |
-| 15% (15.2%) | 18.1 | 50% | 73.7% ± 0.9 | 78.6% ± 0.8 | 5.0 ± 0.3 | 20.6% ± 0.8 | 5.4% ± 0.5 |
-| 15% (15.2%) | 18.1 | 100% | 73.7% ± 0.9 | 83.7% ± 0.8 | 10.0 ± 0.5 | 50.1% ± 0.9 | 11.7% ± 0.7 |
-| 20% (20.0%) | 23.9 | 25% | 67.8% ± 0.7 | 70.4% ± 0.7 | 2.7 ± 0.2 | 8.2% ± 0.5 | 1.8% ± 0.2 |
-| 20% (20.0%) | 23.9 | 50% | 67.8% ± 0.7 | 74.4% ± 0.8 | 6.6 ± 0.4 | 22.1% ± 0.7 | 5.3% ± 0.4 |
-| 20% (20.0%) | 23.9 | 100% | 67.8% ± 0.7 | 79.9% ± 0.8 | 12.1 ± 0.5 | 50.6% ± 0.8 | 12.1% ± 0.7 |
-| 25% (25.0%) | 29.7 | 25% | 62.2% ± 0.6 | 65.4% ± 0.6 | 3.2 ± 0.2 | 8.4% ± 0.4 | 1.7% ± 0.2 |
-| 25% (25.0%) | 29.7 | 50% | 62.2% ± 0.6 | 70.0% ± 0.7 | 7.8 ± 0.4 | 22.7% ± 0.6 | 5.3% ± 0.4 |
-| 25% (25.0%) | 29.7 | 100% | 62.2% ± 0.6 | 76.8% ± 0.7 | 14.6 ± 0.5 | 49.8% ± 0.7 | 13.4% ± 0.6 |
+| 5% (5.1%) | 6.1 | 25% | 84.3% ± 1.3 | 84.8% ± 1.3 | 0.5 ± 0.2 | 2.8% ± 0.6 | 1.7% ± 0.5 |
+| 5% (5.1%) | 6.1 | 50% | 84.3% ± 1.3 | 85.7% ± 1.3 | 1.3 ± 0.3 | 10.1% ± 1.1 | 4.7% ± 0.8 |
+| 5% (5.1%) | 6.1 | 100% | 84.3% ± 1.3 | 86.9% ± 1.3 | 2.6 ± 0.4 | 27.9% ± 1.7 | 9.4% ± 1.1 |
+| 10% (10.1%) | 12.1 | 25% | 78.8% ± 1.0 | 80.0% ± 1.0 | 1.2 ± 0.2 | 5.8% ± 0.6 | 1.9% ± 0.4 |
+| 10% (10.1%) | 12.1 | 50% | 78.8% ± 1.0 | 82.1% ± 1.0 | 3.4 ± 0.3 | 17.9% ± 1.0 | 5.5% ± 0.6 |
+| 10% (10.1%) | 12.1 | 100% | 78.8% ± 1.0 | 85.7% ± 1.0 | 7.0 ± 0.5 | 43.8% ± 1.3 | 11.8% ± 0.8 |
+| 15% (15.2%) | 18.1 | 25% | 73.8% ± 0.9 | 75.7% ± 0.8 | 1.9 ± 0.2 | 7.3% ± 0.5 | 1.9% ± 0.3 |
+| 15% (15.2%) | 18.1 | 50% | 73.8% ± 0.9 | 78.7% ± 0.8 | 4.9 ± 0.3 | 20.6% ± 0.8 | 5.3% ± 0.5 |
+| 15% (15.2%) | 18.1 | 100% | 73.8% ± 0.9 | 83.7% ± 0.8 | 9.8 ± 0.5 | 50.1% ± 0.9 | 11.7% ± 0.7 |
+| 20% (20.0%) | 23.9 | 25% | 68.0% ± 0.7 | 70.6% ± 0.7 | 2.6 ± 0.2 | 8.2% ± 0.5 | 1.8% ± 0.2 |
+| 20% (20.0%) | 23.9 | 50% | 68.0% ± 0.7 | 74.4% ± 0.8 | 6.4 ± 0.4 | 22.1% ± 0.7 | 5.3% ± 0.4 |
+| 20% (20.0%) | 23.9 | 100% | 68.0% ± 0.7 | 79.9% ± 0.8 | 11.9 ± 0.5 | 50.6% ± 0.8 | 12.1% ± 0.7 |
+| 25% (25.0%) | 29.7 | 25% | 62.4% ± 0.6 | 65.6% ± 0.6 | 3.2 ± 0.2 | 8.4% ± 0.4 | 1.7% ± 0.2 |
+| 25% (25.0%) | 29.7 | 50% | 62.4% ± 0.6 | 70.1% ± 0.7 | 7.7 ± 0.4 | 22.7% ± 0.6 | 5.3% ± 0.4 |
+| 25% (25.0%) | 29.7 | 100% | 62.4% ± 0.6 | 76.8% ± 0.7 | 14.3 ± 0.5 | 49.8% ± 0.7 | 13.4% ± 0.6 |
 
 ## Pay lost and rule breaks
 
@@ -39,21 +41,21 @@ Pay lost is what students lose when their shift moves to someone else and they t
 
 | Conflict rate | On Tag Out | Pay lost / week, plain covers | Pay lost / week, Tag Out | Rule breaks prevented / week | Weeks Tag Out kept the plain plan |
 |---|---|---|---|---|---|
-| 5% | 25% | $299 ± 8 | $286 ± 7 | 0.12 ± 0.02 | 32 of 1000 |
-| 5% | 50% | $299 ± 8 | $258 ± 7 | 0.23 ± 0.03 | 28 of 1000 |
-| 5% | 100% | $299 ± 8 | $192 ± 6 | 0.49 ± 0.05 | 9 of 1000 |
-| 10% | 25% | $504 ± 9 | $470 ± 9 | 0.26 ± 0.04 | 63 of 1000 |
-| 10% | 50% | $504 ± 9 | $406 ± 8 | 0.50 ± 0.05 | 36 of 1000 |
-| 10% | 100% | $504 ± 9 | $250 ± 7 | 1.04 ± 0.07 | 11 of 1000 |
-| 15% | 25% | $673 ± 10 | $622 ± 9 | 0.37 ± 0.05 | 91 of 1000 |
-| 15% | 50% | $673 ± 10 | $526 ± 9 | 0.71 ± 0.07 | 51 of 1000 |
-| 15% | 100% | $673 ± 10 | $284 ± 7 | 1.47 ± 0.09 | 4 of 1000 |
-| 20% | 25% | $791 ± 10 | $723 ± 10 | 0.47 ± 0.05 | 93 of 1000 |
-| 20% | 50% | $791 ± 10 | $608 ± 9 | 0.91 ± 0.07 | 35 of 1000 |
-| 20% | 100% | $791 ± 10 | $308 ± 8 | 1.85 ± 0.10 | 4 of 1000 |
-| 25% | 25% | $888 ± 10 | $810 ± 10 | 0.56 ± 0.06 | 74 of 1000 |
-| 25% | 50% | $888 ± 10 | $673 ± 10 | 1.06 ± 0.08 | 15 of 1000 |
-| 25% | 100% | $888 ± 10 | $323 ± 8 | 2.23 ± 0.12 | 0 of 1000 |
+| 5% | 25% | $298 ± 8 | $286 ± 7 | 0.12 ± 0.02 | 32 of 1000 |
+| 5% | 50% | $298 ± 8 | $258 ± 7 | 0.23 ± 0.03 | 29 of 1000 |
+| 5% | 100% | $298 ± 8 | $192 ± 6 | 0.49 ± 0.05 | 11 of 1000 |
+| 10% | 25% | $502 ± 9 | $469 ± 9 | 0.26 ± 0.04 | 64 of 1000 |
+| 10% | 50% | $502 ± 9 | $405 ± 8 | 0.49 ± 0.05 | 37 of 1000 |
+| 10% | 100% | $502 ± 9 | $250 ± 7 | 1.01 ± 0.07 | 11 of 1000 |
+| 15% | 25% | $671 ± 10 | $620 ± 9 | 0.36 ± 0.05 | 93 of 1000 |
+| 15% | 50% | $671 ± 10 | $526 ± 9 | 0.69 ± 0.06 | 52 of 1000 |
+| 15% | 100% | $671 ± 10 | $285 ± 7 | 1.44 ± 0.09 | 5 of 1000 |
+| 20% | 25% | $788 ± 10 | $721 ± 10 | 0.47 ± 0.05 | 98 of 1000 |
+| 20% | 50% | $788 ± 10 | $607 ± 9 | 0.90 ± 0.07 | 38 of 1000 |
+| 20% | 100% | $788 ± 10 | $308 ± 8 | 1.81 ± 0.10 | 4 of 1000 |
+| 25% | 25% | $884 ± 10 | $807 ± 10 | 0.53 ± 0.06 | 75 of 1000 |
+| 25% | 50% | $884 ± 10 | $671 ± 10 | 1.02 ± 0.08 | 17 of 1000 |
+| 25% | 100% | $884 ± 10 | $323 ± 8 | 2.15 ± 0.11 | 0 of 1000 |
 
 Every final schedule in every plan was re-checked with `rulebook.rules.evaluate` and against each student's raw busy blocks: 0 accepted moves broke a limit or double-booked anyone.
 
@@ -85,7 +87,7 @@ Over the whole 4-week break that is about 138 shifts handed off and $8,861 kept 
 | 20% | 0 of 1,000 | - | - |
 | 25% | 1 of 1,000 | 6.00 ± 0.00 | 6.00 ± 0.00 |
 
-Ring sizes at 15% conflicts, 100% adoption: 2 people: 2,306, 3 people: 828, 4 people: 348, 5 people: 81, 6 people: 31, 7 people: 7, 8 people: 1 (3% longer than 4).
+Ring sizes at 15% conflicts, 100% adoption: 2 people: 2,305, 3 people: 828, 4 people: 347, 5 people: 81, 6 people: 31, 7 people: 7, 8 people: 1 (3% longer than 4).
 
 ## Sensitivity
 
@@ -93,12 +95,12 @@ Each row changes one assumption, at 15% conflicts and 100% adoption, same seeds.
 
 | Change | Plain covers fix | Tag Out fixes | Extra (points) |
 |---|---|---|---|
-| none (the model above) | 73.7% ± 0.9 | 83.7% ± 0.8 | 10.0 ± 0.5 |
-| helpers take at most 1 extra shift | 62.1% ± 0.8 | 81.6% ± 0.8 | 19.5 ± 0.7 |
-| helpers take any number of shifts the rules allow | 75.5% ± 0.9 | 83.7% ± 0.8 | 8.2 ± 0.5 |
-| no clustering (every conflict is an individual event) | 94.6% ± 0.4 | 99.0% ± 0.2 | 4.5 ± 0.4 |
-| heavy clustering (80% of conflicts are shared exam evenings) | 52.0% ± 1.1 | 63.2% ± 1.3 | 11.3 ± 0.5 |
-| single TTC pass (passers' shifts stay in the pool) | 73.7% ± 0.9 | 82.7% ± 0.9 | 9.0 ± 0.5 |
+| none (the model above) | 73.8% ± 0.9 | 83.7% ± 0.8 | 9.8 ± 0.5 |
+| helpers take at most 1 extra shift | 62.4% ± 0.8 | 81.6% ± 0.8 | 19.2 ± 0.7 |
+| helpers take any number of shifts the rules allow | 75.6% ± 0.9 | 83.8% ± 0.8 | 8.1 ± 0.5 |
+| no clustering (every conflict is an individual event) | 94.8% ± 0.4 | 99.0% ± 0.2 | 4.2 ± 0.4 |
+| heavy clustering (80% of conflicts are shared exam evenings) | 52.1% ± 1.1 | 63.2% ± 1.3 | 11.2 ± 0.5 |
+| single TTC pass (passers' shifts stay in the pool) | 73.8% ± 0.9 | 82.7% ± 0.9 | 8.9 ± 0.5 |
 
 ## How one week is played
 
@@ -122,7 +124,7 @@ All parameters live in one dataclass, `Params`, at the top of `sim/simulate.py`.
 | `f1_share` | 0.1 | docs/DESIGN.md s7: 10% F-1 |
 | `f1_other_hours` | (0, 9) | task brief: 0-9 h/week at another on-campus employer |
 | `fws_share` | 0.2 | docs/DESIGN.md s7: 20% Federal Work-Study (domestic only; DESIGN s3) |
-| `fws_award_remaining` | (0.0, 400.0) | task brief: $0-$400 left on the award |
+| `fws_award_remaining` | (0.0, 400.0) | task brief: $0-$400 left after the week's own shifts |
 | `history_weeks` | 8 | task brief: 8 weeks of hours history for everyone |
 | `history_noise` | 2.0 | assumption: past weekly totals vary +-2 h around the usual load |
 | `near_cap_share` | 0.1 | assumption ("a few near the 25 h average"): a second ASU job puts them at 22-25 h |
@@ -156,7 +158,7 @@ Limits of this model:
 python -m sim.simulate --weeks 1000 --seed 7
 ```
 
-1,000 weeks per cell, seed 7, 6 worker processes, 100 s. Every week is seeded on its own, so the numbers do not depend on the worker count.
+1,000 weeks per cell, seed 7, 6 worker processes, 120 s. Every week is seeded on its own, so the numbers do not depend on the worker count.
 
 ---
 

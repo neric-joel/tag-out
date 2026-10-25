@@ -100,7 +100,7 @@ Demo and admin: `POST /admin/reset` (reseed from `seeds/`, keep the owner token)
 
 ### Telegram bot relay (`bot/telegram_bot.py`, port 8702)
 
-`POST /send` (`{"student_id", "kind", "text", "buttons"}`) delivers a message to the chat linked to that mascot or to the manager, with a still frame of the student's pet for collision, ask, confirm, commit and abort messages. `GET /links` lists who is linked. Telegram commands: `/start`, `/join <name>`, `/pet`, `/week`, `/diary`, `/sunday`, `/trade`, `/help`. Plain texts go to the mascot's `/intake` and button taps to its `/tap`, both with the owner token.
+`POST /send` (`{"student_id", "kind", "text", "buttons"}`) delivers a message (plain text and buttons only; the mascots live on the website) to the chat linked to that mascot or to the manager, for collision, ask, confirm, commit and abort messages. `GET /links` lists who is linked. Telegram commands: `/start`, `/join <name>`, `/pet`, `/week`, `/diary`, `/sunday`, `/trade`, `/help`. Plain texts go to the mascot's `/intake` and button taps to its `/tap`, both with the owner token.
 
 ## Message types
 

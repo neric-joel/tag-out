@@ -358,19 +358,20 @@
     let d;
     try { d = await get("/sim"); } catch (_) { $("#sim").innerHTML = '<p class="muted">Run <code>python -m sim.simulate</code> to fill this in.</p>'; return; }
     $("#simMeta").textContent = `${d.weeks.toLocaleString("en-US")} synthetic weeks, ${Math.round(d.conflict_rate * 100)}% of shifts collide`;
-    const maxPay = Math.max(d.plain_pay_lost, d.tagout_pay_lost);
+    const rows = [["Plain covers only", d.plain_pct, d.plain_pay_lost, ""],
+      ["Group chat that also swaps, if everyone knew everyone's limits", d.swap_pct ?? d.plain_pct, d.swap_pay_lost ?? d.plain_pay_lost, ""],
+      ["Tag Out, automatically every Sunday", d.tagout_pct, d.tagout_pay_lost, "hue"]];
+    const maxPay = Math.max(...rows.map((r) => r[2]));
+    const bars = (i, max, fmt) => rows.map((r) => `<span class="muted">${r[0]}</span><span class="track"><span class="fill ${r[3]}" style="width:${100 * r[i] / max}%"></span></span><span class="v num">${fmt(r[i])}</span>`).join("");
     $("#sim").innerHTML = `
-      <div><div class="sim-figs">
-        <div><span class="label">Fixed by plain covers</span><span class="value num">${d.plain_pct.toFixed(1)}%</span></div>
-        <div><span class="label">With Tag Out's trades</span><span class="value num">${d.tagout_pct.toFixed(1)}%<small> +${d.extra_points.toFixed(1)} ± ${d.extra_ci.toFixed(1)} points</small></span></div>
+      <div><div class="bars wide" role="img" aria-label="Collisions fixed">
+        <span>Collisions fixed</span><span></span><span></span>${bars(1, 100, (v) => v.toFixed(1) + "%")}
       </div>
-      <p class="sim-note">Winter break (F-1 limit 40 h): ${d.winter.handed.toFixed(1)} of ${d.winter.wanted.toFixed(0)} shifts handed off a week, ${money(d.winter.kept)} kept on campus, ${d.winter.rule_breaks} rule breaks; an unchecked group chat makes about ${d.winter.unchecked_breaks.toFixed(0)} a week.</p></div>
-      <div><div class="bars" role="img" aria-label="Pay lost per week">
-        <span>Pay lost a week</span><span></span><span></span>
-        <span class="muted">Plain covers</span><span class="track"><span class="fill" style="width:${100 * d.plain_pay_lost / maxPay}%"></span></span><span class="v num">${money(d.plain_pay_lost)}</span>
-        <span class="muted">Tag Out</span><span class="track"><span class="fill hue" style="width:${100 * d.tagout_pay_lost / maxPay}%"></span></span><span class="v num">${money(d.tagout_pay_lost)}</span>
+      <p class="sim-note">Most of the gain over plain covers comes from two-person swaps; Tag Out adds ${d.extra_vs_swap != null ? d.extra_vs_swap.toFixed(1) : "–"} points over a perfectly informed group chat. What it adds is doing it privately and on its own, and checking each move: an unchecked group chat makes about ${d.rule_breaks_prevented_per_week != null ? d.rule_breaks_prevented_per_week.toFixed(1) : "1.4"} limit-breaking covers a week on this roster.</p></div>
+      <div><div class="bars wide" role="img" aria-label="Pay lost per week">
+        <span>Pay lost a week</span><span></span><span></span>${bars(2, maxPay, money)}
       </div>
-      <p class="sim-note">Trades cut lost pay by ${Math.round(100 * (1 - d.tagout_pay_lost / d.plain_pay_lost))}% because a swap fixes a collision without anyone giving up the shift. <a href="https://github.com/neric-joel/tag-out/blob/main/docs/SIMULATION.md">Method and assumptions</a>.</p></div>`;
+      <p class="sim-note">Winter break (F-1 limit 40 h): ${d.winter.handed.toFixed(1)} of ${d.winter.wanted.toFixed(0)} shifts handed off a week, ${money(d.winter.kept)} kept on campus, ${d.winter.rule_breaks} rule breaks. <a href="https://github.com/neric-joel/tag-out/blob/main/docs/SIMULATION.md">Method and assumptions</a>.</p></div>`;
   }
 
   // ---------- judge view ----------

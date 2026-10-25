@@ -721,7 +721,9 @@
   const NODE = (id) => (PEOPLE.includes(id) || id === "broker" || id === "steward" ? id : null);
   function ensureFlow() {
     if (flow || !window.TagOutFlow) return;
-    flow = TagOutFlow.create($("#flow"), { students: PEOPLE.filter((p) => p in S.names).map((p) => ({ id: p, name: S.names[p] })), manager: "Library manager" });
+    // each block can be dragged like an n8n node; the layout is remembered per browser ("Reset layout" restores it)
+    flow = TagOutFlow.create($("#flow"), { students: PEOPLE.filter((p) => p in S.names).map((p) => ({ id: p, name: S.names[p], pet: S.pets[p] })),
+      manager: "Library manager", layoutKey: "tagout.flow.library" });
     const msgs = leak.msgs;
     wireLog.forEach((ev) => feedWire({ ...ev, quiet: true }));
     leak.msgs = msgs; // already counted

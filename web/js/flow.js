@@ -37,9 +37,15 @@
     if (parent) parent.appendChild(el);
     return el;
   }
+  // Column widths for the general layout, before it stretches to the viewport.
+  const WIDTHS = { Phones: 140, Mascots: 170, Broker: 180, Steward: 160, Manager: 150 };
+  const GAP = 56; // wide enough for a "private" label between neighbours
+  const clampZoom = value => Math.min(3, Math.max(.1, value));
+  let instances = 0;
   function create(container, opts = {}) {
     if (!container || container.nodeType !== 1) throw new TypeError('A container element is required.');
-    const students = (opts.students || []).map(s => ({ id: String(s.id), name: String(s.name) }));
+    const students = (opts.students || []).map(s => ({ id: String(s.id), name: String(s.name), pet: s.pet ? String(s.pet) : '' }));
+    const showPhones = opts.phones !== false;
     const ids = new Set(['broker', 'steward', 'phone:manager']);
     students.forEach(s => {
       if (!s.id || s.id.startsWith('phone:') || ids.has(s.id) || ids.has('phone:' + s.id)) {
@@ -48,24 +54,57 @@
       ids.add(s.id);
       ids.add('phone:' + s.id);
     });
+    const order = new Map(students.map((s, i) => [s.id, i]));
+    const layoutKey = String(opts.layoutKey || 'tagout.flow.layout');
+    // Saved positions: node id -> [x as a fraction of the stage width, y in px].
+    const saved = new Map();
+    try {
+      const raw = JSON.parse(localStorage.getItem(layoutKey));
+      if (raw && typeof raw === 'object') Object.entries(raw).forEach(([id, p]) => {
+        if (Array.isArray(p) && p.length === 2 && p.every(Number.isFinite)) saved.set(id, p);
+      });
+    } catch (_) { /* storage blocked or unreadable: use the automatic layout */ }
     const root = html('section', 'tof', undefined, container);
     root.setAttribute('aria-label', 'Agent message flow');
     const graphHead = html('div', 'tof-graph-head', undefined, root);
     html('h2', '', 'Agent flow', graphHead);
-    const legend = html('div', 'tof-legend', undefined, graphHead);
+    const headSide = html('div', 'tof-head-side', undefined, graphHead);
+    const legend = html('div', 'tof-legend', undefined, headSide);
     [['req', 'Request'], ['resp', 'Response'], ['private', 'Private owner channel']].forEach(([kind, label]) => {
       const item = html('span', '', undefined, legend);
       html('i', 'tof-key tof-' + kind, undefined, item);
       item.appendChild(document.createTextNode(label));
     });
+    const tools = html('div', 'tof-tools', undefined, headSide);
+    tools.setAttribute('role', 'group');
+    tools.setAttribute('aria-label', 'Graph view');
+    [['−', 'Zoom out', () => zoomBy(1 / 1.25)], ['+', 'Zoom in', () => zoomBy(1.25)],
+      ['Fit', 'Fit the whole graph in view', () => fit()],
+      ['Reset layout', 'Put every block back in its automatic place', () => resetLayout()]].forEach(([text, tip, action]) => {
+      const button = html('button', 'tof-tool', text, tools);
+      button.type = 'button';
+      button.title = tip;
+      if (text.length === 1) button.setAttribute('aria-label', tip);
+      button.addEventListener('click', () => { if (!dead) action(); });
+    });
     const viewport = html('div', 'tof-viewport', undefined, root);
     const stage = html('div', 'tof-stage', undefined, viewport);
     stage.setAttribute('role', 'group');
-    stage.setAttribute('aria-label', 'Phones connect privately to mascots. Mascots connect to the broker, then the steward and manager.');
+    stage.setAttribute('aria-label', (showPhones ? 'Phones connect privately to mascots. ' : '') + 'Mascots connect to the broker, then the steward and manager.');
+    const hint = html('p', 'tof-sr', 'Drag to move this block, or use the arrow keys. Hold Shift to move it further.', root);
+    hint.id = 'tof-hint-' + (++instances);
     const wires = svg('svg', { class: 'tof-wires', 'aria-hidden': 'true' }, stage);
     const packetLayer = svg('svg', { class: 'tof-packets', 'aria-label': 'Messages in flight' }, stage);
-    const nodes = new Map(), edges = [], packets = [], effects = new Map();
-    const headings = ['Phones', 'Mascots', 'Broker', 'Steward', 'Manager'].map(t => html('div', 'tof-column', t, stage));
+    const nodes = new Map(), edges = [], packets = [], effects = new Map(), columns = new Map();
+    function column(title) {
+      if (!columns.has(title)) {
+        const el = html('div', 'tof-column', title, stage);
+        el.title = title;
+        columns.set(title, { title, el, nodes: [], x: 0, w: 0 });
+      }
+      return columns.get(title);
+    }
+    ['Phones', 'Mascots', 'Broker', 'Steward', 'Manager'].forEach(column);
     const lower = html('div', 'tof-inspector', undefined, root);
     const log = html('section', 'tof-log', undefined, lower);
     const logHead = html('div', 'tof-pane-head', undefined, log);
@@ -88,13 +127,26 @@
     const ownerText = html('p', 'tof-owner-text', '', details);
     ownerText.hidden = true;
     let records = [], selected = null, speed = 1, paused = false, dead = false, frame = 0, previous = 0;
+    // stage size, viewport height, row pitch, and the pan/zoom transform
+    let extras = 0, stageW = 0, stageH = 0, viewH = 0, lastWidth = 0, rowH = 76;
+    let zoom = 1, panX = 0, panY = 0, fitted = true;
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-    function addNode(id, title, subtitle, kind) {
+    function addNode(id, title, subtitle, kind, heading, pet, hidden) {
       const el = html('article', 'tof-node tof-node-' + kind, undefined, stage);
       el.dataset.nodeId = id;
+      el.tabIndex = 0;
+      el.setAttribute('aria-label', subtitle ? title + ', ' + subtitle : title);
+      el.setAttribute('aria-describedby', hint.id);
+      el.hidden = !!hidden;
       html('span', 'tof-port tof-port-in', undefined, el).setAttribute('aria-hidden', 'true');
       html('span', 'tof-port tof-port-out', undefined, el).setAttribute('aria-hidden', 'true');
+      if (pet && window.Sprites) {
+        el.classList.add('tof-has-pet');
+        const canvas = html('canvas', 'tof-pet', undefined, el);
+        canvas.setAttribute('aria-hidden', 'true');
+        window.Sprites.badge(canvas, pet, 'idle');
+      }
       const name = html('h3', 'tof-node-title', title, el);
       name.title = title;
       const sub = html('p', 'tof-node-sub', subtitle, el);
@@ -102,20 +154,32 @@
       const footer = html('div', 'tof-node-footer', undefined, el);
       const status = html('span', 'tof-node-status', 'Ready', footer);
       const badge = kind === 'mascot' ? html('span', 'tof-rule', 'Rulebook', footer) : null;
-      nodes.set(id, { el, title, status, badge, kind, x: 0, y: 0, w: 0, h: 64 });
+      const n = { id, el, title, status, badge, kind, hidden: !!hidden, x: 0, y: 0, w: 0, h: 64 };
+      column(heading).nodes.push(n);
+      nodes.set(id, n);
+      return n;
     }
     students.forEach(s => {
-      addNode('phone:' + s.id, s.name + "'s phone", 'Telegram / Cubbie', 'phone');
-      addNode(s.id, s.name + "'s mascot", 'own process + database', 'mascot');
+      addNode('phone:' + s.id, s.name + "'s phone", 'Telegram / Cubbie', 'phone', 'Phones', '', !showPhones);
+      addNode(s.id, s.name + "'s mascot", 'own process + database', 'mascot', 'Mascots', s.pet);
     });
-    addNode('broker', 'Broker', 'sees shift ids, picks, yes/no', 'broker');
-    nodes.get('broker').el.querySelector('.tof-port-in').hidden = students.length > 0;
-    const brokerInputs = students.map(() => html('span', 'tof-port tof-port-in', undefined, nodes.get('broker').el));
+    const broker = addNode('broker', 'Broker', 'sees shift ids, picks, yes/no', 'broker', 'Broker');
+    broker.el.querySelector('.tof-port-in').hidden = students.length > 0;
+    const brokerInputs = students.map(() => html('span', 'tof-port tof-port-in', undefined, broker.el));
     brokerInputs.forEach(port => port.setAttribute('aria-hidden', 'true'));
-    addNode('steward', 'Library Steward', 'roster + manager approval', 'steward');
-    addNode('phone:manager', "Manager's phone", opts.manager || 'Library manager', 'phone');
+    addNode('steward', 'Library Steward', 'roster + manager approval', 'steward', 'Steward');
+    addNode('phone:manager', "Manager's phone", opts.manager || 'Library manager', 'phone', 'Manager');
+    function addSpec(spec) {
+      const id = spec && spec.id != null ? String(spec.id) : '';
+      if (!id || nodes.has(id)) throw new Error('Node ids must be unique and non-empty.');
+      extras++;
+      return addNode(id, String(spec.title || id), spec.subtitle ? String(spec.subtitle) : '',
+        String(spec.kind || 'role').replace(/[^\w-]/g, '-'), String(spec.column || 'Other'), spec.pet ? String(spec.pet) : '');
+    }
 
     function connect(a, b, privateEdge, side) {
+      const known = edges.find(e => (e.a === a && e.b === b) || (e.a === b && e.b === a));
+      if (known) return known;
       const path = svg('path', { class: 'tof-edge' + (privateEdge ? ' tof-edge-private' : '') + (side ? ' tof-edge-side' : '') }, wires);
       let label;
       if (privateEdge) {
@@ -124,13 +188,23 @@
         svg('path', { d: 'M-21 -1 v-3 a3 3 0 0 1 6 0 v3 M-22 -1 h8 v7 h-8 Z', class: 'tof-lock' }, label);
         svg('text', { x: -10, y: 4 }, label).textContent = 'private';
       }
-      edges.push({ a, b, path, label, curve: null, privateEdge });
+      const edge = { a, b, path, label, curve: null, privateEdge, hidden: nodes.get(a).hidden || nodes.get(b).hidden };
+      if (edge.hidden) [path, label].forEach(el => el && el.setAttribute('display', 'none'));
+      edges.push(edge);
+      return edge;
+    }
+    function connectSpec(a, b, o) {
+      a = String(a); b = String(b);
+      if (!nodes.has(a) || !nodes.has(b) || a === b) throw new Error('Edges must join two different known node ids.');
+      return connect(a, b, !!(o && o.private), !!(o && o.side));
     }
     students.forEach(s => { connect('phone:' + s.id, s.id, true); connect(s.id, 'broker', false); });
     connect('broker', 'steward', false);
     // the Steward also asks mascots directly: busy bits for meetings, meeting invites, issue replies
     students.forEach(s => connect(s.id, 'steward', false, true));
     connect('steward', 'phone:manager', true);
+    (opts.nodes || []).forEach(addSpec);
+    (opts.edges || []).forEach(e => connectSpec(e.a, e.b, e));
     function point(c, t) {
       const u = 1 - t;
       return { x: u*u*u*c[0] + 3*u*u*t*c[2] + 3*u*t*t*c[4] + t*t*t*c[6],
@@ -141,50 +215,248 @@
       const p = point(packet.edge.curve, packet.reverse ? 1 - eased : eased);
       packet.el.setAttribute('transform', 'translate(' + p.x + ' ' + p.y + ')');
     }
+    function route(e) {
+      const a = nodes.get(e.a), b = nodes.get(e.b);
+      // Leave from the sides that face each other, so a block dragged past its neighbour still wires cleanly.
+      const forward = b.x + b.w / 2 >= a.x + a.w / 2;
+      const x1 = forward ? a.x + a.w : a.x, x2 = forward ? b.x : b.x + b.w;
+      const y1 = a.y + a.h / 2;
+      const index = forward && e.b === 'broker' && order.has(e.a) ? order.get(e.a) : -1;
+      const y2 = index >= 0 ? b.y + 30 + (index + .5) * (b.h - 60) / students.length : b.y + b.h / 2;
+      const bend = Math.max(20, Math.abs(x2 - x1) * .5) * (forward ? 1 : -1);
+      e.curve = [x1, y1, x1 + bend, y1, x2 - bend, y2, x2, y2];
+      e.path.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + (x1+bend) + ',' + y1 + ' ' + (x2-bend) + ',' + y2 + ' ' + x2 + ',' + y2);
+      if (e.label) {
+        const p = point(e.curve, .5);
+        const offset = e.a === 'phone:' + e.b && order.has(e.b) ? rowH / 2 + 5 : 13;
+        e.label.setAttribute('transform', 'translate(' + p.x + ' ' + (p.y - offset) + ')');
+      }
+    }
+    function place(n, x, y, width, height) {
+      const s = saved.get(n.id);
+      if (s) { x = s[0] * stageW; y = s[1]; }
+      Object.assign(n, { x, y, w: width, h: height });
+      Object.assign(n.el.style, { left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px' });
+    }
     function layout() {
       if (dead) return;
       const available = viewport.clientWidth;
       if (!available) return;
-      const w = Math.max(720, available), h = Math.max(w * 7 / 16, 70 + students.length * 76, 360);
-      const scale = Math.min(1, available / 720);
-      stage.style.width = w + 'px'; stage.style.height = h + 'px';
-      stage.style.transform = 'scale(' + scale + ')';
-      viewport.style.height = h * scale + 'px';
-      [wires, packetLayer].forEach(el => { el.setAttribute('width', w); el.setAttribute('height', h); });
-      const xs = [12, w * .214, w * .452, w * .715, w - Math.max(124, w * .15) - 12];
-      headings.forEach((el, i) => { el.style.left = xs[i] + 'px'; });
-      function place(id, x, y, width, height = 64) {
-        const n = nodes.get(id);
-        Object.assign(n, { x, y, w: width, h: height });
-        Object.assign(n.el.style, { left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px' });
+      // The original five-column layout, kept exactly while nothing was added to it.
+      const legacy = showPhones && !extras;
+      const compact = students.length > 8;
+      rowH = compact ? 60 : 76;
+      const rowNode = compact ? 52 : 64;
+      stage.classList.toggle('tof-compact', compact);
+      const all = [...columns.values()];
+      const shown = legacy ? all : all.filter(c => c.nodes.some(n => !n.hidden));
+      all.forEach(c => { c.el.hidden = !shown.includes(c); });
+      let base, w, h;
+      if (legacy) {
+        base = 720;
+        w = Math.max(base, available);
+        h = Math.max(w * 7 / 16, 70 + students.length * 76, 360);
+        const xs = [12, w * .214, w * .452, w * .715, w - Math.max(124, w * .15) - 12];
+        const ws = [w * .15, w * .19, w * .237, w * .212, Math.max(124, w * .15)];
+        shown.forEach((c, i) => { c.x = xs[i]; c.w = ws[i]; });
+      } else {
+        const design = shown.map(c => WIDTHS[c.title] || 150);
+        base = 24 + design.reduce((sum, v) => sum + v, 0) + GAP * (shown.length - 1);
+        w = Math.max(base, available);
+        const stretch = w / base;
+        let x = 12;
+        shown.forEach((c, i) => { c.x = x * stretch; c.w = design[i] * stretch; x += design[i] + GAP; });
+        h = Math.max(w * 7 / 16, 360, ...shown.map(c => {
+          const visible = c.nodes.filter(n => !n.hidden).length;
+          return c.title === 'Phones' || c.title === 'Mascots' ? 70 + visible * rowH : 84 + visible * 80;
+        }));
       }
-      students.forEach((s, i) => {
-        place('phone:' + s.id, xs[0], 52 + i * 76, w * .15);
-        place(s.id, xs[1], 52 + i * 76, w * .19);
-      });
-      place('broker', xs[2], 52, w * .237, h - 84);
+      const fitScale = Math.min(1, available / base);
+      stageW = w; stageH = h; viewH = h * fitScale;
+      stage.style.width = w + 'px'; stage.style.height = h + 'px';
+      viewport.style.height = viewH + 'px';
+      [wires, packetLayer].forEach(el => { el.setAttribute('width', w); el.setAttribute('height', h); });
+      shown.forEach(c => { c.el.style.left = c.x + 'px'; c.el.style.width = c.w + 'px'; });
+      if (legacy) {
+        const [phones, mascots, , steward, manager] = shown;
+        students.forEach((s, i) => {
+          place(nodes.get('phone:' + s.id), phones.x, 52 + i * 76, phones.w, 64);
+          place(nodes.get(s.id), mascots.x, 52 + i * 76, mascots.w, 64);
+        });
+        place(broker, shown[2].x, 52, shown[2].w, h - 84);
+        place(nodes.get('steward'), steward.x, 100, steward.w, 64);
+        place(nodes.get('phone:manager'), manager.x, h - 96, manager.w, 64);
+      } else {
+        shown.forEach(c => {
+          const visible = c.nodes.filter(n => !n.hidden);
+          if (c.title === 'Phones' || c.title === 'Mascots') {
+            visible.forEach((n, i) => place(n, c.x, 52 + i * rowH, c.w, rowNode));
+          } else if (c.title === 'Broker') {
+            // the broker spans the column; anything else added here stacks below it
+            const tall = h - 84 - (visible.length - 1) * 80;
+            visible.forEach((n, i) => place(n, c.x, i ? 52 + tall + 16 + (i - 1) * 80 : 52, c.w, i ? 64 : tall));
+          } else if (visible.length === 1 && (c.title === 'Steward' || c.title === 'Manager')) {
+            // alone in their columns, the steward sits high and the manager low, as in the original layout
+            place(visible[0], c.x, c.title === 'Steward' ? 100 : h - 96, c.w, 64);
+          } else {
+            const slot = (h - 84) / visible.length;
+            visible.forEach((n, i) => place(n, c.x, 52 + (i + .5) * slot - 32, c.w, 64));
+          }
+        });
+      }
       brokerInputs.forEach((port, i) => {
-        port.style.top = (30 + (i + .5) * (nodes.get('broker').h - 60) / students.length) + 'px';
+        port.style.top = (30 + (i + .5) * (broker.h - 60) / students.length) + 'px';
       });
-      place('steward', xs[3], 100, w * .212);
-      place('phone:manager', xs[4], h - 96, Math.max(124, w * .15));
-      edges.forEach(e => {
-        const a = nodes.get(e.a), b = nodes.get(e.b);
-        const x1 = a.x + a.w, x2 = b.x;
-        const y1 = a.y + a.h / 2;
-        const index = students.findIndex(s => s.id === e.a);
-        const y2 = e.b === 'broker' ? b.y + 30 + (index + .5) * (b.h - 60) / Math.max(1, students.length) : b.y + b.h / 2;
-        const bend = Math.max(20, Math.abs(x2 - x1) * .5);
-        e.curve = [x1, y1, x1 + bend, y1, x2 - bend, y2, x2, y2];
-        e.path.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + (x1+bend) + ',' + y1 + ' ' + (x2-bend) + ',' + y2 + ' ' + x2 + ',' + y2);
-        if (e.label) {
-          const p = point(e.curve, .5);
-          const offset = e.a.startsWith('phone:') ? 43 : 13;
-          e.label.setAttribute('transform', 'translate(' + p.x + ' ' + (p.y - offset) + ')');
-        }
+      edges.forEach(e => { if (!e.hidden) route(e); });
+      packets.forEach(position);
+      if (fitted || available !== lastWidth) fit(); else apply();
+      lastWidth = available;
+    }
+    function apply() {
+      stage.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoom + ')';
+    }
+    function fit() {
+      fitted = true;
+      const vw = viewport.clientWidth;
+      if (!vw || !stageW) return;
+      let x0 = 0, y0 = 0, x1 = stageW, y1 = stageH;
+      nodes.forEach(n => {
+        if (n.hidden) return;
+        x0 = Math.min(x0, n.x - 12); y0 = Math.min(y0, n.y - 12);
+        x1 = Math.max(x1, n.x + n.w + 12); y1 = Math.max(y1, n.y + n.h + 12);
       });
+      zoom = Math.min(1, vw / (x1 - x0), viewH / (y1 - y0));
+      panX = (vw - (x1 - x0) * zoom) / 2 - x0 * zoom;
+      panY = (viewH - (y1 - y0) * zoom) / 2 - y0 * zoom;
+      apply();
+    }
+    function zoomAt(next, x, y) {
+      next = clampZoom(next);
+      panX = x - (x - panX) * next / zoom;
+      panY = y - (y - panY) * next / zoom;
+      zoom = next; fitted = false;
+      apply();
+    }
+    function zoomBy(factor) { zoomAt(zoom * factor, viewport.clientWidth / 2, viewH / 2); }
+    function save() {
+      try { localStorage.setItem(layoutKey, JSON.stringify(Object.fromEntries(saved))); } catch (_) { /* storage unavailable: positions last for this page only */ }
+    }
+    function resetLayout() {
+      saved.clear();
+      try { localStorage.removeItem(layoutKey); } catch (_) { /* storage unavailable */ }
+      fitted = true;
+      layout();
+    }
+    function moveNode(n, x, y) {
+      saved.set(n.id, [x / stageW, y]);
+      Object.assign(n, { x, y });
+      n.el.style.left = x + 'px'; n.el.style.top = y + 'px';
+      edges.forEach(e => { if (!e.hidden && (e.a === n.id || e.b === n.id)) route(e); });
       packets.forEach(position);
     }
+
+    // Pointer input: drag a block, drag empty canvas to pan, two fingers to pinch.
+    const pointers = new Map();
+    let drag = null, pinch = null, swallow = false;
+    function swallowClick() { swallow = true; setTimeout(() => { swallow = false; }); }
+    function pointerDown(e) {
+      if (dead || (e.pointerType === 'mouse' && e.button !== 0) || e.target.closest('.tof-packet')) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) startPinch();
+      if (pointers.size > 1) return;
+      const el = e.target.closest('.tof-node');
+      const n = el ? nodes.get(el.dataset.nodeId) : null;
+      drag = { id: e.pointerId, node: n, x: e.clientX, y: e.clientY, ox: n ? n.x : panX, oy: n ? n.y : panY, moved: false };
+    }
+    function pointerMove(e) {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch) return pinchMove();
+      if (!drag || drag.id !== e.pointerId) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.moved) {
+        if (Math.hypot(dx, dy) < 4) return; // a plain click, not a drag
+        drag.moved = true;
+        // Capture only once moving, so a click on a block still lands on the block.
+        try { viewport.setPointerCapture(e.pointerId); } catch (_) { /* pointer already released */ }
+        if (drag.node) drag.node.el.classList.add('tof-dragging'); else viewport.classList.add('tof-panning');
+      }
+      if (drag.node) moveNode(drag.node, drag.ox + dx / zoom, drag.oy + dy / zoom);
+      else { panX = drag.ox + dx; panY = drag.oy + dy; fitted = false; apply(); }
+    }
+    function pointerUp(e) {
+      if (!pointers.delete(e.pointerId)) return;
+      if (pinch) {
+        if (pointers.size < 2) { pinch = null; swallowClick(); }
+      } else if (drag && drag.id === e.pointerId) endDrag();
+    }
+    function endDrag() {
+      if (drag.moved) {
+        swallowClick();
+        if (drag.node) { drag.node.el.classList.remove('tof-dragging'); save(); } else viewport.classList.remove('tof-panning');
+      }
+      drag = null;
+    }
+    function startPinch() {
+      if (drag) endDrag();
+      const [p, q] = [...pointers.values()];
+      const box = viewport.getBoundingClientRect();
+      pinch = { left: box.left + viewport.clientLeft, top: box.top + viewport.clientTop,
+        distance: Math.hypot(p.x - q.x, p.y - q.y) || 1, x: (p.x + q.x) / 2, y: (p.y + q.y) / 2, zoom, panX, panY };
+    }
+    function pinchMove() {
+      const [p, q] = [...pointers.values()];
+      // keep the stage point that started under the fingers under them
+      const sx = (pinch.x - pinch.left - pinch.panX) / pinch.zoom, sy = (pinch.y - pinch.top - pinch.panY) / pinch.zoom;
+      zoom = clampZoom(pinch.zoom * Math.hypot(p.x - q.x, p.y - q.y) / pinch.distance);
+      panX = (p.x + q.x) / 2 - pinch.left - sx * zoom;
+      panY = (p.y + q.y) / 2 - pinch.top - sy * zoom;
+      fitted = false;
+      apply();
+    }
+    viewport.addEventListener('pointerdown', pointerDown);
+    window.addEventListener('pointermove', pointerMove);
+    window.addEventListener('pointerup', pointerUp);
+    window.addEventListener('pointercancel', pointerUp);
+    root.addEventListener('click', e => {
+      if (swallow && viewport.contains(e.target)) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+    viewport.addEventListener('wheel', e => {
+      if (dead || (!e.ctrlKey && !e.metaKey)) return; // a plain wheel scrolls the page
+      e.preventDefault();
+      const box = viewport.getBoundingClientRect();
+      zoomAt(zoom * Math.exp(-e.deltaY * (e.deltaMode ? 16 : 1) * .002),
+        e.clientX - box.left - viewport.clientLeft, e.clientY - box.top - viewport.clientTop);
+    }, { passive: false });
+    // The viewport clips but can still be scrolled (focus, find in page); turn any scroll into a pan.
+    viewport.addEventListener('scroll', () => {
+      if (!viewport.scrollLeft && !viewport.scrollTop) return;
+      panX -= viewport.scrollLeft; panY -= viewport.scrollTop;
+      viewport.scrollLeft = viewport.scrollTop = 0;
+      fitted = false;
+      apply();
+    });
+    // Keyboard focus on a block or packet outside the view pans it into the middle.
+    stage.addEventListener('focusin', e => {
+      if (!e.target.matches(':focus-visible')) return;
+      const box = e.target.getBoundingClientRect(), view = viewport.getBoundingClientRect();
+      const left = view.left + viewport.clientLeft, top = view.top + viewport.clientTop;
+      if (box.left >= left && box.top >= top && box.right <= left + viewport.clientWidth && box.bottom <= top + viewH) return;
+      panX += left + viewport.clientWidth / 2 - (box.left + box.right) / 2;
+      panY += top + viewH / 2 - (box.top + box.bottom) / 2;
+      fitted = false;
+      apply();
+    });
+    stage.addEventListener('keydown', e => {
+      const n = e.target.classList.contains('tof-node') ? nodes.get(e.target.dataset.nodeId) : null;
+      const step = e.shiftKey ? 64 : 16;
+      const d = n && !e.altKey && !e.ctrlKey && !e.metaKey && { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+      if (!d || dead) return;
+      e.preventDefault();
+      moveNode(n, n.x + d[0], n.y + d[1]);
+      save();
+    });
+
     function name(id) { return nodes.get(id)?.title || String(id); }
     function select(record) {
       selected?.row.setAttribute('aria-pressed', 'false');
@@ -261,7 +533,7 @@
       if (records.length > 400) records.pop().row.remove();
       count.textContent = records.length + ' retained';
       const color = m.private ? 'var(--positive)' : m.dir === 'resp' ? 'var(--muted)' : 'var(--hue)';
-      if (quiet) return; // history: listed for inspection, not animated
+      if (quiet || edge.hidden) return; // history, or a hidden phone: listed for inspection, not animated
       if (motion.matches) {
         flash(edge.path, 'tof-edge-flash', 500, color);
         flash(nodes.get(m.to).el, 'tof-receiving', 420, color);
@@ -324,10 +596,21 @@
         if (!Number.isFinite(value) || value <= 0) throw new RangeError('Speed must be a positive finite number.');
         speed = value;
       },
+      addNode(spec) { if (dead) return; addSpec(spec); layout(); },
+      connect(a, b, o) {
+        if (dead) return;
+        const edge = connectSpec(a, b, o);
+        if (stageW && !edge.hidden) route(edge);
+      },
+      resetLayout() { if (!dead) resetLayout(); },
+      fit() { if (!dead) fit(); },
       explain,
       destroy() {
         if (dead) return;
         clear(); dead = true; observer.disconnect();
+        window.removeEventListener('pointermove', pointerMove);
+        window.removeEventListener('pointerup', pointerUp);
+        window.removeEventListener('pointercancel', pointerUp);
         motion.removeEventListener('change', motionChanged); root.remove();
       }
     };

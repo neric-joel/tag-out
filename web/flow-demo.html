@@ -7,6 +7,7 @@
   <title>Tag Out · Agent flow</title>
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="css/flow.css">
+  <script src="js/sprites.js" defer></script>
   <script src="js/flow.js" defer></script>
 </head>
 <body>
@@ -14,9 +15,11 @@
     <header class="tof-demo-header">
       <div>
         <h1>Tag Out · A week in messages</h1>
-        <p>Six students, six private mascots, one shared roster. Follow a three-person trade from Sunday’s calendar check to the manager’s approval.</p>
+        <p>Sixteen students, sixteen private mascots, one shared roster, and the people a call-out can escalate to. Follow a three-person trade from Sunday’s calendar check to the manager’s approval. Drag a block to move it, drag empty space to pan, and pinch or hold Ctrl (⌘ on a Mac) while scrolling to zoom.</p>
       </div>
       <div class="tof-demo-controls">
+        <button class="btn" id="burst" type="button">Send a burst on every channel</button>
+        <label for="phones"><input type="checkbox" id="phones"> Show phones</label>
         <button class="btn" id="play" type="button" aria-pressed="false">Pause</button>
         <label for="speed">Speed
           <select id="speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
@@ -25,14 +28,41 @@
     </header>
     <p class="tof-demo-phase" role="status"><strong id="phase">Sunday · Checking next week</strong> <span id="phase-note">Private calendars stay with each mascot.</span></p>
     <div id="flow"></div>
-    <p class="tof-demo-note">Scripted example · October 25–31, 2026 · No backend connection. Select any message to inspect it. Ballots are masked as “•••” in this demo. The week repeats after the final decision.</p>
+    <p class="tof-demo-note">Scripted example · October 25–31, 2026 · No backend connection. Select any message to inspect it. Ballots are masked as “•••” in this demo. The week repeats after the final decision. Block positions are saved in this browser; “Reset layout” puts them back. With phones hidden, owner-channel messages are still listed but not drawn.</p>
   </main>
   <script>
     window.addEventListener('DOMContentLoaded', function () {
       'use strict';
-      const students = ['Ana', 'Ben', 'Dev', 'Priya', 'Zoe', 'Marco'].map(name => ({ id: name.toLowerCase(), name }));
-      const flow = TagOutFlow.create(document.getElementById('flow'), { students, manager: 'Library manager' });
+      const names = ['Ana', 'Ben', 'Dev', 'Priya', 'Zoe', 'Marco', 'Kai', 'Lena', 'Omar', 'Rosa', 'Sam', 'Tara', 'Uma', 'Vic', 'Wes', 'Yara'];
+      const students = names.map(name => ({ id: name.toLowerCase(), name }));
+      // The people a call-out can escalate to, drawn as extra nodes after the built-in agents.
+      const roles = [
+        { id: 'lead-library', title: 'Library shift lead', subtitle: 'Circulation desk', kind: 'lead', column: 'Shift leads', pet: 'debug-duck-v2' },
+        { id: 'lead-dining', title: 'Dining shift lead', subtitle: 'Dining hall', kind: 'lead', column: 'Shift leads', pet: 'raccoon' },
+        { id: 'lead-rec', title: 'Rec center shift lead', subtitle: 'Front desk', kind: 'lead', column: 'Shift leads', pet: 'kumo' },
+        { id: 'manager-dining', title: 'Dining manager', subtitle: 'Department manager', kind: 'manager', column: 'Managers' },
+        { id: 'manager-rec', title: 'Rec center manager', subtitle: 'Department manager', kind: 'manager', column: 'Managers' },
+        { id: 'manager-backup', title: 'Backup manager', subtitle: 'Answers when a manager is away', kind: 'manager', column: 'Managers' },
+        { id: 'student-employment', title: 'Student Employment', subtitle: 'Hours and payroll rules', kind: 'hr', column: 'Student Employment' },
+        { id: 'issc', title: 'ISSC', subtitle: 'International student hour limits', kind: 'issc', column: 'ISSC' }
+      ];
+      const links = [
+        ['steward', 'lead-library'], ['steward', 'lead-dining'], ['steward', 'lead-rec'],
+        ['lead-library', 'phone:manager'], ['lead-dining', 'manager-dining'], ['lead-rec', 'manager-rec'],
+        ['phone:manager', 'manager-backup'], ['manager-dining', 'manager-backup'], ['manager-rec', 'manager-backup'],
+        ['manager-backup', 'student-employment'], ['student-employment', 'issc']
+      ];
       const play = document.getElementById('play'), speedControl = document.getElementById('speed');
+      const phonesBox = document.getElementById('phones'), burst = document.getElementById('burst');
+      let flow;
+      function build() {
+        if (flow) flow.destroy();
+        flow = TagOutFlow.create(document.getElementById('flow'), {
+          students, manager: 'Library manager', phones: phonesBox.checked, nodes: roles,
+          edges: links.map(([a, b]) => ({ a, b })), layoutKey: 'tagout.flow.demo.' + (phonesBox.checked ? 'phones' : 'no-phones')
+        });
+        flow.pause(paused); flow.setSpeed(speed);
+      }
       const phase = document.getElementById('phase'), note = document.getElementById('phase-note');
       const shifts = [
         { shift_id: 'library-tue-1027-1800-d1', employer: 'Campus Library', start: '2026-10-27T18:00:00-07:00', end: '2026-10-27T22:00:00-07:00', owner: 'ana', role: 'Circulation desk' },
@@ -47,6 +77,7 @@
       ];
       const events = [];
       let sequence = 0, elapsed = 0, cursor = 0, paused = false, speed = 1, last = 0, raf;
+      build();
       function at(time, action) { events.push({ time, action }); }
       function chapter(time, title, text) { at(time, () => { phase.textContent = title; note.textContent = text; }); }
       function send(time, from, to, schema, payload, extra = {}) {
@@ -126,6 +157,21 @@
         play.setAttribute('aria-pressed', String(paused));
       });
       speedControl.addEventListener('change', () => { speed = Number(speedControl.value); flow.setSpeed(speed); });
+      phonesBox.addEventListener('change', build);
+      // One sample message along every channel in the graph, a few milliseconds apart.
+      burst.addEventListener('click', () => {
+        const shift_id = 'library-tue-1027-1800-d1', channels = [];
+        students.forEach(s => {
+          if (phonesBox.checked) channels.push([s.id, 'phone:' + s.id, 'OwnerNotice', {}, { private: true, text: 'A sample note for ' + s.name + ' only.' }]);
+          channels.push([s.id, 'broker', 'TradeRequest', { agent_id: s.id, shift_id, urgent: false }]);
+          channels.push(['steward', s.id, 'SlotQuery', { slots: ['Thu 14:00', 'Thu 15:00'] }]);
+        });
+        channels.push(['steward', 'broker', 'ShiftRef', { roster_version: 17, shifts: [] }, { dir: 'resp' }]);
+        channels.push(['steward', 'phone:manager', 'ManagerApproval', {}, { private: true, text: 'Approve one sample roster change?' }]);
+        links.forEach(([a, b], i) => channels.push([a, b, 'Escalation', { shift_id, level: i + 1 }]));
+        channels.forEach(([from, to, schema, payload, extra], i) => setTimeout(() => flow.message(Object.assign({
+          id: 'burst-' + (++sequence), from, to, schema, payload, dir: 'req' }, extra)), i * 30));
+      });
       window.addEventListener('pagehide', event => { if (!event.persisted) { cancelAnimationFrame(raf); flow.destroy(); } });
       raf = requestAnimationFrame(tick);
     });

@@ -4,6 +4,9 @@ DevHacks S3 x Cubbie, Track 2 (agent-to-agent coordination). Due Sun Oct 25 2026
 
 Track: `agents`
 
+Website (the gallery card opens this first): https://tag-out.vercel.app
+Repo: https://github.com/neric-joel/tag-out
+
 ## One-line pitch
 
 Each ASU student worker gets a mascot agent that spots next week's shift collisions and trades shifts with coworkers' mascots, checking work-hour limits nobody else can see.
@@ -25,7 +28,8 @@ About 10,000 students work at ASU each year, and when a shift collides with scho
 
 ## Still to do before submitting
 
-- [ ] Record the 3-minute demo video and add its link near the top of the README (a silent draft: `python -m scripts.capture video --all`).
+- [x] Hosted demo judges can click through: https://tag-out.vercel.app (a replay of the real system; `tests/e2e` passes against it).
+- [ ] Demo video: a captioned draft with music is at `recordings/tagout_demo.mp4` (`python -m scripts.video`). Add your voice if you like (script in `docs/VIDEO.md`), upload it (YouTube unlisted) and put the link in the README and the submission.
 - [ ] Survey results are pending. Add the numbers from the ASU student worker survey to the README and the pitch only once they are collected. Until then nothing in the repo or the submission claims a survey result.
 - [ ] Make `neric-joel/tag-out` public, then check on GitHub that the simulator chart, the Mermaid diagrams and the CI badge render.
 - [ ] Submit on the Cubbie site with the kit CLI, track `agents`, before 12:00 PM Arizona on Sun Oct 25 2026.

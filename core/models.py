@@ -78,10 +78,11 @@ class Limits(_Private):
 
     f1_or_j1: bool = False
     fws: bool = False
-    fws_award_remaining: float | None = None
+    fws_award_remaining: float | None = None  # left on the award at the start of the week
     other_employer_hours: dict[str, float] = Field(default_factory=dict)  # per week, e.g. {"dining": 9}
     non_asu_employers: list[str] = Field(default_factory=list)  # e.g. ["dining"]: Aramark counts for F-1, not the ASU 25 h
-    hours_history: list[float] | None = None  # ASU hours per Mon-Sun week in the measurement period (Workday time)
+    hours_history: list[float] | None = None  # ASU hours per Mon-Sun week (Workday time)
+    hours_history_weeks: list[date] | None = None  # the Monday of each week in hours_history
     hire_date: date | None = None  # Workday hire date: starts the 25 h average's initial 12-month period
 
 

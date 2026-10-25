@@ -28,7 +28,8 @@ def seed(store: Store, sid: str) -> Student:
     time_csv = ICS.parent / "workday" / f"{sid}_time.csv"
     if time_csv.exists():  # hours history comes from Workday time entries, summed across positions
         limits = limits.model_copy(update={"hours_history": workday.history(
-            workday.parse_time_csv(time_csv.read_text(encoding="utf-8")), DEMO_MONDAY)})
+            workday.parse_time_csv(time_csv.read_text(encoding="utf-8")), DEMO_MONDAY),
+            "hours_history_weeks": workday.history_weeks(DEMO_MONDAY)})
     st = Student(id=sid, name=spec["name"], pet_id=spec["pet_id"], limits=limits, prefs=Preferences(**prefs))
     start, end = DEMO_MONDAY - timedelta(days=7), DEMO_MONDAY + timedelta(days=14)
     store.set_shifts(shifts_from_ics(read(ICS / f"{sid}_library.ics"), EMPLOYER, start, end, WAGE), [])

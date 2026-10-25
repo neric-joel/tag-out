@@ -45,7 +45,7 @@ class Params:
     f1_share: float = 0.10  # docs/DESIGN.md s7: 10% F-1
     f1_other_hours: tuple[int, int] = (0, 9)  # task brief: 0-9 h/week at another on-campus employer
     fws_share: float = 0.20  # docs/DESIGN.md s7: 20% Federal Work-Study (domestic only; DESIGN s3)
-    fws_award_remaining: tuple[float, float] = (0.0, 400.0)  # task brief: $0-$400 left on the award
+    fws_award_remaining: tuple[float, float] = (0.0, 400.0)  # task brief: $0-$400 left after the week's own shifts
     history_weeks: int = 8  # task brief: 8 weeks of hours history for everyone
     history_noise: float = 2.0  # assumption: past weekly totals vary +-2 h around the usual load
     near_cap_share: float = 0.10  # assumption ("a few near the 25 h average"): a second ASU job puts them at 22-25 h
@@ -144,15 +144,11 @@ def verdict(plan: Plan, pid: str, add: list[str], drop: list[str]) -> Verdict:
     """rulebook.rules.check_change for this person as they stand in this plan."""
     p = plan.week.people[pid]
     student = p.student
-    award = student.limits.fws_award_remaining
-    if student.limits.fws and award is not None:
-        award = max(0.0, award - max(0.0, plan.pay_change(pid)))  # what is left after shifts already taken
-    key = (pid, award, frozenset(plan.held[pid]), tuple(add), tuple(drop))
+    # The award is what was left at the start of the week; the Rulebook counts every shift held this week
+    # against it, so shifts already taken in this plan are included without any adjustment here.
+    key = (pid, frozenset(plan.held[pid]), tuple(add), tuple(drop))
     memo = plan.week.verdicts
     if key not in memo:
-        if award != student.limits.fws_award_remaining:
-            student = student.model_copy(update={"limits": student.limits.model_copy(
-                update={"fws_award_remaining": award})})
         sh = plan.week.shift
         memo[key] = check_change(student, [sh[s] for s in plan.held[pid]], [sh[s] for s in add],
                                       [sh[s] for s in drop], p.busy)
@@ -382,7 +378,8 @@ def make_roster(p: Params, seed: int, i: int, monday: date, in_session: bool) ->
         history = [round(min(ceiling, max(0.0, usual + rng.uniform(-p.history_noise, p.history_noise))), 1)
                    for _ in range(p.history_weeks)]
         limits = Limits(f1_or_j1=pid in f1, fws=pid in fws, other_employer_hours=other, hours_history=history,
-                        fws_award_remaining=float(round(rng.uniform(*p.fws_award_remaining))) if pid in fws else None)
+                        fws_award_remaining=float(round(p.wage * p.shift_hours * len(mine)
+                                                        + rng.uniform(*p.fws_award_remaining))) if pid in fws else None)
         prefs = Preferences(wants_more_hours=pid in wants, soft_avoid=[
             SoftAvoid(weekday=4, start_hour=18, end_hour=22, label="Friday evenings")] if pid in fri_avoid else [])
         sids = []

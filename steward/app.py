@@ -40,7 +40,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     reg = reg or registry()
     app.state.net = net or Net()
     names = {s["id"]: s["name"] for s in STUDENTS}
-    state = {"roster": load_roster(), "version": 1, "holds": {}, "phone": [],
+    state = {"roster": load_roster(), "version": 1, "holds": {}, "ballots": {}, "phone": [],
              "auto": os.environ.get("TAGOUT_MODE", "auto") == "auto",
              "delay": float(os.environ.get("TAGOUT_AUTO_DELAY", "1.5")) + 0.5, "open": []}
     app.state.s = state
@@ -63,7 +63,8 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         if txn not in state["holds"]:
             return "That request is closed."
         vote = "yes" if verb == "approve" else "no"
-        await app.state.net.post(f"{reg['broker']}/txn/vote", Vote(txn_id=txn, agent_id="steward", vote=vote))
+        await app.state.net.post(f"{reg['broker']}/txn/vote", Vote(txn_id=txn, agent_id="steward", vote=vote,
+                                                                    ballot=state["ballots"].get(txn, "")))
         state["phone"].append({"kind": "reply", "text": "Approved." if vote == "yes" else "Denied.", "buttons": []})
         return "Approved." if vote == "yes" else "Denied."
 
@@ -85,8 +86,10 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         for m in p.moves:
             ref = state["roster"].get(m.shift_id)
             if ref is None or ref.owner != m.from_agent:
-                return {"vote": Vote(txn_id=p.txn_id, agent_id="steward", vote="stale").model_dump()}
+                return {"vote": Vote(txn_id=p.txn_id, agent_id="steward", vote="stale",
+                                     ballot=p.ballot).model_dump()}
         state["holds"][p.txn_id] = [m.model_dump() for m in p.moves]
+        state["ballots"][p.txn_id] = p.ballot
         lines = [f"{names[m.from_agent]}'s {fmt_span(state['roster'][m.shift_id].start, state['roster'][m.shift_id].end)}"
                  f" -> {names[m.to_agent]}" for m in p.moves]
         text = ("Trade request: " + "; ".join(lines) + ". Each student's mascot checked its own student's work "
@@ -128,7 +131,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     async def reset() -> dict:
         if os.environ.get("TAGOUT_DEBUG") != "1":
             raise HTTPException(403)
-        state.update(roster=load_roster(), version=1, holds={}, phone=[], open=[])
+        state.update(roster=load_roster(), version=1, holds={}, ballots={}, phone=[], open=[])
         return {"ok": True}
 
     @app.post("/admin/auto")

@@ -69,12 +69,14 @@ class Prepare(Wire):
     ring_id: str
     moves: list[Move]
     seen_version: int
+    ballot: str = ""  # random per member and transaction; only a vote that echoes it counts
 
 
 class Vote(Wire):
     txn_id: str
     agent_id: str
     vote: Literal["yes", "no", "stale", "timeout"]
+    ballot: str = ""
 
 
 class Decision(Wire):

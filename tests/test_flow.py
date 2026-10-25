@@ -68,8 +68,11 @@ async def test_editing_a_week_before_commit_aborts_and_retries(system):
     assert abort["proposal"] == prep["proposal"]
     stale = [e for e in system.bus.history if e["type"] == "vote" and e["vote"] == "stale"]
     assert stale and stale[0]["agent"] == "dev"
-    # nothing moved: everyone still has their original shifts at the moment of abort
-    assert "library-tue-1027-1800-d1" not in shift_ids(system, "ben") or system.engine.committed
+    # nothing moved: right after the abort, the ring's shifts are all still with their original owners
+    assert "library-tue-1027-1800-d1" in shift_ids(system, "ana")
+    assert "library-thu-1029-1400-d1" in shift_ids(system, "ben")
+    assert "library-fri-1030-1000-d1" in shift_ids(system, "dev")
+    assert not system.store("ana").get("hold")
     await system.post("/admin/auto", {"enabled": True, "agents": ["dev"], "delay": 0.05})
     summary = await system.wait_for("summary", timeout=30)
     assert summary["fixed"] == 4

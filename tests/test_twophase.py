@@ -27,12 +27,13 @@ class FakeNet:
         if url.endswith("/txn/prepare"):
             v = self.plan[who]
             if v in ("stale", "no"):
-                return {"vote": {"txn_id": body.txn_id, "agent_id": who, "vote": v}}
+                return {"vote": {"txn_id": body.txn_id, "agent_id": who, "vote": v, "ballot": body.ballot}}
             if v == "yes":
                 async def later():
                     await asyncio.sleep(0.001)
                     from core.wire import Vote
-                    await self.engine_ref[0].vote(Vote(txn_id=body.txn_id, agent_id=who, vote="yes"))
+                    await self.engine_ref[0].vote(Vote(txn_id=body.txn_id, agent_id=who, vote="yes",
+                                                       ballot=body.ballot))
                 asyncio.get_running_loop().create_task(later())
             return {"vote": None}  # "silent": never votes
         if url.endswith("/txn/decide"):
@@ -78,3 +79,26 @@ def test_cpsat_drops_invalid_and_overlapping_proposals():
     chosen, status = select([a, b, c])
     assert status == "OPTIMAL"
     assert [p.id for p in chosen] == ["ring-b"]  # b fixes more; a overlaps b on Ben; c has a member who said no
+
+
+def test_a_forged_vote_without_the_ballot_is_ignored():
+    async def run():
+        ref = []
+        net = FakeNet(ref, {"ana": "silent", "ben": "yes", "dev": "yes", "steward": "yes"})
+        reg = {"agents": {a: f"http://{a}" for a in MEMBERS}, "steward": "http://steward"}
+        eng = Engine(net, reg, Bus(), Timing(0, 0, 0.2, 0))
+        ref.append(eng)
+        eng.roster = {s: ShiftRef(shift_id=s, employer="library", start="2026-10-27T18:00:00-07:00",
+                                  end="2026-10-27T22:00:00-07:00", owner=m.from_agent)
+                      for s, m in zip("thf", MOVES, strict=True)}
+        p = Proposal("ring-1", "ring", MEMBERS, MOVES, MEMBERS, MEMBERS, versions={a: 1 for a in MEMBERS})
+
+        async def forge():
+            from core.wire import Vote
+            await asyncio.sleep(0.01)
+            for tid in list(eng.txns):
+                await eng.vote(Vote(txn_id=tid, agent_id="ana", vote="yes", ballot="guess"))
+        asyncio.get_running_loop().create_task(forge())
+        return await eng.two_phase(p)
+
+    assert asyncio.run(run()) is False  # Ana never voted; the forged yes didn't count

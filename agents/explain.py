@@ -12,7 +12,7 @@ from core.models import BusyBlock, Collision, Shift, Student
 from core.timeutil import week_start
 from core.wire import Move
 from ingest import llm
-from rulebook.rules import week_hours
+from rulebook.rules import f1_cap, week_hours
 
 SOURCE_WORDS = {"canvas": "Canvas", "calendar": "your calendar", "text": "your text", "asu": "ASU's calendar",
                 "class": "your class schedule", "seed": "your calendar"}
@@ -45,6 +45,11 @@ def ask(shift_label: str, avoid_label: str) -> str:
                   f"slot. Take it so you keep your pay this week?")
 
 
+def ask_limit(shift_label: str, hours: float, cap: float) -> str:
+    return polish(f"A {shift_label} Library shift could come to you in a trade, but it would put you at {hours:g} of "
+                  f"your {cap:g} on-campus hours this week, with no room for a late relief. Take it anyway?")
+
+
 def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move], names: dict[str, str],
             shifts: list[Shift], busy: list[BusyBlock]) -> str:
     who = {m.shift_id: names.get(m.to_agent, m.to_agent) for m in moves}
@@ -64,13 +69,15 @@ def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move
     if st.limits.f1_or_j1 and (adds or drops):
         monday = week_start((adds or drops)[0].start.date())
         after = [s for s in shifts if s.id not in {d.id for d in drops}] + adds
-        parts.append(f"You'd be at {week_hours(st, after, monday):g} of your 20 hours across all jobs.")
+        parts.append(f"You'd be at {week_hours(st, after, monday):g} of your {f1_cap(monday):g} hours across all "
+                     f"on-campus jobs.")
     return polish(" ".join(parts) + " Confirm?")
 
 
 def committed(adds: list[Shift], drops: list[Shift]) -> str:
     bits = [f"gave {d.label}" for d in drops] + [f"took {a.label}" for a in adds]
-    return polish("Done. The trade went through: you " + " and ".join(bits) + ". Your manager approved it.")
+    return polish("Done. The trade went through: you " + " and ".join(bits) + ". Your manager approved it. "
+                  "Enter your time in Workday as usual for the shifts you work.")
 
 
 def aborted() -> str:

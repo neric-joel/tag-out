@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import secrets
 from dataclasses import dataclass, field
 
 from broker.cpsat import Proposal, select
@@ -40,7 +41,7 @@ class Timing:
 
     @classmethod
     def fast(cls) -> Timing:
-        return cls(0.0, 0.05, 5.0, 0.0)
+        return cls(0.0, 0.3, 5.0, 0.0)
 
     @classmethod
     def live(cls) -> Timing:
@@ -55,6 +56,7 @@ class Txn:
     votes: dict[str, str] = field(default_factory=dict)
     done: asyncio.Event = field(default_factory=asyncio.Event)
     expected: set[str] = field(default_factory=set)
+    ballots: dict[str, str] = field(default_factory=dict)
 
 
 class Engine:
@@ -81,8 +83,8 @@ class Engine:
         t = self.txns.get(v.txn_id)
         if t is None or t.done.is_set():
             return
-        if v.agent_id not in t.expected:
-            return
+        if v.agent_id not in t.expected or v.ballot != t.ballots.get(v.agent_id):
+            return  # not a member, or not holding this member's ballot: a forged vote changes nothing
         t.votes[v.agent_id] = v.vote
         self.bus.emit("vote", txn_id=t.id, agent=v.agent_id, vote=v.vote)
         if v.vote != "yes" or set(t.votes) >= t.expected:
@@ -213,6 +215,7 @@ class Engine:
     async def two_phase(self, p: Proposal) -> bool:
         tid = f"txn-{next(self.ids)}"
         t = Txn(tid, p, expected=set(p.members) | {"steward"})
+        t.ballots = {a: secrets.token_urlsafe(12) for a in t.expected}
         self.txns[tid] = t
         self.bus.emit("prepare", txn_id=tid, proposal=p.id, members=p.members,
                       moves=[m.model_dump() for m in p.moves])
@@ -221,11 +224,12 @@ class Engine:
         async def prep(a: str, url: str) -> None:
             try:
                 r = await self.net.post(f"{url}/txn/prepare", Prepare(txn_id=tid, ring_id=p.id, moves=p.moves,
-                                                                       seen_version=p.versions.get(a, -1)))
+                                                                       seen_version=p.versions.get(a, -1),
+                                                                       ballot=t.ballots[a]))
                 if r.get("vote"):
                     await self.vote(Vote(**r["vote"]))
             except Exception:
-                await self.vote(Vote(txn_id=tid, agent_id=a, vote="no"))
+                await self.vote(Vote(txn_id=tid, agent_id=a, vote="no", ballot=t.ballots[a]))
 
         await asyncio.gather(*(prep(a, u) for a, u in targets.items()))
         try:
@@ -281,6 +285,14 @@ class Engine:
             cycles += more
             remaining = {s: o for s, o in remaining.items() if not any(o in c for c in more)}
         chains, it = await self.chain_round(rid, dict(remaining), it) if remaining else ([], it)
+        covered = {m.shift_id for ch in chains for m in ch}
+        left = {s: o for s, o in remaining.items() if s not in covered}
+        if left and self.timing.ask_window > 0:
+            # a helper near a limit asks its student first; give the answers the same window as a swap round
+            self.bus.emit("counter_window", round_id=rid, seconds=self.timing.ask_window, phase="cover")
+            await asyncio.sleep(self.timing.ask_window)
+            more, it = await self.chain_round(rid, left, it)
+            chains += more
 
         proposals = []
         for c in cycles:

@@ -55,5 +55,10 @@ def history(entries: list[TimeEntry], before: date, weeks: int = 8) -> list[floa
     return [round(totals.get(m, 0.0), 2) for m in mondays]
 
 
+def history_weeks(before: date, weeks: int = 8) -> list[date]:
+    """The Mondays that line up with history(entries, before, weeks)."""
+    return [week_start(before) - timedelta(days=7 * k) for k in range(weeks, 0, -1)]
+
+
 def positions(entries: list[TimeEntry]) -> list[str]:
     return sorted({e.position for e in entries})

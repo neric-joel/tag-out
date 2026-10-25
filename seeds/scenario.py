@@ -69,7 +69,7 @@ STUDENTS: list[dict] = [
     },
     {
         "id": "marco", "name": "Marco", "pet_id": "frost-yeti", "port": 8716,
-        "limits": {"fws": True, "fws_award_remaining": 40.0,
+        "limits": {"fws": True, "fws_award_remaining": 230.0,
                    "hours_history": [12, 12, 12, 12, 12, 12, 12, 12], "hire_date": "2025-08-18"},
         "prefs": {},
         "library_shifts": [(2, 14, 18), (3, 10, 14), (5, 14, 18)],

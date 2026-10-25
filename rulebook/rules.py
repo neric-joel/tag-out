@@ -95,6 +95,33 @@ def measurement_window(student: Student, monday: date) -> tuple[date, date, str]
     return date(start_year, 10, 1), date(start_year + 1, 9, 30), "standard"
 
 
+def period_history(student: Student, monday: date) -> tuple[list[float], date]:
+    """ASU weekly hours inside the current measurement period, before this week. Without dated history (no
+    Workday import), every recorded week is used, which is the stricter reading."""
+    lim = student.limits
+    start, _end, _kind = measurement_window(student, monday)
+    hist = lim.hours_history or []
+    if lim.hours_history_weeks and len(lim.hours_history_weeks) == len(hist):
+        return [h for w, h in zip(lim.hours_history_weeks, hist, strict=True) if start <= w < monday], start
+    return list(hist), start
+
+
+def f1_buffer() -> float:
+    """Tag Out asks the student before a trade takes them within this many hours of the F-1 limit."""
+    return float(config()["f1_weekly_20"].get("buffer_hours", 0))
+
+
+def near_f1_limit(student: Student, shifts_after: list[Shift], monday: date) -> bool:
+    if not student.limits.f1_or_j1:
+        return False
+    total = week_hours(student, shifts_after, monday)
+    return f1_cap(monday) - f1_buffer() < total <= f1_cap(monday)
+
+
+def week_pay(shifts: list[Shift], monday: date) -> float:
+    return sum(s.pay for s in shifts if week_start(s.start.date()) == monday)
+
+
 def f1_cap(monday: date) -> float:
     if in_break_week(monday):
         return float(config()["f1_break_40"]["weekly_hours"])
@@ -112,12 +139,13 @@ def rooms(student: Student, shifts: list[Shift], monday: date) -> list[Room]:
         out.append(Room("f1_break_40" if in_break_week(monday) else "f1_weekly_20", total, cap, cap - total))
     if lim.hours_history:
         avg_cap = float(config()["aca_25_avg"]["average_hours"])
-        n = len(lim.hours_history)
+        hist, _start = period_history(student, monday)
         asu = asu_week_hours(student, shifts, monday)
-        allowed = avg_cap * (n + 1) - sum(lim.hours_history)
+        allowed = avg_cap * (len(hist) + 1) - sum(hist)
         out.append(Room("aca_25_avg", asu, allowed, allowed - asu))
     if lim.fws and lim.fws_award_remaining is not None:
-        out.append(Room("fws_award", 0.0, lim.fws_award_remaining, lim.fws_award_remaining, unit="$"))
+        paid = week_pay(shifts, monday)
+        out.append(Room("fws_award", paid, lim.fws_award_remaining, lim.fws_award_remaining - paid, unit="$"))
     return out
 
 
@@ -154,14 +182,15 @@ def evaluate(
         cap = f1_cap(monday)
         rid = "f1_break_40" if in_break_week(monday) else "f1_weekly_20"
         findings.append(Finding(rid, "blocked" if total > cap else "eligible",
-                                f"{total:g} h this week across all jobs, limit {cap:g}"))
+                                f"{total:g} h this week across all on-campus jobs, limit {cap:g}"))
 
     avg_cap = config()["aca_25_avg"]["average_hours"]
     if lim.hours_history:
-        n = len(lim.hours_history)
-        projected = (sum(lim.hours_history) + asu_week_hours(student, week, monday)) / (n + 1)
+        hist, start = period_history(student, monday)
+        projected = (sum(hist) + asu_week_hours(student, week, monday)) / (len(hist) + 1)
         findings.append(Finding("aca_25_avg", "blocked" if projected > avg_cap else "eligible",
-                                f"projected average {projected:.1f} h of {avg_cap} h over {n + 1} weeks"))
+                                f"projected average {projected:.1f} h of {avg_cap} h over the measurement period so "
+                                f"far ({len(hist) + 1} weeks since {start:%b %d %Y})"))
     else:
         findings.append(Finding("aca_25_avg", "unverified",
                                 "no hours history yet, so the 25 h average can't be checked"))
@@ -171,9 +200,9 @@ def evaluate(
         if remaining is None:
             findings.append(Finding("fws_award", "unverified", "award balance unknown"))
         else:
-            over = added_pay > remaining
-            findings.append(Finding("fws_award", "blocked" if over else "eligible",
-                                    f"+${added_pay:.0f} against ${remaining:.0f} left on the award"))
+            paid = week_pay(week, monday)  # everything scheduled this week counts, not only what a trade adds
+            findings.append(Finding("fws_award", "blocked" if paid > remaining else "eligible",
+                                    f"${paid:.0f} scheduled this week against ${remaining:.0f} left on the award"))
 
     statuses = {f.status for f in findings}
     status: Status = "blocked" if "blocked" in statuses else "unverified" if "unverified" in statuses else "eligible"

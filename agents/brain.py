@@ -27,7 +27,7 @@ from core.wire import (
     TradeRequest,
     Vote,
 )
-from rulebook.rules import binding, check_change
+from rulebook.rules import binding, check_change, f1_cap, near_f1_limit, week_hours
 
 Avail = Literal["yes", "unsure", "no"]
 WAGE = 16.0
@@ -125,33 +125,60 @@ class Brain:
         if req.phase == "extend" and req.you_give and give is None:
             drop = [to_shift(self.seen[req.you_give])] if req.you_give in self.seen else []
         yes, unsure = [], []
-        for ref in sorted(req.items, key=lambda r: r.start):
+        for ref in sorted(req.items, key=lambda r: self.preference(r, give)):
             if ref.owner == self.me:
                 continue
             a = self.availability(ref, giving=req.you_give)
             if a == "no" or not self.rule_ok([to_shift(ref)], drop):
                 continue
+            if a == "yes" and self.near_limit([to_shift(ref)], drop) and self.answer(ref.shift_id) != "yes":
+                a = "unsure"  # inside the F-1 buffer: the student decides, not the mascot
             (yes if a == "yes" else unsure).append(ref)
         if yes:
             choice = yes[0]
             self.store.note(f"Round {req.iteration} ({req.phase}): picked {to_shift(choice).label}.")
             return Pick(round_id=req.round_id, iteration=req.iteration, agent_id=self.me, shift_id=choice.shift_id)
         if unsure:
-            await self.ask(unsure[0])
+            await self.ask(unsure[0], drop)
         else:
             self.store.note(f"Round {req.iteration} ({req.phase}): nothing fits, passed.")
         return Pick(round_id=req.round_id, iteration=req.iteration, agent_id=self.me, shift_id=None)
 
-    async def ask(self, ref: ShiftRef) -> None:
+    def answer(self, shift_id: str) -> str | None:
+        return self.store.get("answers", {}).get(shift_id)
+
+    def preference(self, ref: ShiftRef, give: Shift | None) -> tuple:
+        """The student's private ranking: shifts in the same part of the day as the one they give up first
+        (it keeps their routine), then earlier in the week."""
+        same_part = give is not None and (ref.start.hour >= 17) == (give.start.hour >= 17)
+        return (0 if same_part else 1, ref.start)
+
+    def near_limit(self, add: list[Shift], drop: list[Shift]) -> bool:
+        st = self.store.student()
+        if not st.limits.f1_or_j1 or not add:
+            return False
+        after = [s for s in self.store.shifts() if s.id not in {d.id for d in drop}] + add
+        return near_f1_limit(st, after, week_start(add[0].start.date()))
+
+    async def ask(self, ref: ShiftRef, drop: list[Shift] | None = None) -> None:
         asked = self.store.get("asked", [])
         if ref.shift_id in asked:
             return
         self.store.put("asked", asked + [ref.shift_id])
         st = self.store.student()
-        avoid = next(a for a in st.prefs.soft_avoid if a.weekday == ref.start.weekday())
-        self.store.note(f"Passed for now: {to_shift(ref).label} is open but it's your {avoid.label} slot. Asked you.")
-        await self.notify(explain.ask(to_shift(ref).label, avoid.label),
-                          [("Take it", f"ask:yes:{ref.shift_id}"), ("Keep my slot", f"ask:no:{ref.shift_id}")],
+        label = to_shift(ref).label
+        avoid = next((a for a in st.prefs.soft_avoid if a.weekday == ref.start.weekday()
+                      and ref.start.hour < a.end_hour and a.start_hour < ref.end.hour), None)
+        if avoid:
+            self.store.note(f"Passed for now: {label} is open but it's your {avoid.label} slot. Asked you.")
+            text, keep = explain.ask(label, avoid.label), "Keep my slot"
+        else:
+            monday = week_start(ref.start.date())
+            after = [s for s in self.store.shifts() if s.id not in {d.id for d in drop or []}] + [to_shift(ref)]
+            hours, cap = week_hours(st, after, monday), f1_cap(monday)
+            self.store.note(f"Passed for now: {label} would put you at {hours:g} of {cap:g} on-campus hours. Asked you.")
+            text, keep = explain.ask_limit(label, hours, cap), "Leave room"
+        await self.notify(text, [("Take it", f"ask:yes:{ref.shift_id}"), (keep, f"ask:no:{ref.shift_id}")],
                           kind="ask")
 
     # ---------- validation of the exact final ring ----------
@@ -168,6 +195,8 @@ class Brain:
         giving = drops[0].id if drops else None
         if any(self.availability(self.seen[s.id], giving=giving) != "yes" for s in adds):
             return False
+        if self.near_limit(adds, drops) and any(self.answer(s.id) != "yes" for s in adds):
+            return False
         return self.rule_ok(adds, drops)
 
     def check(self, rc: RingCheck) -> Eligibility:
@@ -176,11 +205,11 @@ class Brain:
     # ---------- two-phase commit ----------
     async def prepare(self, p: Prepare) -> Vote | None:
         if p.seen_version != self.store.version():
-            return Vote(txn_id=p.txn_id, agent_id=self.me, vote="stale")
+            return Vote(txn_id=p.txn_id, agent_id=self.me, vote="stale", ballot=p.ballot)
         if not self.ring_ok(p.moves):
-            return Vote(txn_id=p.txn_id, agent_id=self.me, vote="no")
+            return Vote(txn_id=p.txn_id, agent_id=self.me, vote="no", ballot=p.ballot)
         self.store.put("hold", {"txn_id": p.txn_id, "ring_id": p.ring_id, "version": p.seen_version,
-                                "moves": [m.model_dump() for m in p.moves]})
+                                "moves": [m.model_dump() for m in p.moves], "ballot": p.ballot})
         adds, drops = self.my_moves(p.moves)
         st = self.store.student()
         text = explain.confirm(st, adds, drops, p.moves, self.names(), self.store.shifts(), self.store.busy())
@@ -207,11 +236,12 @@ class Brain:
             hold = self.store.get("hold")
             if not hold or hold["txn_id"] != parts[1]:
                 return "That trade is no longer open."
+            ballot = hold.get("ballot", "")
             if parts[0] == "decline":
-                await self.send_vote(Vote(txn_id=parts[1], agent_id=self.me, vote="no"))
+                await self.send_vote(Vote(txn_id=parts[1], agent_id=self.me, vote="no", ballot=ballot))
                 return "Declined. Nobody will be told why."
             vote = "yes" if hold["version"] == self.store.version() else "stale"
-            await self.send_vote(Vote(txn_id=parts[1], agent_id=self.me, vote=vote))
+            await self.send_vote(Vote(txn_id=parts[1], agent_id=self.me, vote=vote, ballot=ballot))
             return "Confirmed. Waiting for the others." if vote == "yes" else "Your week changed, so I pulled out."
         return "?"
 
@@ -246,7 +276,8 @@ class Brain:
         self.store.bump()
         hold = self.store.get("hold")
         if hold and hold["version"] != self.store.version():
-            await self.send_vote(Vote(txn_id=hold["txn_id"], agent_id=self.me, vote="stale"))
+            await self.send_vote(Vote(txn_id=hold["txn_id"], agent_id=self.me, vote="stale",
+                                      ballot=hold.get("ballot", "")))
             self.store.note(f"Your week changed while {hold['ring_id']} was pending. Pulled out (stale).")
 
     # ---------- views ----------

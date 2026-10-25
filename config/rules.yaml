@@ -13,6 +13,7 @@ rules:
     applies_to: f1_or_j1
     kind: block
     weekly_hours: 20
+    buffer_hours: 1  # the mascot asks its student before a trade takes them within this many hours of the limit
     counted: Mon-Sun, each week alone, summed across every on-campus employer
     summary: F-1/J-1 students work at most 20 hours a week while school is in session.
 

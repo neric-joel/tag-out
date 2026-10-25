@@ -9,7 +9,8 @@ from __future__ import annotations
 import asyncio
 import os
 import secrets
-from datetime import date
+from datetime import date, datetime, timedelta
+from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
@@ -17,6 +18,7 @@ from pydantic import BaseModel
 from agents.brain import Brain
 from agents.seed import seed
 from agents.store import Store
+from core.models import BusyBlock
 from core.net import RUNTIME, Net, registry
 from core.timeutil import fmt_span, overlaps
 from core.wire import (
@@ -35,6 +37,7 @@ from core.wire import (
     Vote,
 )
 from ingest import text as text_intake
+from ingest.ics import _bid, classify, exam_eves
 from seeds.scenario import DEMO_MONDAY, STUDENTS
 
 
@@ -44,6 +47,18 @@ class Tap(BaseModel):
 
 class Intake(BaseModel):
     text: str
+
+
+class ImportedEvent(BaseModel):
+    title: str
+    start: datetime
+    end: datetime | None = None
+    kind: str = "other"
+
+
+class EventImport(BaseModel):
+    source: Literal["canvas", "calendar"]
+    events: list[ImportedEvent]
 
 
 class PetChoice(BaseModel):
@@ -187,6 +202,25 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
         reply = f"Noted: {got}. Only 'busy' ever leaves me."
         store.send({"kind": "reply", "text": reply, "buttons": [], "engine": engine})
         return {"reply": reply, "engine": engine, "events": len(blocks)}
+
+    @app.post("/import")
+    async def import_events(body: EventImport, x_owner_token: str | None = Header(None)) -> dict:
+        """Calendar items from the student's own assistant (Cubbie reads Canvas and Google Calendar and sends them
+        here). They become private busy blocks; the label never leaves this mascot."""
+        owner(x_owner_token)
+        blocks = []
+        for e in body.events[:500]:
+            kind = e.kind if e.kind in text_intake.KINDS else classify(e.title)
+            if body.source == "canvas" and kind in ("other", "class"):
+                kind = "due"
+            end = e.end if e.end and e.end > e.start else e.start + timedelta(hours=1 if kind != "due" else 0)
+            blocks.append(BusyBlock(id=_bid(body.source, e.title, e.start), start=e.start, end=max(end, e.start),
+                                    kind=kind, label=e.title[:80], source=body.source))  # type: ignore[arg-type]
+        if body.source == "canvas" and store.student().prefs.protect_exam_eves:
+            blocks += exam_eves(blocks)
+        store.add_busy(blocks)
+        await brain.schedule_changed()
+        return {"imported": len(blocks)}
 
     @app.post("/pet")
     async def pet(body: PetChoice, x_owner_token: str | None = Header(None)) -> dict:

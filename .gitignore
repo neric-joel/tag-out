@@ -1,0 +1,15 @@
+.env*
+api.env
+*.db
+*.db-journal
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+web/pets/
+recordings/
+cache/
+runtime/
+*.log

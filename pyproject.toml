@@ -1,0 +1,36 @@
+[project]
+name = "tag-out"
+version = "0.1.0"
+description = "Mascot agents that trade campus shifts for student workers without leaking why."
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.162",
+  "uvicorn[standard]>=0.54",
+  "httpx>=0.28",
+  "pydantic>=2.14",
+  "ortools>=9.15",
+  "anthropic>=2.3",
+  "python-telegram-bot>=22.8",
+  "icalendar>=7.3",
+  "recurring-ical-events>=3.8",
+  "sse-starlette>=3.5",
+  "pyyaml>=6.0",
+  "matplotlib>=3.11",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9", "pytest-asyncio>=1.4", "hypothesis>=6.170", "ruff>=0.17"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["web/pets", "cache", "runtime"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]

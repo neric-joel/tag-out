@@ -1,0 +1,50 @@
+# Every limit Tag Out enforces, as data. Quotes live in docs/RULES.md (verbatim) and docs/rule_quotes.json.
+# Not legal or immigration advice. Your DSO and ASU Student Employment decide. Rules are cited; limits are configurable.
+
+timezone: America/Phoenix
+
+rules:
+  class_time:
+    applies_to: everyone
+    kind: block
+    summary: No work during your own class time.
+
+  f1_weekly_20:
+    applies_to: f1_or_j1
+    kind: block
+    weekly_hours: 20
+    counted: Mon-Sun, each week alone, summed across every on-campus employer
+    summary: F-1/J-1 students work at most 20 hours a week while school is in session.
+
+  f1_break_40:
+    applies_to: f1_or_j1
+    kind: raise
+    weekly_hours: 40
+    summary: In ASU-listed break weeks the F-1/J-1 limit rises to 40 hours.
+    # From the Student Employment hourly-limits chart (fetched 2026-10-24). Summer is 40 h except a first or final
+    # semester (20 h); Tag Out can't know which, so summer is left out and stays at the safer 20 h.
+    break_periods:
+      - name: Winter break 2026-2027
+        start: 2026-12-14
+        end: 2027-01-10
+      - name: Spring break 2027
+        start: 2027-03-08
+        end: 2027-03-14
+
+  aca_25_avg:
+    applies_to: everyone
+    kind: block
+    average_hours: 25
+    counted: average across all ASU jobs and stipends over the measurement period (FWS hours count)
+    summary: Every ASU student worker averages at most 25 hours a week; missing history means unverified, never safe.
+
+  weekly_40:
+    applies_to: everyone
+    kind: block
+    weekly_hours: 40
+    summary: Over 40 hours in a workweek is overtime and needs your manager, so Tag Out never trades into it.
+
+  fws_award:
+    applies_to: fws
+    kind: block
+    summary: Federal Work-Study earnings cannot go past the award.

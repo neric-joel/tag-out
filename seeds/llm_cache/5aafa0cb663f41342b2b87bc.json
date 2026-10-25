@@ -1,0 +1,15 @@
+{
+ "events": [
+  {
+   "date": "2026-10-29",
+   "end": "16:00",
+   "kind": "interview",
+   "start": "15:00",
+   "title": "Amazon interview"
+  }
+ ],
+ "preferences": {
+  "never_weekdays": [],
+  "wants_more_hours": null
+ }
+}

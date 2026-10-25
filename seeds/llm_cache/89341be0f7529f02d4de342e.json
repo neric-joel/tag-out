@@ -1,0 +1,15 @@
+{
+ "events": [
+  {
+   "date": "2026-10-28",
+   "end": "16:00",
+   "kind": "other",
+   "start": "13:00",
+   "title": "Fall career fair"
+  }
+ ],
+ "preferences": {
+  "never_weekdays": [],
+  "wants_more_hours": null
+ }
+}

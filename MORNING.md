@@ -15,7 +15,7 @@ Updated Sun Oct 25 2026, past midnight (Arizona). Submissions close 12:00 PM.
 - [x] P9 deterministic demo driver (`python -m scripts.demo --all`) + headless capture script for a draft video
 - [x] P10 README, docs/ARCHITECTURE.md, docs/PRIVACY.md, docs/SUBMISSION.md (cloud session, merged, then updated)
 
-Tests: 34 passing (`.venv\Scripts\python -m pytest`), `ruff check .` clean. CI workflow runs both on push.
+Tests: 41 passing (`.venv\Scripts\python -m pytest`), `ruff check .` clean. CI workflow runs both on push.
 
 ## Run it (one command)
 
@@ -36,9 +36,15 @@ For real Telegram taps instead of the synthetic auto-taps: `python -m scripts.ru
 
 ## The headline numbers (docs/simulation.json, 1,000 synthetic weeks, 40-person roster, 15% conflicts)
 
-- Plain covers fix 73.7% of conflicts; with Tag Out's trades 83.7% (+10.0 points, 95% CI 9.5 to 10.5: borderline against the brief's 10-point bar, so lead with pay).
-- Pay lost per week drops from $673 to $284 (58% less), because a swap fixes a collision without anyone giving up the shift.
-- Winter break: 34.6 of 54 shifts handed off a week, $2,215 kept on campus, 0 rule breaks; an unchecked group chat would make about 3 a week.
+| | Plain covers | Group chat that also swaps (if everyone knew everyone's limits) | Tag Out |
+|---|---|---|---|
+| Collisions fixed | 73.8% | 83.5% | 83.7% |
+| Pay lost per week | $671 | $326 | $285 |
+
+Honest framing (the judges pushed on this): most of the gain over plain covers comes from two-person swaps, which a
+well-run group chat could also arrange. Tag Out's edge is that it does this on its own every Sunday, privately, and
+blocks about 1.4 limit-breaking covers a week that an unchecked group chat would make. In the demo week a
+Library-only scheduler would have put Ben at 21 of 20 F-1 hours and Dev over the 25 h average (judge view).
 
 ## Demo week (what the video shows)
 
@@ -57,6 +63,20 @@ For real Telegram taps instead of the synthetic auto-taps: `python -m scripts.ru
 5. **Make the repo public** (it's private now, as you asked): `gh repo edit neric-joel/tag-out --visibility public --accept-visibility-change-consequences`.
 6. **Submit yourself** from `D:\Projects\Dev Hacks\cubbie-hackathon-kit\skills\cubbie-hackathon\scripts`: `python hackathon.py login --google`, then `python hackathon.py submit --track agents --team "Aju" --pitch "<line from docs/SUBMISSION.md>" --member "<Your Name> <ASU email>" --repo https://github.com/neric-joel/tag-out --video <url>` (preview first, then `--yes`).
 7. **After the event:** rotate the Anthropic key, `/revoke` the bot token in BotFather.
+
+## Judges (3 AI judge personas on the 10-criterion rubric, read-only on the repo)
+
+- Round 1 on the built product: ASU staff 69, Cubbie engineer 68, skeptic 65 (average 67.3).
+- Fixed since: 25 h average now uses the measurement window; F-1 buffer (asks before going within 1 h of the limit);
+  Work-Study counts the week's scheduled pay; on-campus wording; ballot-protected votes; computed KPI; pre-trade
+  Library-only scheduler comparison; pairwise-swap baseline; manager CSV/ICS export; Sunday 6 PM scheduler;
+  Cubbie Skill (`cubbie-skill/tag-out`, passes the kit validator); docs drift.
+
+## Cubbie
+
+`cubbie-skill/tag-out/SKILL.md` makes a student's Cubbie the front door to their mascot (Canvas and Calendar in,
+texts and taps relayed). To try it offline: `.venv\Scripts\python cubbie-skill	ag-out\scripts	agout.py --sample inbox`.
+If you want it on the Cubbie site later, it is a normal Skill folder in a public repo.
 
 ## Notes
 

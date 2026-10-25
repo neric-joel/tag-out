@@ -61,7 +61,17 @@ def video(url: str, demo_args: list[str]) -> None:
         proc = subprocess.Popen([sys.executable, "-m", "scripts.demo", *demo_args], cwd=ROOT)
         while proc.poll() is None:
             page.wait_for_timeout(500)
+        page.wait_for_timeout(4000)
+        # a short tour: the roster after the trades, the simulation, then the judge view's comparison
+        for sel, pause in ((".board", 4500), (".sim", 5000)):
+            page.locator(sel).scroll_into_view_if_needed()
+            page.wait_for_timeout(pause)
+        page.goto(url.rstrip("/") + "/judge")
+        page.wait_for_timeout(3000)
+        page.locator("#baseline").scroll_into_view_if_needed()
         page.wait_for_timeout(6000)
+        page.locator("#phonesRow").scroll_into_view_if_needed()
+        page.wait_for_timeout(5000)
         path = page.video.path()
         ctx.close()
         b.close()

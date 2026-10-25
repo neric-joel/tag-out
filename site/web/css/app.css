@@ -474,8 +474,8 @@ h2 { font-size: 16px; line-height: 22px; font-weight: 600; }
 .org-clock b { font-size: 20px; font-weight: 600; }
 .org-body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--gap); }
 .org-viewport { position: relative; overflow: hidden; border-radius: var(--radius-stage); background: var(--raised); border: 1px solid var(--rule); }
-.org-stage { position: absolute; left: 0; top: 0; width: 1200px; height: 720px; transform-origin: 0 0; }
-.org-wires { position: absolute; inset: 0; width: 1200px; height: 720px; pointer-events: none; }
+.org-stage { position: absolute; left: 0; top: 0; width: 1200px; height: 632px; transform-origin: 0 0; }
+.org-wires { position: absolute; inset: 0; width: 1200px; height: 632px; pointer-events: none; }
 .org-edge { fill: none; stroke: var(--control); stroke-width: 1.6; }
 .org-edge.also { stroke-dasharray: 5 5; }
 .org-packet { fill: var(--hue); }
@@ -609,3 +609,9 @@ details.more p { margin-top: 6px; }
 .org-compose select { height: 32px; border: 1px solid var(--control); border-radius: var(--radius-control); background: var(--surface); font: inherit; font-size: 13px; padding: 0 6px; }
 .org-compose input { flex: 1; min-width: 0; height: 32px; border-radius: 999px; padding: 0 14px; font-size: 13px; }
 @media (max-width: 640px) { .org-compose { order: 3; flex-basis: 100%; max-width: none; } }
+/* a student's and the manager's chat fill the rest of the first screen too; the thread scrolls inside */
+@media (min-width: 1101px) {
+  #viewStudent .me-grid > .tg { height: clamp(420px, calc(var(--screen, 100vh) - var(--me-top, 170px) - 16px), 820px); }
+  #viewManager .mgr-grid > .tg { height: clamp(420px, calc(var(--screen, 100vh) - var(--mgr-top, 192px) - 16px), 820px); }
+  #viewStudent .me-grid > .tg .tg-thread, #viewManager .mgr-grid > .tg .tg-thread { flex: 1; min-height: 0; max-height: none; }
+}

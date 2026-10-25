@@ -273,6 +273,12 @@
       }
       const fitScale = Math.min(1, available / base);
       stageW = w; stageH = h; viewH = h * fitScale;
+      // no taller than the window has room for under the page's header, so the whole graph is on one screen
+      const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      let top = 0;
+      for (let el = viewport; el; el = el.offsetParent) top += el.offsetTop;
+      const room = innerHeight / z - top - 24;
+      if (room > 260) viewH = Math.min(viewH, room);
       stage.style.width = w + 'px'; stage.style.height = h + 'px';
       viewport.style.height = viewH + 'px';
       [wires, packetLayer].forEach(el => { el.setAttribute('width', w); el.setAttribute('height', h); });

@@ -174,11 +174,13 @@
   function fitScreen() {
     const root = document.documentElement, z = parseFloat(getComputedStyle(root).zoom) || 1;
     root.style.setProperty("--screen", innerHeight / z + "px");
-    const grid = $("#viewCommons > .grid");
-    if (!grid || !grid.offsetParent) return;
-    let top = 0;
-    for (let el = grid; el; el = el.offsetParent) top += el.offsetTop;
-    root.style.setProperty("--grid-top", top + "px");
+    [["#viewCommons > .grid", "--grid-top"], ["#viewStudent .me-grid", "--me-top"], ["#viewManager .mgr-grid", "--mgr-top"]].forEach(([sel, v]) => {
+      const el = $(sel);
+      if (!el || !el.offsetParent) return; // that page is hidden
+      let top = 0;
+      for (let e = el; e; e = e.offsetParent) top += e.offsetTop;
+      root.style.setProperty(v, top + "px");
+    });
   }
   // when something starts moving in a panel, scroll just enough to show all of it
   function reveal(sel) {
@@ -663,7 +665,7 @@
     if (v === "agents") ensureFlow();
     if (v === "org") ensureOrg();
     if (v === "commons" && world) world.setPetHeight(+store.get("tagout.size", 96));
-    if (v === "commons") fitScreen();
+    fitScreen();
   }
   function renderPill() {
     const r = role();
@@ -1012,7 +1014,7 @@
     window.tagOutWorld = world; // handy in the console during the demo
     // the size slider ends at the tallest pet the commons can draw, so every step of it changes something
     const fitSize = () => {
-      const s = $("#petSize"), max = Math.max(+s.min + 8, Math.min(200, world.maxPetHeight()));
+      const s = $("#petSize"), max = Math.max(+s.min + 8, Math.min(140, world.maxPetHeight()));
       s.max = max;
       if (+s.value > max) { s.value = max; world.setPetHeight(max); }
     };

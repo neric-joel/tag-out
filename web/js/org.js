@@ -2,7 +2,7 @@
    rung; the rung holding it shows a countdown, and silence moves it up again. Nodes can be dragged. */
 (function () {
   "use strict";
-  const W = 1200, H = 720;
+  const W = 1200, H = 632; // the second row of students ends at 608
   const TIERS = { top: 22, backup: 128, manager: 236, lead: 344, students: 462 };
   const RULE = { no_cover_2h: "2 h without a cover", no_answer_30m: "no answer in 30 min (silence counts as no)",
     safety_first: "a safety report goes to Environmental Health and Safety at once" };
@@ -74,9 +74,10 @@
     // fit the column's width, and the window's height under the panel's own header, so the whole chart is on
     // screen at once (the window's height is in the page's own pixels: the demo video zooms the page)
     function scale() {
-      const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1, panel = viewport.closest(".panel") || viewport;
-      const head = (viewport.getBoundingClientRect().top - panel.getBoundingClientRect().top) / z;
-      return Math.min(1, viewport.clientWidth / W, Math.max(0.5, (innerHeight / z - 32 - head - 24) / H)) || 1;
+      const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      let top = 0;
+      for (let el = viewport; el; el = el.offsetParent) top += el.offsetTop;
+      return Math.min(1, viewport.clientWidth / W, Math.max(0.5, (innerHeight / z - top - 40) / H)) || 1;
     }
     function fit() { const s = scale(); stage.style.transform = `scale(${s})`; viewport.style.height = H * s + "px"; }
     addEventListener("resize", fit);

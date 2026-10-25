@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/web/css/app.css?v=26">
+<link rel="stylesheet" href="/web/css/app.css?v=27">
 <link rel="stylesheet" href="/web/css/flow.css?v=16">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23121212' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='%23fff' d='M11.2 7.3C14.8 7.1 22.4 6.8 26.1 7.2C27.6 7.4 28.3 8.3 28.4 9.8C28.6 13.6 28.7 18.4 28.3 22.1C28.1 23.7 27.2 24.5 25.7 24.6C21.9 24.9 14.9 24.8 11.4 24.6C10.5 24.5 9.9 24.1 9.3 23.4L4.6 17.4C4 16.6 4 15.6 4.7 14.8L9.2 8.4C9.7 7.7 10.3 7.3 11.2 7.3Z'/%3E%3Ccircle cx='9.7' cy='16' r='1.6'/%3E%3Cpath d='M8.6 15.1C6.4 12.5 4.6 8.9 2.7 5.1'/%3E%3Cpath d='M14.4 12.2C17.3 11.9 20.6 11.9 23.5 12.3M19.1 12.1C18.9 14.9 19.1 17.9 19.3 20.7'/%3E%3C/svg%3E">
 </head>
@@ -69,7 +69,7 @@
           <p class="status" id="roundStatus" aria-live="polite">The mascots are hanging out until Sunday's check.</p>
         </div>
         <div class="tools">
-          <label class="size"><span>Size</span><input type="range" id="petSize" min="48" max="200" step="2" value="96" aria-label="Mascot size"></label>
+          <label class="size"><span>Size</span><input type="range" id="petSize" min="48" max="140" step="2" value="96" aria-label="Mascot size"></label>
           <button class="btn small-btn" id="btnPets" type="button" data-debug>Pets</button>
         </div>
       </header>
@@ -229,7 +229,9 @@
   <section class="titlerow">
     <div>
       <h1>How the agents talk</h1>
-      <p class="finding">Every line below is a real message between agents: six Library mascots (each its own app and database), a broker and the Library's Steward; the campus hierarchy is on the Org chart. Live they run as separate processes; this replay was recorded with all of them in one. Click any message to read exactly what crossed. No message has a field for a reason, hours or a calendar; the only free text is what a student chooses to send, and every message is scanned for private labels.</p>
+      <p class="finding">Every block is its own app, and every line a real message between them. Click one to read exactly what crossed: no message has a field for a reason.</p>
+      <details class="more"><summary>What's in the graph</summary>
+        <p>Six Library mascots (each its own app and database), a broker and the Library's Steward; the campus hierarchy is on the Org chart. Live they run as separate processes; this replay was recorded with all of them in one. No message has a field for a reason, hours or a calendar; the only free text is what a student chooses to send, and every message is scanned for private labels.</p></details>
     </div>
     <div class="actions">
       <button class="btn" id="agSunday" type="button">Run Sunday check</button>
@@ -310,9 +312,9 @@
 </footer>
 
 <script src="/web/js/world.js?v=19"></script>
-<script src="/web/js/flow.js?v=24"></script>
-<script src="/web/js/org.js?v=9"></script>
+<script src="/web/js/flow.js?v=25"></script>
+<script src="/web/js/org.js?v=10"></script>
 <script src="/web/js/sprites.js?v=15"></script>
-<script src="/web/js/app.js?v=44"></script>
+<script src="/web/js/app.js?v=45"></script>
 </body>
 </html>

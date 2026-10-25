@@ -40,6 +40,7 @@ from rulebook.rules import (
     fws_runway,
     near_f1_limit,
     next_break,
+    rooms,
     week_hours,
 )
 
@@ -492,7 +493,18 @@ class Brain:
             "student": st.name, "pet_id": st.pet_id,
             "energy": {"rule_id": room.rule_id, "used": room.used, "cap": room.cap, "room": room.room,
                        "unit": room.unit, "quote": quote, "url": url},
-            "shifts": [{"id": s.id, "label": s.label} for s in shifts if week_start(s.start.date()) == monday],
+            "shifts": [{"id": s.id, "label": s.label, "start": s.start.isoformat(), "end": s.end.isoformat()}
+                       for s in shifts if week_start(s.start.date()) == monday],
+            "busy": [{"label": b.label, "kind": b.kind, "source": b.source, "start": b.start.isoformat(),
+                      "end": b.end.isoformat()} for b in self.store.busy()
+                     if week_start(b.start.date()) == monday and b.kind != "class"],
+            "classes": sorted({b.label for b in self.store.busy() if b.kind == "class"}),
+            "rooms": [{"rule_id": r.rule_id, "used": r.used, "cap": r.cap, "room": r.room, "unit": r.unit}
+                      for r in rooms(st, shifts, monday)],
+            "runway": fws_runway(st, shifts, monday),
+            "other_jobs": st.limits.other_employer_hours,
+            "f1": bool(st.limits.f1_or_j1), "fws": bool(st.limits.fws),
+            "wants_more_hours": bool(st.prefs.wants_more_hours),
             "collisions": self.store.get("collisions", []),
             "diary": self.store.diary(),
             "version": self.store.version(),

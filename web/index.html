@@ -7,7 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/web/css/app.css?v=13">
+<link rel="stylesheet" href="/web/css/app.css?v=16">
+<link rel="stylesheet" href="/web/css/flow.css?v=15">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23121212'/%3E%3Cpath d='M9 11h14M16 11v12' stroke='%23fff' stroke-width='3.2' stroke-linecap='round'/%3E%3Ccircle cx='23.5' cy='21.5' r='3' fill='%231d5fbf'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -20,13 +21,18 @@
   </a>
   <span class="scope">Library front desk <span class="sep">/</span> week of Oct 26, 2026</span>
   <nav class="tabs" aria-label="Views">
-    <a href="/" id="tabArena">Commons</a>
+    <a href="#commons" id="tabArena">Commons</a>
+    <a href="#me" id="tabMe">Student</a>
+    <a href="#manager" id="tabMgr">Manager</a>
+    <a href="#agents" id="tabAgents">How it works</a>
     <a href="/judge" id="tabJudge">Judge view</a>
   </nav>
+  <button class="who-pill" id="whoPill" type="button" aria-label="Sign in as someone else">Sign in</button>
   <div class="live" id="live"><span class="dot"></span><span id="liveText">Connecting</span></div>
 </header>
 
 <main class="canvas">
+ <div class="view" id="viewCommons">
   <section class="titlerow">
     <div>
       <h1>This week's collisions</h1>
@@ -98,8 +104,9 @@
     </section>
 
     <section class="panel log" aria-labelledby="logTitle">
-      <header class="panel-head"><h2 id="logTitle">Round log</h2><span class="muted small" id="logCount">0 events</span></header>
-      <ol class="events" id="events"></ol>
+      <header class="panel-head"><h2 id="logTitle">Activity</h2><span class="muted small" id="logCount">0 items</span></header>
+      <div class="log-wrap"><table class="log-table"><thead><tr><th>Time</th><th>What happened</th><th class="who">Who</th><th>Status</th></tr></thead>
+        <tbody id="events"></tbody></table></div>
     </section>
   </div>
 
@@ -107,6 +114,109 @@
     <header class="panel-head"><h2 id="simTitle">On a 40-person roster</h2><span class="muted small" id="simMeta">simulation</span></header>
     <div id="sim"></div>
   </section>
+ </div>
+
+ <div class="view" id="viewStudent" hidden>
+  <section class="me-head">
+    <canvas id="meAvatar" width="96" height="104" aria-hidden="true"></canvas>
+    <div>
+      <h1 id="meTitle">Your week</h1>
+      <p class="finding" id="meSub">Only you see this page. Your coworkers and your manager see that you're busy, and which shift you want to trade. Never why.</p>
+    </div>
+  </section>
+  <div class="me-grid">
+    <section class="panel me-week" aria-labelledby="meWeekTitle">
+      <header class="panel-head"><h2 id="meWeekTitle">Your week</h2><span class="muted small">Oct 26 to Nov 1</span></header>
+      <div id="meWeek"></div>
+    </section>
+    <section class="panel tg" aria-labelledby="meChatTitle">
+      <header class="tg-head"><canvas id="meChatPet" width="36" height="39" aria-hidden="true"></canvas>
+        <div><h2 id="meChatTitle">Your mascot</h2><p class="sub">Telegram or Cubbie · private</p></div></header>
+      <div class="thread tg-thread" id="meThread" aria-live="polite"></div>
+      <div class="chips" id="meChips" aria-label="Things you can text your mascot"></div>
+      <form class="compose" id="meCompose">
+        <input type="text" id="meInput" placeholder="Message your mascot" aria-label="Message to your mascot">
+        <button class="btn primary" type="submit">Send</button>
+      </form>
+    </section>
+    <section class="panel me-private" aria-labelledby="mePrivTitle">
+      <header class="panel-head"><h2 id="mePrivTitle">Private to you</h2></header>
+      <div id="mePrivate"></div>
+    </section>
+  </div>
+ </div>
+
+ <div class="view" id="viewManager" hidden>
+  <section class="me-head">
+    <svg class="mgr-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9"/><path d="M9 11h14M16 11v12"/><circle cx="23.5" cy="21.5" r="3"/></svg>
+    <div>
+      <h1>Library front desk, manager</h1>
+      <p class="finding">You see the roster, approvals, open shifts and reports. You never see why someone asked for a trade, their hours at other jobs, or their visa or Work-Study status.</p>
+    </div>
+  </section>
+  <div class="mgr-grid">
+    <section class="panel tg" aria-labelledby="mgrInboxTitle">
+      <header class="tg-head"><div class="tg-avatar">LM</div><div><h2 id="mgrInboxTitle">Approvals and updates</h2><p class="sub">What arrives on your phone</p></div></header>
+      <div class="thread tg-thread" id="mgrThread" aria-live="polite"></div>
+    </section>
+    <section class="panel mgr-actions" aria-labelledby="mgrActTitle">
+      <header class="panel-head"><h2 id="mgrActTitle">Do something</h2></header>
+      <form class="act" id="mgrExtra">
+        <h3>Post an extra shift</h3>
+        <p class="muted small">Every mascot is offered it. Only students who want hours and fit every limit pick it; you won't see why anyone passed.</p>
+        <div class="row"><select id="exDay" aria-label="Day"></select><select id="exStart" aria-label="Start"></select><select id="exEnd" aria-label="End"></select><button class="btn primary" type="submit">Post</button></div>
+      </form>
+      <div class="act">
+        <h3>Find a team meeting time</h3>
+        <p class="muted small">Each mascot answers busy or free for each hour, nothing else. You pick from the three best hours.</p>
+        <button class="btn" id="mgrMeeting" type="button">Find the best hour next week</button>
+      </div>
+      <div class="act">
+        <h3>Standing rule</h3>
+        <label class="toggle"><input type="checkbox" id="mgrSwapRule"> Swaps that keep every shift covered and nobody's hours the same go through without me</label>
+      </div>
+      <div class="act">
+        <h3>Your scheduler</h3>
+        <p class="muted small">Download the approved roster: <a href="/roster.csv">CSV</a> or <a href="/roster.ics">calendar file</a>. Students enter their time in Workday as usual.</p>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="mgrListTitle">
+      <header class="panel-head"><h2 id="mgrListTitle">Open shifts, reports, meetings</h2></header>
+      <div id="mgrLists"></div>
+      <div class="forecast" id="mgrForecast"></div>
+    </section>
+  </div>
+  <section class="panel board" aria-labelledby="mgrBoardTitle">
+    <header class="panel-head"><h2 id="mgrBoardTitle">Library roster</h2></header>
+    <div class="board-grid" id="mgrBoard" role="table" aria-label="Shifts by person and day"></div>
+  </section>
+ </div>
+
+ <div class="view" id="viewAgents" hidden>
+  <section class="titlerow">
+    <div>
+      <h1>How the agents talk</h1>
+      <p class="finding">Every line below is a real message between separate processes: six mascots, a broker and the Library's Steward. Click any message to read exactly what crossed. Reasons, hours and calendars have no field to travel in.</p>
+    </div>
+    <div class="actions">
+      <button class="btn" id="agSunday" type="button">Run Sunday check</button>
+      <button class="btn" id="agRun" type="button">Start trade rounds</button>
+      <button class="btn danger" id="agSnoop" type="button">Snoop: ask every mascot why</button>
+    </div>
+  </section>
+  <section class="kpis" aria-label="What crossed">
+    <div class="kpi lead"><span class="label">Messages between agents</span><span class="value num" id="lkMsgs">0</span></div>
+    <div class="kpi"><span class="label">Fields outside the schemas</span><span class="value num" id="lkFields">0</span></div>
+    <div class="kpi"><span class="label">Private labels in any message</span><span class="value num" id="lkLabels">0</span></div>
+    <div class="kpi"><span class="label">Decisions made by an LLM</span><span class="value num">0</span></div>
+  </section>
+  <p class="snoop-note" id="snoopNote" hidden></p>
+  <div id="flow"></div>
+  <section class="panel claims" id="claims" aria-labelledby="claimsTitle">
+    <header class="panel-head"><h2 id="claimsTitle">Sources and claims</h2><span class="muted small">every number on this site, and where it comes from</span></header>
+    <table class="ledger" id="ledger"></table>
+  </section>
+ </div>
 
   <section class="phones-row" id="phonesRow" hidden aria-labelledby="phonesTitle">
     <header class="section-head">
@@ -129,6 +239,15 @@
   </section>
 </main>
 
+<dialog class="pets-dialog signin" id="signIn" aria-labelledby="signInTitle">
+  <form method="dialog" class="pets-head">
+    <h2 id="signInTitle">Sign in as</h2>
+    <button class="btn small-btn" value="close" aria-label="Close">Close</button>
+  </form>
+  <p class="muted small">Demo with synthetic students: pick anyone to see Tag Out the way they would. A real student only ever sees their own page.</p>
+  <div class="people" id="people"></div>
+</dialog>
+
 <dialog class="pets-dialog" id="petDialog" aria-labelledby="petDialogTitle">
   <form method="dialog" class="pets-head">
     <h2 id="petDialogTitle">Pick a mascot</h2>
@@ -136,20 +255,20 @@
   </form>
   <div class="pets-controls">
     <label>For <select id="petFor" aria-label="Which student"></select></label>
-    <input type="search" id="petQuery" placeholder="Search Codex Pets, e.g. goku, cat, dragon" aria-label="Search pets">
+    <input type="search" id="petQuery" placeholder="Search pets, e.g. goku, cat, dragon" aria-label="Search pets">
     <button class="btn" id="petSearch" type="button">Search</button>
   </div>
-  <p class="muted small" id="petNote">Pets come from codex-pets.net. Each student picks their own; no two people on a roster share one.</p>
+  <p class="muted small" id="petNote">Each student picks their own; no two people on a roster share one.</p>
   <div class="pets-grid" id="petGrid"></div>
 </dialog>
 
 <footer class="site-foot">
   <p><strong>Not legal or immigration advice.</strong> Your DSO and ASU Student Employment decide. Rules are cited; limits are configurable. Students and schedules here are synthetic.</p>
-  <p class="credits" id="credits">Mascots from Codex Pets.</p>
 </footer>
 
-<script src="/web/js/world.js?v=13"></script>
-<script src="/web/js/sprites.js?v=13"></script>
-<script src="/web/js/app.js?v=13"></script>
+<script src="/web/js/world.js?v=15"></script>
+<script src="/web/js/flow.js?v=15"></script>
+<script src="/web/js/sprites.js?v=14"></script>
+<script src="/web/js/app.js?v=16"></script>
 </body>
 </html>

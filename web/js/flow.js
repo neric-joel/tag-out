@@ -115,8 +115,8 @@
     addNode('steward', 'Library Steward', 'roster + manager approval', 'steward');
     addNode('phone:manager', "Manager's phone", opts.manager || 'Library manager', 'phone');
 
-    function connect(a, b, privateEdge) {
-      const path = svg('path', { class: 'tof-edge' + (privateEdge ? ' tof-edge-private' : '') }, wires);
+    function connect(a, b, privateEdge, side) {
+      const path = svg('path', { class: 'tof-edge' + (privateEdge ? ' tof-edge-private' : '') + (side ? ' tof-edge-side' : '') }, wires);
       let label;
       if (privateEdge) {
         label = svg('g', { class: 'tof-edge-label' }, wires);
@@ -128,6 +128,8 @@
     }
     students.forEach(s => { connect('phone:' + s.id, s.id, true); connect(s.id, 'broker', false); });
     connect('broker', 'steward', false);
+    // the Steward also asks mascots directly: busy bits for meetings, meeting invites, issue replies
+    students.forEach(s => connect(s.id, 'steward', false, true));
     connect('steward', 'phone:manager', true);
     function point(c, t) {
       const u = 1 - t;

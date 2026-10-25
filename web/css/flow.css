@@ -90,3 +90,5 @@
 @media (prefers-reduced-motion: reduce) {
   .tof *, .tof *::before, .tof *::after { animation: none !important; transition: none !important; }
 }
+
+.tof-edge-side { stroke-dasharray: 2 5; opacity: .45; }

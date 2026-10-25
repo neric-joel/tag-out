@@ -247,6 +247,17 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         url = reg["steward"] if who == "manager" else reg["agents"][who]
         return JSONResponse(await net.get(f"{url}/phone?since={since}"))
 
+    @app.get("/me/{who}")
+    async def me(who: str) -> JSONResponse:
+        """A student's own page (synthetic demo: relayed from their mascot's owner channel)."""
+        if not debug() or who not in reg["agents"]:
+            raise HTTPException(403)
+        return JSONResponse(await net.get(f"{reg['agents'][who]}/diary"))
+
+    @app.get("/quotes")
+    async def quotes() -> JSONResponse:
+        return JSONResponse(json.loads((WEB.parent / "docs" / "rule_quotes.json").read_text(encoding="utf-8")))
+
     @app.post("/phone/{who}/tap")
     async def phone_tap(who: str, body: dict) -> dict:
         if not debug():

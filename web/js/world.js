@@ -388,6 +388,7 @@
     function tick(time) {
       raf = 0;
       if (dead || document.hidden) return;
+      if (width < 120 || height < 120) { last = null; raf = requestAnimationFrame(tick); return; } // view hidden: idle
       const dt = last === null ? 0 : clamp((time - last) / 1000, 0, 0.2);
       last = time; clock += dt;
       if (dpr !== (window.devicePixelRatio || 1)) resize();

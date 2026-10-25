@@ -7,10 +7,20 @@
   const PEOPLE = ["ana", "ben", "dev", "priya", "zoe", "marco"];
   const JUDGE = location.pathname.startsWith("/judge");
   const MONDAY = new Date("2026-10-26T00:00:00-07:00");
+  const ROLE_KEY = "tagout.as";
+  const QUICK = ["I'm sick, can't make it today", "dentist Thu 3pm", "I want more hours this week",
+    "set up a meeting with my supervisor", "the printer at the desk is broken"];
+  // every field name the closed schemas in core/wire.py allow; anything else crossing would be a leak
+  const ALLOWED = new Set(["agent_id", "badges", "ballot", "category", "employer", "end", "from_agent", "going", "issue_id",
+    "items", "iteration", "meeting_id", "minutes", "monday", "moves", "name", "ok", "outcome", "owner", "pet_id", "phase",
+    "request_id", "ring_id", "role", "round_id", "seen_version", "shift_id", "slots", "start", "state", "text", "title",
+    "to_agent", "trades_made", "txn_id", "urgent", "version", "vote", "you_give", "agent_id"]);
+  const leak = { msgs: 0, fields: 0, hits: 0, labels: null };
+  let flow = null;
 
   const S = {
     debug: false, names: {}, pets: {}, petMeta: [], roster: {}, requested: new Set(), moved: {}, open: new Set(),
-    votes: {}, summary: null, committed: [], gathered: new Set(), checks: 0, passed: 0,
+    votes: {}, summary: null, committed: [], gathered: new Set(), checks: 0, passed: 0, view: null,
   };
   let world = null;
   const BOOT = Date.now();
@@ -61,11 +71,13 @@
 
   function onEvent(ev) {
     live = live || Date.parse(ev.ts) > BOOT - 1500;
+    if (ev.type === "wire") { feedWire(ev); return; }
+    if (flow && live) flowState(ev);
     switch (ev.type) {
       case "reset":
         Object.assign(S, { requested: new Set(), moved: {}, open: new Set(), votes: {}, summary: null, committed: [], checks: 0, passed: 0 });
         requesters.clear();
-        $("#events").innerHTML = ""; $("#logCount").textContent = "0 events";
+        $("#events").innerHTML = ""; $("#logCount").textContent = "0 items";
         W.clear(); W.release(PEOPLE); PEOPLE.forEach((a) => { W.badge(a, null); W.status(a, ""); W.face(a, null); });
         refreshRoster(); setStatus("Reset. The mascots are hanging out until Sunday's check."); setFinding(null); renderKpis(); break;
       case "sunday_check":
@@ -151,7 +163,7 @@
         W.status(ev.agent, "week changed"); W.say(ev.agent, "My week just changed.", 2400); break;
       case "pet_changed":
         S.pets[ev.agent] = ev.pet_id; if (world) world.setPet(ev.agent, ev.pet_id);
-        renderTabs(); renderBoard(); renderCredits(); break;
+        renderTabs(); renderBoard(); break;
       case "summary":
         (ev.open_shifts || []).forEach((s) => S.open.add(s));
         if (ev.kind === "callout") {
@@ -218,18 +230,48 @@
       case "abort": return `<span class="bad">Aborted</span> ${ev.txn_id}. Holds released, shifts unchanged.`;
       case "schedule_edited": return `${name(ev.agent)}'s week changed while the trade waited for confirmations.`;
       case "pet_changed": return `${name(ev.agent)} picked a new mascot.`;
-      case "summary": return ev.kind === "callout" ? `Call-out round done: ${ev.fixed ? "covered" : "no safe taker, sent to the manager"}.` : `Week done: ${ev.fixed} of ${ev.asked} fixed, ${money(ev.pay_kept)} of pay kept by trading, ${ev.open} open.`;
+      case "summary":
+        if (ev.kind === "callout") return `Call-out round done: ${ev.fixed ? "covered" : "no safe taker, sent to the manager"}.`;
+        if (ev.kind === "extra") return ev.taker ? `Extra shift ${shiftLabel(ev.shift_id)} taken by ${name(ev.taker)}.` : `Nobody could take the extra shift ${shiftLabel(ev.shift_id)} safely.`;
+        return `Week done: ${ev.fixed} of ${ev.asked} fixed, ${money(ev.pay_kept)} of pay kept by trading, ${ev.open} open.`;
+      case "extra_open": return `The manager posted an extra shift. Every mascot is offered it.`;
+      case "snoop": return `A nosy broker asked every mascot why it passed. Every one refused.`;
       case "reset": return "Demo reset.";
       default: return null;
+    }
+  }
+  function meta(ev) {
+    const pub = JUDGE && S.debug;
+    const movers = (moves) => listNames([...new Set((moves || []).flatMap((x) => [x.from_agent, x.to_agent]).filter((a) => a !== "open"))]);
+    switch (ev.type) {
+      case "sunday_check": return ["Broker", "Sent"];
+      case "trade_request": return [name(ev.agent), ev.urgent ? "Call-out" : "Asked"];
+      case "picks": return ["Mascots", "Answered"];
+      case "counter_window": return ["Broker", "Waiting"];
+      case "cycle": return [movers(ev.moves), "Proposed"];
+      case "chain": return [movers(ev.moves), "Proposed"];
+      case "selected": return ["CP-SAT", `Kept ${ev.proposals.length}`];
+      case "prepare": return [listNames(ev.members), "Waiting"];
+      case "vote": return [ev.agent === "steward" ? "Manager" : ev.vote !== "no" || pub ? name(ev.agent) : "Someone",
+        { yes: "Confirmed", no: "Declined", stale: "Stale", timeout: "Timed out" }[ev.vote]];
+      case "commit": return [movers(ev.moves), "Committed"];
+      case "abort": return [listNames(ev.members), "Aborted"];
+      case "summary": return ["Broker", "Done"];
+      case "extra_open": return ["Manager", "Posted"];
+      case "snoop": return ["Judge", "Refused"];
+      case "schedule_edited": return [name(ev.agent), "Changed"];
+      default: return ["", ""];
     }
   }
   function logEvent(ev) {
     const text = sentence(ev);
     if (!text) return;
-    const li = document.createElement("li");
-    li.innerHTML = `<time>${clock(ev.ts)}</time><span>${text}</span>`;
-    $("#events").prepend(li);
-    $("#logCount").textContent = `${$("#events").children.length} events`;
+    const [who, status] = meta(ev);
+    const tone = /Confirmed|Committed|Done|Refused/.test(status) ? "ok" : /Declined|Aborted|Stale|Timed/.test(status) ? "bad" : "";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="t">${clock(ev.ts)}</td><td>${text}</td><td class="who">${esc(who)}</td><td class="st ${tone}">${esc(status)}</td>`;
+    $("#events").prepend(tr);
+    $("#logCount").textContent = `${$("#events").children.length} items`;
   }
 
   // ---------- roster board ----------
@@ -243,7 +285,7 @@
       renderBoard();
     } catch (_) { /* broker restarting */ }
   }
-  function renderBoard() {
+  function renderBoard(target = "#board") {
     const html = ['<div class="day" role="columnheader"></div>'];
     DAYS.forEach((d, i) => html.push(`<div class="day" role="columnheader">${d} ${new Date(MONDAY.getTime() + i * 864e5).getDate()}</div>`));
     const end = new Date(MONDAY.getTime() + 7 * 864e5);
@@ -260,8 +302,9 @@
         html.push(`<div class="cell" role="cell">${chips}</div>`);
       }
     }
-    $("#board").innerHTML = html.join("");
-    $("#board").querySelectorAll("canvas").forEach((c) => Sprites.badge(c, c.dataset.pet || "debug-duck-v2", "idle"));
+    $(target).innerHTML = html.join("");
+    $(target).querySelectorAll("canvas").forEach((c) => Sprites.badge(c, c.dataset.pet || "debug-duck-v2", "idle"));
+    if (target === "#board" && S.view === "manager") renderBoard("#mgrBoard");
   }
 
   // ---------- chats (synthetic demo: the owner channel relayed by the broker) ----------
@@ -412,22 +455,241 @@
         </tbody></table>
         <p class="sim-note">Library-only scheduler: ${b.violations} limit break${b.violations === 1 ? "" : "s"}, ${money(b.pay_lost)} of pay moved off the students who asked. Tag Out: 0 breaks found by any private re-check${S.summary ? `, ${money(S.summary.pay_kept)} of pay kept by trading` : ""}.</p>` : "";
     } catch (_) { /* not yet */ }
+    renderForecast("#forecast");
+  }
+
+  async function renderForecast(sel) {
     try {
       const f = await get("/forecast");
       const lab = (slot) => { const m = slot.match(/^(\w{3}) (\d+)-(\d+)$/); if (!m) return slot; const h = (x) => (+x % 12) || 12; return `${m[1]} ${h(m[2])}–${h(m[3])} ${+m[3] >= 12 ? "PM" : "AM"}`; };
       const top = f.alerts.slice().sort((a, b) => b.busy - a.busy);
-      $("#forecast").innerHTML = `<h3>Crunch forecast for the manager</h3>
+      $(sel).innerHTML = `<h3>Crunch forecast for the manager</h3>
         <p class="muted small" style="margin-bottom:8px">Counts only, shown when ${f.k} or more of ${f.staff} staff are busy. No names, no reasons.</p>
         <ul>${top.length ? top.slice(0, 4).map((a) => `<li><span>${lab(a.slot)}</span><span class="num">${a.busy} of ${a.staff} can't work</span></li>`).join("") : "<li><span>No crunch next week.</span><span></span></li>"}</ul>
         ${top.length > 4 ? `<p class="muted small" style="margin-top:6px">${top.length - 4} more slots with ${f.k} or more busy.</p>` : ""}`;
     } catch (_) { /* steward down */ }
   }
 
-  function renderCredits() {
-    const used = new Set(Object.values(S.pets));
-    const credits = S.petMeta.filter((p) => used.has(p.id)).map((p) => `<a href="${p.page}">${esc(p.name)}</a> by ${esc(p.creator)}`);
-    const extra = [...used].filter((id) => !S.petMeta.some((p) => p.id === id)).map((id) => `<a href="https://codex-pets.net/#/pets/${esc(id)}">${esc(id)}</a>`);
-    $("#credits").innerHTML = `Mascots from <a href="https://codex-pets.net">Codex Pets</a>: ${credits.concat(extra).join(", ")}. Each student picked their own; the art is downloaded at setup, not stored in the repo.`;
+  // ---------- pages: sign in, a student's own page, the manager's page, how the agents talk ----------
+  const VIEWS = { commons: "#viewCommons", me: "#viewStudent", manager: "#viewManager", agents: "#viewAgents" };
+  const TAB = { commons: "#tabArena", me: "#tabMe", manager: "#tabMgr", agents: "#tabAgents" };
+  const role = () => store.get(ROLE_KEY, null);
+  function route() {
+    let v = (location.hash || "#commons").slice(1);
+    if (!(v in VIEWS) || JUDGE) v = "commons";
+    if (v === "me" && !PEOPLE.includes(role())) { openSignIn(); v = S.view || "commons"; }
+    if (v === "manager") store.set(ROLE_KEY, "manager");
+    Object.entries(VIEWS).forEach(([k, sel]) => { $(sel).hidden = k !== v; });
+    document.querySelectorAll(".tabs a").forEach((a) => a.removeAttribute("aria-current"));
+    $(JUDGE ? "#tabJudge" : TAB[v]).setAttribute("aria-current", "page");
+    S.view = v;
+    renderPill();
+    if (v === "me") { meChat.reset(role()); renderMe(); }
+    if (v === "manager") renderMgr();
+    if (v === "agents") ensureFlow();
+    if (v === "commons" && world) world.setPetHeight(+store.get("tagout.size", 120));
+  }
+  function renderPill() {
+    const r = role();
+    $("#whoPill").textContent = r ? `${r === "manager" ? "Library manager" : S.names[r]} · switch` : "Sign in";
+  }
+  function openSignIn() {
+    const wrap = $("#people");
+    wrap.innerHTML = PEOPLE.filter((p) => p in S.names).map((p) => `<button type="button" data-who="${p}">
+        <canvas data-pet="${esc(S.pets[p] || "")}" width="96" height="104"></canvas>${S.names[p]}<span class="sub">${esc(SUBTITLE[p] || "student worker")}</span></button>`).join("")
+      + `<button type="button" data-who="manager"><svg class="mgr-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9"/><path d="M9 11h14M16 11v12"/><circle cx="23.5" cy="21.5" r="3"/></svg>Library manager<span class="sub">approves trades, posts shifts</span></button>`;
+    wrap.querySelectorAll("canvas").forEach((c) => Sprites.badge(c, c.dataset.pet || "debug-duck-v2", "idle"));
+    wrap.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+      store.set(ROLE_KEY, b.dataset.who); $("#signIn").close();
+      location.hash = b.dataset.who === "manager" ? "#manager" : "#me"; route();
+    }));
+    $("#signIn").showModal();
+  }
+
+  // a chat thread that polls one phone (the owner channel, relayed in the synthetic demo)
+  function threadPoller(sel, emptyText) {
+    const st = { who: null, count: -1 };
+    st.reset = (who) => { st.who = who; st.count = -1; };
+    st.poll = async () => {
+      if (!st.who) return;
+      let d; try { d = await get(`/phone/${st.who}`); } catch (_) { return; }
+      const msgs = d.messages || []; if (msgs.length === st.count) return;
+      const fresh = st.count >= 0 && msgs.length > st.count; st.count = msgs.length;
+      const t = $(sel);
+      t.innerHTML = msgs.length ? bubbles(msgs, fresh) : `<p class="empty">${typeof emptyText === "function" ? emptyText(st.who) : emptyText}</p>`;
+      wireButtons(t, st.who, st.poll); t.scrollTop = t.scrollHeight;
+    };
+    return st;
+  }
+  const meChat = threadPoller("#meThread", (who) => `Nothing yet. ${S.names[who]}'s mascot only texts when something in the week collides. Try a message below.`);
+  const mgrChat = threadPoller("#mgrThread", "Trade approvals, call-outs and reports land here.");
+
+  const SUBTITLE = { ana: "Work-Study, Canvas exams", ben: "F-1, also works at Dining", dev: "two ASU jobs, 25 h average",
+    priya: "F-1, wants more hours", zoe: "weekend trip coming up", marco: "Work-Study, career fair" };
+  const RULE = { f1_weekly_20: "On-campus hours this week (F-1 limit, all jobs together)", f1_break_40: "On-campus hours this break week (F-1)",
+    aca_25_avg: "ASU 25-hour average", weekly_40: "Hours this week (40 h cap)", fws_award: "Work-Study award left this week" };
+
+  async function renderMe() {
+    const who = role(); if (!PEOPLE.includes(who)) return;
+    $("#meTitle").textContent = `${S.names[who]}'s week`;
+    $("#meChatTitle").textContent = `${S.names[who]}'s mascot`;
+    Sprites.badge($("#meAvatar"), S.pets[who] || "debug-duck-v2", "waving");
+    Sprites.badge($("#meChatPet"), S.pets[who] || "debug-duck-v2", "idle");
+    $("#meChips").innerHTML = QUICK.map((q) => `<button type="button">${esc(q)}</button>`).join("");
+    $("#meChips").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => sendMe(b.textContent)));
+    meChat.poll();
+    let d; try { d = await get(`/me/${who}`); } catch (_) { return; }
+    const items = d.shifts.map((s) => ({ ...s, label: "Library shift", kind: "shift" })).concat(d.busy.map((b) => ({ ...b })));
+    const clash = (a, b) => new Date(a.start) < new Date(b.end) && new Date(b.start) < new Date(a.end);
+    items.forEach((it) => { if (it.kind === "shift") it.clash = d.busy.some((b) => b.kind !== "due" && clash(it, b)); });
+    const html = DAYS.map((day, i) => {
+      const date = new Date(MONDAY.getTime() + i * 864e5);
+      const today = items.filter((it) => (new Date(it.start).getDay() + 6) % 7 === i).sort((a, b) => new Date(a.start) - new Date(b.start));
+      const rows = today.map((it) => `<div class="week-item ${it.kind === "shift" ? "shift" : ""} ${it.clash ? "clash" : ""}">
+          <time>${it.kind === "due" ? "due " + hourLabel(new Date(it.start)) : span(it).replace(/^\w{3} /, "")}</time>
+          <span class="what"><b>${esc(it.label)}</b>${it.clash ? " · collides" : ""}${it.source && it.kind !== "shift" ? `<span class="src"> · from ${esc({ canvas: "Canvas", calendar: "your calendar", gmail: "an email", text: "your text", asu: "ASU calendar" }[it.source] || it.source)}</span>` : ""}</span></div>`).join("");
+      return `<div class="week-day"><h3>${day} ${date.getDate()}</h3>${rows || '<p class="week-empty">Nothing.</p>'}</div>`;
+    }).join("");
+    $("#meWeek").innerHTML = html + (d.classes.length ? `<p class="muted small">Classes every week: ${d.classes.map(esc).join(", ")}.</p>` : "");
+    const meters = d.rooms.filter((r) => r.unit === "$" || r.rule_id.startsWith("f1") || (r.rule_id === "aca_25_avg" && r.room < 16)).map((r) => {
+      const pct = Math.max(0, Math.min(100, 100 * r.used / r.cap));
+      const val = r.unit === "$" ? `${money(r.room)} left` : `${r.used.toFixed(0)} of ${r.cap.toFixed(0)} h`;
+      const other = r.rule_id.startsWith("f1") && Object.keys(d.other_jobs).length ? `Includes ${Object.entries(d.other_jobs).map(([k, v]) => `${v} h at ${k}`).join(", ")} that the Library can't see.` : "";
+      return `<div class="meter"><div class="top"><span>${RULE[r.rule_id] || r.rule_id}</span><b>${val}</b></div>
+        <span class="track"><span class="fill ${r.room < 4 ? "tight" : ""}" style="width:${pct}%"></span></span>${other ? `<span class="note">${other}</span>` : ""}</div>`;
+    }).join("");
+    const runway = d.runway ? `<div class="meter"><span class="note">At this week's schedule your Work-Study award lasts about ${d.runway[0].toFixed(1)} more weeks; the next break is ${d.runway[2]} weeks away.</span></div>` : "";
+    $("#mePrivate").innerHTML = `<div class="priv">${meters || '<p class="muted small">No hour limit is close this week.</p>'}${runway}
+      <div class="seen-box"><h3>What others see</h3><ul><li>Coworkers and the manager: that you're busy at some times, which shift you want to trade, and your yes or no.</li>
+      <li>Never: your calendar, your reasons, your other jobs, your visa or Work-Study status.</li></ul></div>
+      <p class="muted small">${d.wants_more_hours ? "You asked for more hours: your mascot picks extra shifts that fit every limit, and you confirm each one." : "Want more hours? Tell your mascot, and it will pick extra shifts that fit every limit."}</p></div>`;
+  }
+  async function sendMe(text) {
+    const who = role(); if (!PEOPLE.includes(who) || !text) return;
+    await post(`/phone/${who}/text`, { text }).catch(() => {});
+    meChat.poll(); setTimeout(renderMe, 600);
+  }
+
+  async function renderMgr() {
+    mgrChat.who !== "manager" && mgrChat.reset("manager");
+    mgrChat.poll();
+    if (!$("#exDay").options.length) {
+      $("#exDay").innerHTML = DAYS.map((d, i) => { const dt = new Date(MONDAY.getTime() + i * 864e5); return `<option value="${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}"${i === 3 ? " selected" : ""}>${d} ${dt.getDate()}</option>`; }).join("");
+      const hrs = (sel) => Array.from({ length: 16 }, (_, k) => k + 7).map((h) => `<option value="${h}"${h === sel ? " selected" : ""}>${(h % 12) || 12} ${h >= 12 ? "PM" : "AM"}</option>`).join("");
+      $("#exStart").innerHTML = hrs(18); $("#exEnd").innerHTML = hrs(22);
+    }
+    renderBoard("#mgrBoard");
+    renderForecast("#mgrForecast");
+    let m; try { m = await get("/manager/state"); } catch (_) { return; }
+    $("#mgrSwapRule").checked = !!m.swap_rule;
+    m.roster.forEach((r) => { S.roster[r.shift_id] = r; });
+    const li = (t, sub) => `<li>${t}${sub ? `<span class="sub">${sub}</span>` : ""}</li>`;
+    const open = m.open.map((s) => li(`${name(S.roster[s] ? S.roster[s].owner : "")}'s ${shiftLabel(s)}`, "no safe trade; still scheduled, no reason given"));
+    const extras = m.extras.map((s) => { const r = S.roster[s]; return li(`Extra: ${shiftLabel(s)}`, r && r.owner !== "open" ? `taken by ${name(r.owner)}` : "offered to every mascot"); });
+    const issues = m.issues.map((i) => li(`${esc(i.text)}`, `${i.category} · from ${esc(i.from)} · ${i.status}`));
+    const meets = Object.entries(m.meetings).map(([, mt]) => { const c = mt.chosen; const going = Object.values(mt.rsvp).filter(Boolean).length;
+      return li(c == null ? "Team meeting: pick a time in your inbox" : `Team meeting ${span({ start: mt.options[c].slot[0], end: mt.options[c].slot[1] })}`, c == null ? `${mt.options.length} options` : `${going} coming, ${Object.keys(mt.rsvp).length - going} can't`); });
+    const block = (title, rows, empty) => `<ul class="mgr-list"><h3>${title}</h3>${rows.length ? rows.join("") : `<li class="muted">${empty}</li>`}</ul>`;
+    $("#mgrLists").innerHTML = block("Open shifts", open.concat(extras), "None.") + block("Reports", issues, "No reports.") + block("Meetings", meets, "None scheduled.");
+  }
+
+  // the agent graph, fed by the broker's wire events
+  const NODE = (id) => (PEOPLE.includes(id) || id === "broker" || id === "steward" ? id : null);
+  function ensureFlow() {
+    if (flow || !window.TagOutFlow) return;
+    flow = TagOutFlow.create($("#flow"), { students: PEOPLE.filter((p) => p in S.names).map((p) => ({ id: p, name: S.names[p] })), manager: "Library manager" });
+    renderLedger();
+    if (S.debug) Promise.all(PEOPLE.map((p) => get(`/me/${p}`).catch(() => null))).then((all) => {
+      leak.labels = new Set(all.filter(Boolean).flatMap((d) => d.busy.map((b) => b.label).concat(d.classes)).filter((l) => l && l.length > 3));
+    });
+  }
+  function flowState(ev) {
+    const st = (id, t, tone) => flow.state(id, t, tone);
+    switch (ev.type) {
+      case "sunday_check": PEOPLE.forEach((a) => st(a, "checking next week", "wait")); st("broker", "Sunday check sent"); break;
+      case "trade_request": st(ev.agent, ev.urgent ? "called out" : "wants a trade", "wait"); break;
+      case "round": st("broker", `${cap(ev.phase)} round ${ev.iteration}: asking ${ev.agents.length}`, "wait"); break;
+      case "picks": Object.entries(ev.picks).forEach(([a, s]) => st(a, s ? `picked ${shortLabel(s)}` : "passed", s ? "ok" : "")); break;
+      case "counter_window": st("broker", `counter-offer window, ${ev.seconds} s`, "wait"); break;
+      case "selected": st("broker", `CP-SAT kept ${ev.proposals.length}`, "ok"); break;
+      case "prepare": st("broker", `holding ${ev.txn_id}`, "wait"); st("steward", "asked to approve", "wait"); break;
+      case "vote": st(ev.agent === "steward" ? "steward" : ev.agent, { yes: "confirmed", no: "declined", stale: "week changed", timeout: "no answer" }[ev.vote], ev.vote === "yes" ? "ok" : "bad"); break;
+      case "commit": st("broker", `committed ${ev.txn_id}`, "ok"); (ev.members || []).forEach((a) => st(a, "traded", "ok")); break;
+      case "abort": st("broker", `aborted ${ev.txn_id}`, "bad"); break;
+      case "summary": st("broker", ev.kind === "week" || !ev.kind ? `week done: ${ev.fixed} of ${ev.asked}` : `${ev.kind} done`, "ok"); break;
+      default: break;
+    }
+  }
+  function countKeys(o) {
+    if (Array.isArray(o)) return o.reduce((n, v) => n + countKeys(v), 0);
+    // a slot map's keys are slot labels ("Mon 10"), not field names: count its values only
+    if (o && typeof o === "object") return Object.entries(o).reduce((n, [k, v]) => n + (ALLOWED.has(k) ? 0 : 1) + (k === "slots" ? 0 : countKeys(v)), 0);
+    return 0;
+  }
+  function feedWire(ev) {
+    if (ev.status < 400) {
+      leak.msgs++;
+      leak.fields += countKeys(ev.payload) + countKeys(ev.response);
+      const blob = JSON.stringify([ev.payload, ev.response]);
+      if (leak.labels instanceof Set) leak.labels.forEach((l) => { if (blob.includes(l)) leak.hits++; });
+    }
+    $("#lkMsgs").textContent = leak.msgs.toLocaleString("en-US");
+    $("#lkFields").textContent = String(leak.fields);
+    $("#lkLabels").textContent = String(leak.hits);
+    const from = NODE(ev.from), to = NODE(ev.to);
+    if (!flow || !live || !from || !to) return;
+    flow.message({ from, to, schema: ev.schema, path: ev.path, payload: ev.payload, dir: "req", ts: ev.ts });
+    if (ev.status >= 400) flow.message({ from: to, to: from, schema: `${ev.status} rejected`, payload: ev.response || {}, dir: "resp", ts: ev.ts });
+    else if (ev.response != null) {
+      const held = ev.schema === "Prepare" && ev.response && ev.response.vote === null;
+      flow.message({ from: to, to: from, schema: held ? "Held: asking student" : ev.resp_schema || "OK", payload: ev.response, dir: "resp", ts: ev.ts });
+    }
+    if (PEOPLE.includes(to) && (ev.schema === "RingCheck" || ev.schema === "PickRequest" || ev.schema === "Prepare")) flow.rule(to);
+  }
+  // the owner channel: private packets between each phone and its mascot (judge view data, never on the wire)
+  const owners = {};
+  async function pollOwners() {
+    if (!flow || !S.debug) return;
+    await Promise.all(PEOPLE.concat(["manager"]).map(async (who) => {
+      let d; try { d = await get(`/phone/${who}`); } catch (_) { return; }
+      const msgs = d.messages || [], seen = owners[who] ?? msgs.length;
+      owners[who] = msgs.length;
+      msgs.slice(seen).forEach((m) => {
+        const phone = `phone:${who}`, agent = who === "manager" ? "steward" : who;
+        const toPhone = m.kind !== "student";
+        if (m.kind === "reply" && m.from === "auto") return;
+        flow.message({ from: toPhone ? agent : phone, to: toPhone ? phone : agent, schema: toPhone ? "Message" : "Text", private: true, text: m.text, dir: "req" });
+      });
+    }));
+  }
+
+  async function snoop() {
+    const note = $("#snoopNote");
+    note.hidden = false; note.textContent = "Asking every mascot why it passed, and probing for room it never offered…";
+    let r; try { r = await post("/demo/snoop"); } catch (e) { note.textContent = "Snoop needs the synthetic demo (debug) mode."; return; }
+    const v = Object.values(r), refused = v.filter((x) => x.why === 422).length, nos = v.filter((x) => x.room_probe === false).length;
+    note.innerHTML = `<b>${refused} of ${v.length}</b> mascots rejected "why did you pass?" outright: the request carried a field no schema has (HTTP 422). <b>${nos} of ${v.length}</b> answered no about a shift they never picked, so a nosy broker learns nothing about anyone's room. Watch the red replies in the graph.`;
+  }
+
+  async function renderLedger() {
+    let d = {}, q = {};
+    try { [d, q] = await Promise.all([get("/sim"), get("/quotes")]); } catch (_) { /* fill what we can */ }
+    const gh = (p) => `https://github.com/neric-joel/tag-out/blob/main/${p}`;
+    const src = (kind, path, extra) => `<span class="src">${kind}</span> <a href="${gh(path)}"><code>${path}</code></a>${extra ? `<span class="sub">${extra}</span>` : ""}`;
+    const quote = (id) => q[id] ? `<span class="src">Rule</span> <code>${id}</code><blockquote>"${esc(q[id].quote)}"</blockquote><a class="sub" href="${esc(q[id].url)}">${esc(q[id].url.replace(/^https:\/\//, "").split("/")[0])}</a>` : `<span class="src">Rule</span> <code>${id}</code>`;
+    const rows = [
+      ["21 of 20 h", "What a Library-only scheduler would do to Ben (F-1): it can't see his 9 Aramark hours.", src("Test", "tests/test_baseline.py")],
+      ["17 of 20 h", "Ben's hours after the ring. Only Ben sees this line.", src("Test", "tests/test_flow.py")],
+      ["20 h a week, all jobs", "The F-1/J-1 on-campus limit during the semester, summed across every employer.", quote("f1_break_40")],
+      ["25 h average", "Every ASU student worker, averaged over the measurement period.", quote("aca_25_avg")],
+      ["Up to the award", "Federal Work-Study earnings stop at the award.", quote("fws_award")],
+      [d.tagout_pct != null ? `${d.tagout_pct}% vs ${d.swap_pct}%` : "–", "Collisions fixed: Tag Out vs a group chat where every volunteer checks all of their own limits correctly.", src("Simulation", "docs/simulation.json", "1,000 synthetic weeks, seed 7, 40-person roster")],
+      [d.rule_breaks_hand_checked_per_week != null ? `${d.rule_breaks_hand_checked_per_week} a week` : "–", "Limit-breaking covers a group chat still makes when volunteers check this job's hours by hand.", src("Simulation", "docs/simulation.json", d.rule_breaks_by_rule ? Object.entries(d.rule_breaks_by_rule).map(([k, v]) => `${k} ${v}`).join(", ") : "")],
+      ["10,000", "Students who work at ASU each year.", quote("stats")],
+      ["0", "Private values in any agent-to-agent message (also counted live above).", src("Test", "tests/test_privacy.py")],
+      ["0", "Decisions made by an LLM. Rules are code; Claude only reads students' texts.", src("Code", "rulebook/rules.py")],
+    ];
+    $("#ledger").innerHTML = `<thead><tr><th>Number</th><th>What it says</th><th>Source</th></tr></thead><tbody>${rows.map((r) => `<tr><td class="fig">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join("")}</tbody>`;
   }
 
   // ---------- controls ----------
@@ -443,6 +705,19 @@
     const size = $("#petSize");
     size.value = store.get("tagout.size", 120);
     size.addEventListener("input", () => { if (world) world.setPetHeight(+size.value); store.set("tagout.size", +size.value); });
+    $("#whoPill").addEventListener("click", openSignIn);
+    window.addEventListener("hashchange", route);
+    $("#meCompose").addEventListener("submit", (e) => { e.preventDefault(); const i = $("#meInput"); const t = i.value.trim(); i.value = ""; sendMe(t); });
+    $("#mgrExtra").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await post("/manager/extra", { date: $("#exDay").value, start: +$("#exStart").value, end: +$("#exEnd").value }).catch(() => {});
+      setTimeout(renderMgr, 400);
+    });
+    $("#mgrMeeting").addEventListener("click", async () => { await post("/manager/meeting", {}).catch(() => {}); setTimeout(renderMgr, 400); });
+    $("#mgrSwapRule").addEventListener("change", (e) => post("/manager/tap", { data: e.target.checked ? "rule:swaps:on" : "rule:swaps:off" }).then(renderMgr).catch(() => {}));
+    $("#agSunday").addEventListener("click", () => post("/demo/sunday").catch(() => {}));
+    $("#agRun").addEventListener("click", () => post("/demo/run").catch(() => {}));
+    $("#agSnoop").addEventListener("click", snoop);
     $("#compose").addEventListener("submit", async (e) => {
       e.preventDefault();
       const input = $("#composeInput"), text = input.value.trim(); if (!text) return;
@@ -465,16 +740,22 @@
     st.roster.forEach((r) => { S.roster[r.shift_id] = r; });
     document.querySelectorAll("[data-debug]").forEach((el) => { el.hidden = !S.debug; });
     $("#tabJudge").hidden = !S.debug;
-    (JUDGE ? $("#tabJudge") : $("#tabArena")).setAttribute("aria-current", "page");
-
+    $("#tabMe").hidden = $("#tabMgr").hidden = $("#whoPill").hidden = !S.debug; // role pages need the synthetic demo
     world = PetWorld.create($("#world"), { petHeight: +store.get("tagout.size", 120), onSelect: (id) => { if (S.debug) openChat(id); } });
     window.tagOutWorld = world; // handy in the console during the demo
     world.setPets(PEOPLE.filter((p) => p in S.names).map((p) => ({ id: p, name: S.names[p], petId: S.pets[p] || "debug-duck-v2" })));
 
     if (JUDGE && S.debug) { $("#debugBanner").hidden = false; $("#judgePanel").hidden = false; buildPhones(); renderJudge(); setInterval(renderJudge, 4000); }
-    renderCredits(); renderKpis(); renderBoard(); renderSim(); wire();
+    renderKpis(); renderBoard(); renderSim(); wire(); route();
     if (S.debug) { chat.who = store.get("tagout.chat", "ana"); openChat(chat.who); }
-    setInterval(() => { if (S.debug) pollChat(); phones.forEach((p) => p.poll()); }, 1200);
+    setInterval(() => {
+      if (S.debug && S.view === "commons") pollChat();
+      phones.forEach((p) => p.poll());
+      if (S.view === "me") meChat.poll();
+      if (S.view === "manager") mgrChat.poll();
+      if (S.view === "agents") pollOwners();
+    }, 1200);
+    setInterval(() => { if (S.view === "me") renderMe(); if (S.view === "manager") renderMgr(); }, 5000);
     connect();
   }
   boot().catch((e) => { $("#roundStatus").textContent = "Can't reach the broker. Start it with: python -m scripts.run_all"; console.error(e); });

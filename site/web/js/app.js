@@ -530,7 +530,7 @@
     $("#petGrid").innerHTML = d.pets.map((p) => {
       const owner = taken.get(p.id), mine = owner === $("#petFor").value;
       return `<button type="button" class="pet-card" data-id="${esc(p.id)}" data-sheet="${esc(p.sheet || "")}" ${owner && !mine ? 'aria-disabled="true"' : ""}>
-        <img src="${esc(p.poster)}" alt="" loading="lazy"><span class="n">${esc(p.name)}</span>
+        <img src="${esc(p.poster)}" alt="" decoding="async"><span class="n">${esc(p.name)}</span>
         <span class="c">${owner ? (mine ? "current pick" : `${esc(name(owner))}'s`) : "by " + esc(p.creator || "unknown")}</span></button>`;
     }).join("") || '<p class="muted">No pets found.</p>';
     $("#petGrid").querySelectorAll(".pet-card").forEach((b) => b.addEventListener("click", () => usePet(b)));
@@ -860,6 +860,7 @@
     note.hidden = false;
     const v = Object.values(r), refused = v.filter((x) => x.why === 422).length, nos = v.filter((x) => x.room_probe === false).length;
     note.innerHTML = `<b>${nos} of ${v.length}</b> mascots answered a plain no when the broker probed for room on a shift they never picked, the same no as a real one, so a nosy broker learns nothing about anyone's hours. Asking outright "why did you pass?" gets nowhere either: <b>${refused} of ${v.length}</b> rejected the request before any code ran (HTTP 422), since no message has a field for a reason. Watch the red replies in the graph.`;
+    reveal("#flow .tof-viewport"); // the note pushed the graph down: keep all of it on screen
   }
 
   async function renderLedger() {

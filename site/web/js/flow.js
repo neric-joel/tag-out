@@ -465,7 +465,7 @@
       const m = record.message;
       detailHead.textContent = m.schema + ' · ' + name(m.from) + ' → ' + name(m.to);
       meaning.textContent = explain(m.schema);
-      meta.textContent = 'ID: ' + m.id + (m.path ? ' · Path: ' + m.path : '') + ' · ' + record.time;
+      meta.textContent = [m.id != null ? 'ID: ' + m.id : '', m.path ? 'Path: ' + m.path : '', record.time].filter(Boolean).join(' · ');
       ownerNote.hidden = ownerText.hidden = !m.private;
       content.hidden = !!m.private;
       content.textContent = m.private ? '' : JSON.stringify(m.payload, null, 2);

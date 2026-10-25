@@ -275,9 +275,17 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
                                     kind=kind, label=e.title[:80], source=body.source))  # type: ignore[arg-type]
         if body.source == "canvas" and store.student().prefs.protect_exam_eves:
             blocks += exam_eves(blocks)
+        # a sync replaces this source's events inside the synced window, so a cancelled event stops being busy
+        before = {b.id: (b.start, b.end) for b in store.busy() if b.source == body.source}
+        if blocks:
+            lo, hi = min(b.start for b in blocks), max(b.end for b in blocks)
+            keep = {b.id for b in blocks}
+            store.delete_busy([i for i, (s, e) in before.items() if i not in keep and s >= lo and e <= hi])
         store.add_busy(blocks)
-        await brain.schedule_changed()
-        return {"imported": len(blocks)}
+        after = {b.id: (b.start, b.end) for b in store.busy() if b.source == body.source}
+        if after != before:  # only a real change makes a held trade stale
+            await brain.schedule_changed()
+        return {"imported": len(blocks), "changed": after != before}
 
     @app.post("/pet")
     async def pet(body: PetChoice, x_owner_token: str | None = Header(None)) -> dict:

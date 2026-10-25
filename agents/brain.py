@@ -342,7 +342,7 @@ class Brain:
             after = [s for s in self.store.shifts() if s.id not in {d.id for d in drop or []}] + [to_shift(ref)]
             hours, cap = week_hours(st, after, monday), f1_cap_for(st, monday)
             self.store.note(f"Passed for now: {label} would put you at {hours:g} of {cap:g} on-campus hours. Asked you.")
-            text, keep = explain.ask_limit(label, hours, cap), "Leave room"
+            text, keep = explain.ask_limit(label, hours, cap, st.limits.other_employer_hours), "Leave room"
         buttons = [("Take it", f"ask:yes:{ref.shift_id}"), (keep, f"ask:no:{ref.shift_id}")]
         if keep == "Leave room":
             buttons.reverse()  # near a limit, the safe answer comes first

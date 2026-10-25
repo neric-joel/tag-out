@@ -91,3 +91,23 @@ async def test_cubbie_script_against_a_live_mascot(system, tmp_path, monkeypatch
     finally:
         server.should_exit = True
         await task
+
+
+async def test_resync_only_counts_real_changes(system):
+    """Cubbie syncs every Sunday: the same events again must not make a held trade stale; a cancelled one goes."""
+    events = [{"title": "Gym with roommate", "start": "2026-10-30T10:00:00-07:00", "end": "2026-10-30T12:00:00-07:00",
+               "kind": "other"},
+              {"title": "Study group", "start": "2026-10-28T16:00:00-07:00", "end": "2026-10-28T17:00:00-07:00",
+               "kind": "other"}]
+    first = (await system.net.client.post("http://zoe.mascot/import", json={"source": "calendar", "events": events})).json()
+    v1 = (await system.net.client.get("http://zoe.mascot/version")).json()["version"]
+    again = (await system.net.client.post("http://zoe.mascot/import", json={"source": "calendar", "events": events})).json()
+    v2 = (await system.net.client.get("http://zoe.mascot/version")).json()["version"]
+    assert first["changed"] and not again["changed"] and v2 == v1
+    # next Sunday the study group is cancelled and a Monday meeting is new; the window Mon-Fri covers the study group
+    monday = {"title": "Advisor meeting", "start": "2026-10-26T09:00:00-07:00", "end": "2026-10-26T10:00:00-07:00",
+              "kind": "appointment"}
+    later = (await system.net.client.post("http://zoe.mascot/import",
+                                          json={"source": "calendar", "events": [monday, events[0]]})).json()
+    labels = [b.label for b in system.store("zoe").busy()]
+    assert later["changed"] and "Study group" not in labels and {"Gym with roommate", "Advisor meeting"} <= set(labels)

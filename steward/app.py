@@ -40,6 +40,8 @@ from seeds.scenario import EMPLOYER, MANAGER, STUDENTS
 
 ICS = Path(__file__).resolve().parent.parent / "seeds" / "ics"
 K_ANON = 3  # the forecast only reports a slot when at least this many people are affected
+CHECKS = ("class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other "
+          "jobs), the 25-hour average and any award limit")
 
 
 class Tap(BaseModel):
@@ -71,7 +73,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
     state = {"roster": load_roster(), "version": 1, "holds": {}, "ballots": {}, "changed": {}, "phone": [],
              "auto": os.environ.get("TAGOUT_MODE", "auto") == "auto",
              "delay": float(os.environ.get("TAGOUT_AUTO_DELAY", "1.5")) + 0.5, "open": [],
-             "swap_rule": swap_rule_default(), "issues": {}, "meetings": {}, "extras": []}
+             "swap_rule": swap_rule_default(), "issues": {}, "meetings": {}, "extras": [], "checked": {}}
     app.state.s = state
 
     def phone_add(msg: dict) -> None:
@@ -168,10 +170,10 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
                              "stays covered and nobody's hours change. It still needs every student to confirm.",
                              [("Ask me each time", "rule:swaps:off")], kind="info")
             return {"vote": Vote(txn_id=p.txn_id, agent_id="steward", vote="yes", ballot=p.ballot).model_dump()}
-        text = ("Trade request: " + "; ".join(lines) + ". Each student's mascot privately checked the trade "
-                "against the shifts and other jobs it knows about for its student and said eligible; no reasons are "
-                "shared. It goes through only if every student confirms and you approve. If you don't answer in "
-                "time, nothing moves and everyone keeps the shift they were scheduled for.")
+        text = ("Trade request: " + "; ".join(lines) + ".\nChecked " + datetime.now(PHX).strftime("%a %b %d, %I:%M %p")
+                + ": each student's mascot re-checked this exact trade against " + CHECKS + ", and said eligible. "
+                "No reasons are shared.\nIt goes through only if every student confirms and you approve. If you "
+                "don't answer in time, nothing moves and everyone keeps the shift they were scheduled for.")
         await to_manager(text, [("Approve", f"approve:{p.txn_id}"), ("Deny", f"deny:{p.txn_id}")])
         return {"vote": None}
 
@@ -312,6 +314,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
                 ref = state["roster"][m.shift_id]
                 state["roster"][m.shift_id] = ref.model_copy(update={"owner": m.to_agent})
                 state["changed"][m.shift_id] = d.txn_id
+                state["checked"][m.shift_id] = datetime.now(PHX).isoformat(timespec="minutes")
                 done.append(f"{names[m.to_agent]} now works {fmt_span(ref.start, ref.end)}")
             state["version"] += 1
             phone_add({"kind": "info", "buttons": [], "text": "Roster updated: " + "; ".join(done)
@@ -325,6 +328,8 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
             rows.append({"date": f"{r.start:%Y-%m-%d}", "start": f"{r.start:%H:%M}", "end": f"{r.end:%H:%M}",
                          "position": "Library front desk", "worker": names.get(r.owner, r.owner),
                          "changed_by_trade": "yes" if r.shift_id in state["changed"] else "",
+                         "checked_at": state["checked"].get(r.shift_id, ""),
+                         "checked": CHECKS if r.shift_id in state["changed"] else "",
                          "shift_id": r.shift_id})
         return rows
 
@@ -333,7 +338,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         """The approved roster for the manager's own scheduler or shared sheet (When I Work, Sling, Excel)."""
         out = io.StringIO()
         w = csv.DictWriter(out, fieldnames=["date", "start", "end", "position", "worker", "changed_by_trade",
-                                            "shift_id"])
+                                            "checked_at", "checked", "shift_id"])
         w.writeheader()
         w.writerows(export_rows())
         return Response(out.getvalue(), media_type="text/csv",
@@ -388,7 +393,7 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         if os.environ.get("TAGOUT_DEBUG") != "1":
             raise HTTPException(403)
         state.update(roster=load_roster(), version=1, holds={}, ballots={}, changed={}, phone=[], open=[],
-                     swap_rule=swap_rule_default(), issues={}, meetings={}, extras=[])
+                     swap_rule=swap_rule_default(), issues={}, meetings={}, extras=[], checked={})
         return {"ok": True}
 
     @app.post("/admin/auto")

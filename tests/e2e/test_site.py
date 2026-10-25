@@ -45,6 +45,11 @@ def browser():
         b.close()
 
 
+def ready(page):
+    """The hosted page has loaded its recording and wired its buttons."""
+    expect(page.locator("#liveText")).to_have_text("Recording", timeout=30_000)
+
+
 @pytest.fixture
 def page(browser):
     ctx = browser.new_context(viewport={"width": 1440, "height": 900})
@@ -57,6 +62,7 @@ def page(browser):
 
 def test_play_the_week_on_the_hosted_page(page, base_url):
     page.goto(base_url + "/", wait_until="domcontentloaded")
+    ready(page)
     expect(page.locator(".static-banner")).to_contain_text("recording of the real system")
     page.get_by_role("button", name="Play the week").first.click()
     expect(page.locator("#kFixed")).to_contain_text("4", timeout=60_000)
@@ -69,6 +75,7 @@ def test_play_the_week_on_the_hosted_page(page, base_url):
 
 def test_sign_in_as_ben_shows_his_private_week(page, base_url):
     page.goto(base_url + "/", wait_until="domcontentloaded")
+    ready(page)
     page.locator("#whoPill").click()
     page.locator("#people button[data-who='ben']").click()
     expect(page.locator("#viewStudent")).to_be_visible()
@@ -82,6 +89,7 @@ def test_sign_in_as_ben_shows_his_private_week(page, base_url):
 
 def test_manager_page_shows_approvals_and_the_roster(page, base_url):
     page.goto(base_url + "/", wait_until="domcontentloaded")
+    ready(page)
     page.get_by_role("button", name="Play the week").first.click()
     expect(page.locator("#kFixed")).to_contain_text("of 5", timeout=60_000)
     page.goto(base_url + "/#manager", wait_until="domcontentloaded")
@@ -93,6 +101,7 @@ def test_manager_page_shows_approvals_and_the_roster(page, base_url):
 
 def test_how_it_works_counts_messages_and_finds_no_leak(page, base_url):
     page.goto(base_url + "/#agents", wait_until="domcontentloaded")
+    ready(page)
     page.locator("#agSunday").click()
     expect(page.locator("#lkMsgs")).to_have_text(re.compile(r"^[1-9]\d{2,}"), timeout=60_000)  # 100+ messages
     expect(page.locator("#lkFields")).to_have_text("0")

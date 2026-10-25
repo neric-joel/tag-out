@@ -74,6 +74,10 @@ class Store:
         rows = self.db.execute("SELECT json FROM busy").fetchall()
         return sorted((BusyBlock.model_validate_json(r[0]) for r in rows), key=lambda b: b.start)
 
+    def delete_busy(self, ids: list[str]) -> None:
+        self.db.executemany("DELETE FROM busy WHERE id = ?", [(i,) for i in ids])
+        self.db.commit()
+
     def add_busy(self, blocks: list[BusyBlock]) -> None:
         for b in blocks:
             self.db.execute("INSERT OR REPLACE INTO busy VALUES (?, ?)", (b.id, b.model_dump_json()))

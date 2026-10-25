@@ -56,3 +56,20 @@ async def test_callout_without_a_day_asks_which_shift(system):
     assert tapped["reply"].startswith("Asking your coworkers to cover")
     request = await system.wait_for("trade_request", after=n)
     assert request["shift_id"] == ask["buttons"][0]["data"][4:] and request["urgent"] is True
+
+
+@pytest.mark.parametrize("text,is_callout", [
+    ("I woke up sick, can't make it Monday", True),
+    ("I am sick, cannot make it Sunday", True),
+    ("can someone take my thursday shift, family emergency", True),
+    ("im not feeling well, skip my shift", True),
+    ("won't make it in tomorrow", True),
+    ("dentist Thu 3pm", False),
+    ("I feel well today, more hours please", False),
+    ("I got the Amazon interview Thu 3pm!!", False),
+])
+def test_callout_phrases(text, is_callout):
+    from datetime import date
+
+    from ingest.text import callout
+    assert (callout(text, date(2026, 10, 26), date(2026, 10, 25)) is not None) == is_callout

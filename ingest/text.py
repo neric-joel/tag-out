@@ -69,7 +69,8 @@ NEVER_RE = re.compile(r"\b(never|no|not)\b.*\b(mon|tue|wed|thu|fri|sat|sun)[a-z]
 CALLOUT_RE = re.compile(
     r"\b(tag me out|call(?:ing)? out|call in sick|"
     r"(?:can'?t|cannot|can not|won'?t) (?:make|work|do|come to|come in) (?:it|my|the|today|tomorrow|in)|"
-    r"cover (?:for )?me|cover my|take my shift|i'?m sick|i am sick|feel(?:ing)? (?:sick|ill)|got sick|woke up sick)\b",
+    r"cover (?:for )?me|cover my|take my (?:\w+ )?shift|skip my (?:\w+ )?shift|i'?m sick|i am sick|"
+    r"not feel(?:ing)? well|feel(?:ing)? (?:sick|ill)|got sick|woke up sick|family emergency)\b",
     re.I)
 RELATIVE_RE = re.compile(r"\b(today|tonight|tomorrow)\b", re.I)
 

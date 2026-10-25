@@ -118,7 +118,7 @@ def run_tour(t: Tour) -> None:
     t.cap("In each round a mascot answers the broker with one pick or a pass. A pass looks the same whatever the reason.", 8)
     t.cap("No ring yet: Ana's only option is her gym slot, so her mascot asks her instead of deciding.", 7)
     t.cap("She says yes. A three-way ring closes, and Ana, Dev and Ben all keep their hours and their pay.", 8)
-    t.cap("Nothing moves until every student confirms and the manager approves. 4 of 5 fixed, $192 of pay kept.", 7)
+    t.cap("Nothing moves until every student confirms. The manager approves covers; swaps pass on a standing rule. 4 of 5 fixed.", 7)
     t.uncap()
 
     t.click("#whoPill")
@@ -149,7 +149,7 @@ def run_tour(t: Tour) -> None:
     t.click("#agSnoop")
     t.page.wait_for_timeout(1200)
     t.scroll("#snoopNote")
-    t.cap("A nosy broker asks every mascot why it passed. All six refuse, and none vouches for a shift it never picked.", 8)
+    t.cap("A nosy broker asks every mascot why it passed. The schemas reject the question, and no mascot vouches for a shift it never picked.", 8)
     t.scroll("#claims")
     t.cap("Every number on the site traces to a rule quote, the simulator or a test.", 6)
     t.uncap()

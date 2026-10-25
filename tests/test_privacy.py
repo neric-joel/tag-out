@@ -129,3 +129,14 @@ async def test_a_mascot_only_vouches_for_shifts_it_picked(tmp_path):
         assert any("never asked for" in e["text"] for e in s.store("zoe").diary())
     finally:
         await s.close()
+
+
+
+def test_site_leak_counter_allows_exactly_the_wire_fields():
+    """The How it works page counts fields outside the schemas against its own list; keep that list honest."""
+    import re
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parent.parent / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    listed = set(re.findall(r'"(\w+)"', re.search(r"const ALLOWED = new Set\(\[(.*?)\]\)", js, re.S).group(1)))
+    assert listed == wire_fields()

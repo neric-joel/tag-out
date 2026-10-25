@@ -41,8 +41,8 @@ def intro(st: Student) -> str:
             "Every Sunday at 6 PM I check next week's Library shifts against your Canvas, your calendar and what "
             "you text me. I only text you when a shift collides with something.\n\n"
             f"What I know, privately: your shifts, your calendar, other jobs ({other}) and the work-hour limits "
-            "that apply to you. What your coworkers and manager see: only that you're busy, and which shift you "
-            "want to trade. Never why.\n\n"
+            "that apply to you. What your coworkers and manager see: that you're busy at some times, which shift "
+            "you want to trade, and your yes or no answers. Never why, and never your hours at other jobs.\n\n"
             "Text me anytime, for example:\n"
             "- dentist Thu 3pm\n"
             "- I'm sick, can't make it today\n"
@@ -76,10 +76,12 @@ def fws_runway(lasts: float, paid: float, weeks_left: int, remaining: float) -> 
             "Aid now what happens when it runs out. I won't take extra shifts that go past it.")
 
 
-def ask_limit(shift_label: str, hours: float, cap: float) -> str:
+def ask_limit(shift_label: str, hours: float, cap: float, other: dict[str, float] | None = None) -> str:
+    check = "".join(f" Is it still {h:g} h at {job} this week? If it's more, choose Leave room." for job, h in
+                    (other or {}).items())
     return (f"A {shift_label} Library shift could come to you, but it would put you at {hours:g} of your {cap:g} "
             "on-campus hours this week (your F-1 limit counts every campus job together). That leaves no room to "
-            "stay late or cover a call-out.\n\n"
+            f"stay late or cover a call-out.{check}\n\n"
             "Leave room: I pass. This is the safer choice.\n"
             "Take it: only if you're sure your week won't run over.")
 
@@ -108,13 +110,14 @@ def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move
         lines.append(f"Hours: you'd be at {week_hours(st, after, monday):g} of your {f1_cap_for(st, monday):g} hours "
                      "across all on-campus jobs" + (f", counting the {other} you told me about." if other else "."))
     lines += ["I checked it against your limits privately. Nobody else sees your numbers.", "",
-              "It goes through only if everyone in it confirms and your manager approves. Confirm, or Decline "
-              "(nobody is told why)."]
+              "It goes through only if everyone in it confirms and your manager approves it (swaps can also pass on "
+              "their standing rule for swaps). Confirm, or Decline (nobody is told why)."]
     return "\n".join(lines)
 
 
 def committed(adds: list[Shift], drops: list[Shift], week: list[Shift] | None = None) -> str:
-    lines = ["Done. The trade went through and your manager approved it.", ""]
+    lines = ["Done. The trade went through: everyone in it confirmed, and your manager approved it (or their "
+             "standing rule for swaps did).", ""]
     lines += [f"You gave: {d.label}" for d in drops] + [f"You took: {a.label}" for a in adds]
     if week:
         lines.append("Your Library week now: " + ", ".join(s.label for s in sorted(week, key=lambda s: s.start)) + ".")
@@ -124,8 +127,7 @@ def committed(adds: list[Shift], drops: list[Shift], week: list[Shift] | None = 
 
 def aborted() -> str:
     return ("That trade was cancelled before anything changed. Your shifts are exactly as they were.\n\n"
-            "Someone's week changed or someone said no; I'm not told who or why, and neither is anyone else. "
-            "I'll keep looking in the next round.")
+            "Someone's week changed or someone said no. Nobody is told why. I'll keep looking in the next round.")
 
 
 def issue_draft(text: str, category: str) -> str:

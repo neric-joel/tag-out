@@ -237,7 +237,7 @@
       }
       if (packets.length || effects.size) schedule(); else previous = 0;
     }
-    function message(input) {
+    function message(input, quiet) {
       if (dead) return;
       if (!input || !nodes.has(input.from) || !nodes.has(input.to)) throw new Error('Message endpoints must be known node ids.');
       const edge = edges.find(e => (e.a === input.from && e.b === input.to) || (e.b === input.from && e.a === input.to));
@@ -261,6 +261,7 @@
       if (records.length > 400) records.pop().row.remove();
       count.textContent = records.length + ' retained';
       const color = m.private ? 'var(--positive)' : m.dir === 'resp' ? 'var(--muted)' : 'var(--hue)';
+      if (quiet) return; // history: listed for inspection, not animated
       if (motion.matches) {
         flash(edge.path, 'tof-edge-flash', 500, color);
         flash(nodes.get(m.to).el, 'tof-receiving', 420, color);

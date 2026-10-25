@@ -16,6 +16,7 @@
     "request_id", "ring_id", "role", "round_id", "seen_version", "shift_id", "slots", "start", "state", "text", "title",
     "to_agent", "trades_made", "txn_id", "urgent", "version", "vote", "you_give", "agent_id"]);
   const leak = { msgs: 0, fields: 0, hits: 0, labels: null };
+  const wireLog = []; // recent wire events, so the graph can list what crossed before it was opened
   let flow = null;
 
   const S = {
@@ -324,7 +325,7 @@
         if (ev.kind === "extra") return ev.taker ? `Extra shift ${shiftLabel(ev.shift_id)} taken by ${name(ev.taker)}.` : `Nobody could take the extra shift ${shiftLabel(ev.shift_id)} safely.`;
         return `Week done: ${ev.fixed} of ${ev.asked} fixed, ${money(ev.pay_kept)} of pay kept by trading, ${ev.open} open.`;
       case "extra_open": return `The manager posted an extra shift. Every mascot is offered it.`;
-      case "snoop": if (ev.results) showSnoop(ev.results); return `A nosy broker asked every mascot why it passed. Every one refused.`;
+      case "snoop": if (ev.results) showSnoop(ev.results); return `A nosy broker asked every mascot why it passed. The schemas rejected every question.`;
       case "reset": return "Demo reset.";
       default: return null;
     }
@@ -385,8 +386,8 @@
         const chips = Object.values(S.roster).filter((r) => { const s = new Date(r.start); return r.owner === p && (s.getDay() + 6) % 7 === i && s >= MONDAY && s < end; })
           .sort((a, b) => new Date(a.start) - new Date(b.start)).map((r) => {
             const id = r.shift_id, cls = S.open.has(id) ? "open" : S.moved[id] || (S.requested.has(id) ? "req" : "");
-            const title = { open: "no safe trade", moved: "traded in", covered: "covered", req: "wants a trade" }[cls] || "shift";
-            return `<span class="chip ${cls}" title="${span(r)}: ${title}">${S.open.has(id) ? "open" : span(r, true)}</span>`;
+            const title = { open: "no safe trade; still scheduled", moved: "traded in", covered: "covered", req: "wants a trade" }[cls] || "shift";
+            return `<span class="chip ${cls}" title="${span(r)}: ${title}">${S.open.has(id) ? "no trade" : span(r, true)}</span>`;
           }).join("");
         html.push(`<div class="cell" role="cell">${chips}</div>`);
       }
@@ -652,7 +653,7 @@
     const runway = d.runway ? `<div class="meter"><span class="note">At this week's schedule your Work-Study award lasts about ${d.runway[0].toFixed(1)} more weeks; the next break is ${d.runway[2]} weeks away.</span></div>` : "";
     $("#mePrivate").innerHTML = `<div class="priv">${meters || '<p class="muted small">No hour limit is close this week.</p>'}${runway}
       <div class="seen-box"><h3>What others see</h3><ul><li>Coworkers and the manager: that you're busy at some times, which shift you want to trade, and your yes or no.</li>
-      <li>Never: your calendar, your reasons, your other jobs, your visa or Work-Study status.</li></ul></div>
+      <li>Never: your calendar, your reasons, or your hours at other jobs. Coworkers never see your visa or Work-Study status (your manager knows those from hiring).</li></ul></div>
       <p class="muted small">${d.wants_more_hours ? "You asked for more hours: your mascot picks extra shifts that fit every limit, and you confirm each one." : "Want more hours? Tell your mascot, and it will pick extra shifts that fit every limit."}</p></div>`;
   }
   async function sendMe(text) {
@@ -689,6 +690,9 @@
   function ensureFlow() {
     if (flow || !window.TagOutFlow) return;
     flow = TagOutFlow.create($("#flow"), { students: PEOPLE.filter((p) => p in S.names).map((p) => ({ id: p, name: S.names[p] })), manager: "Library manager" });
+    const msgs = leak.msgs;
+    wireLog.forEach((ev) => feedWire({ ...ev, quiet: true }));
+    leak.msgs = msgs; // already counted
     renderLedger();
     if (S.debug) Promise.all(PEOPLE.map((p) => get(`/me/${p}`).catch(() => null))).then((all) => {
       leak.labels = new Set(all.filter(Boolean).flatMap((d) => d.busy.map((b) => b.label).concat(d.classes)).filter((l) => l && l.length > 3));
@@ -728,14 +732,16 @@
     $("#lkFields").textContent = String(leak.fields);
     $("#lkLabels").textContent = String(leak.hits);
     const from = NODE(ev.from), to = NODE(ev.to);
-    if (!flow || !live || !from || !to) return;
-    flow.message({ from, to, schema: ev.schema, path: ev.path, payload: ev.payload, dir: "req", ts: ev.ts });
-    if (ev.status >= 400) flow.message({ from: to, to: from, schema: `${ev.status} rejected`, payload: ev.response || {}, dir: "resp", ts: ev.ts });
+    if (from && to && !ev.quiet) { wireLog.push(ev); if (wireLog.length > 300) wireLog.shift(); }
+    if (!flow || !from || !to) return;
+    const quiet = !live || ev.quiet;
+    flow.message({ from, to, schema: ev.schema, path: ev.path, payload: ev.payload, dir: "req", ts: ev.ts }, quiet);
+    if (ev.status >= 400) flow.message({ from: to, to: from, schema: `${ev.status} rejected`, payload: ev.response || {}, dir: "resp", ts: ev.ts }, quiet);
     else if (ev.response != null) {
       const held = ev.schema === "Prepare" && ev.response && ev.response.vote === null;
-      flow.message({ from: to, to: from, schema: held ? "Held: asking student" : ev.resp_schema || "OK", payload: ev.response, dir: "resp", ts: ev.ts });
+      flow.message({ from: to, to: from, schema: held ? "Held: asking student" : ev.resp_schema || "OK", payload: ev.response, dir: "resp", ts: ev.ts }, quiet);
     }
-    if (PEOPLE.includes(to) && (ev.schema === "RingCheck" || ev.schema === "PickRequest" || ev.schema === "Prepare")) flow.rule(to);
+    if (!quiet && PEOPLE.includes(to) && (ev.schema === "RingCheck" || ev.schema === "PickRequest" || ev.schema === "Prepare")) flow.rule(to);
   }
   // the owner channel: private packets between each phone and its mascot (judge view data, never on the wire)
   const owners = {};
@@ -764,7 +770,7 @@
     const note = $("#snoopNote");
     note.hidden = false;
     const v = Object.values(r), refused = v.filter((x) => x.why === 422).length, nos = v.filter((x) => x.room_probe === false).length;
-    note.innerHTML = `<b>${refused} of ${v.length}</b> mascots rejected "why did you pass?" outright: the request carried a field no schema has (HTTP 422). <b>${nos} of ${v.length}</b> answered no about a shift they never picked, so a nosy broker learns nothing about anyone's room. Watch the red replies in the graph.`;
+    note.innerHTML = `<b>${refused} of ${v.length}</b> mascots never saw "why did you pass?": the closed schema rejected the request before any code ran (HTTP 422), because no message has a field for a reason. <b>${nos} of ${v.length}</b> mascots answered no about a shift they never picked, so a nosy broker learns nothing about anyone's room. Watch the red replies in the graph.`;
   }
 
   async function renderLedger() {
@@ -776,9 +782,10 @@
     const rows = [
       ["21 of 20 h", "What a Library-only scheduler would do to Ben (F-1): it can't see his 9 Aramark hours.", src("Test", "tests/test_baseline.py")],
       ["17 of 20 h", "Ben's hours after the ring. Only Ben sees this line.", src("Test", "tests/test_flow.py")],
-      ["20 h a week, all jobs", "The F-1/J-1 on-campus limit during the semester, summed across every employer.", quote("f1_break_40")],
+      ["20 h a week", "The F-1/J-1 on-campus limit during the fall and spring semesters.", quote("f1_weekly_20")],
+      ["…across all jobs", "The same page says the 20 hours are combined across every on-campus employer.", quote("f1_break_40")],
       ["25 h average", "Every ASU student worker, averaged over the measurement period.", quote("aca_25_avg")],
-      ["Up to the award", "Federal Work-Study earnings stop at the award.", quote("fws_award")],
+      ["Up to the award", "Work-Study can pay only up to the award; after that the department decides whether the job continues on regular pay.", quote("fws_award")],
       [d.tagout_pct != null ? `${d.tagout_pct}% vs ${d.swap_pct}%` : "–", "Collisions fixed: Tag Out vs a group chat where every volunteer checks all of their own limits correctly.", src("Simulation", "docs/simulation.json", "1,000 synthetic weeks, seed 7, 40-person roster")],
       [d.rule_breaks_hand_checked_per_week != null ? `${d.rule_breaks_hand_checked_per_week} a week` : "–", "Limit-breaking covers a group chat still makes when volunteers check this job's hours by hand.", src("Simulation", "docs/simulation.json", d.rule_breaks_by_rule ? Object.entries(d.rule_breaks_by_rule).map(([k, v]) => `${k} ${v}`).join(", ") : "")],
       ["10,000", "Students who work at ASU each year.", quote("stats")],

@@ -50,7 +50,7 @@
 
   // ---------- hosted replay: a recording of the real system (scripts/record.py) instead of a live broker ----------
   const STATIC = !!window.TAGOUT_STATIC;
-  const R = { recs: {}, cur: null, i: 0, clock: "", timer: 0 };
+  const R = { recs: {}, cur: null, i: 0, clock: "", timer: 0, stop: Infinity };
   async function loadRec(name) {
     if (!R.recs[name]) R.recs[name] = await fetch(`data/${name}.json`).then((r) => r.json());
     return R.recs[name];
@@ -68,25 +68,29 @@
     return snap[p];
   }
   // what a judge's action replays: the recorded real run of that same action
-  const REPLAY = { "/demo/sunday": ["tour"], "/demo/run": ["tour"], "/demo/break": ["breakit"], "/demo/snoop": ["tour", "supervisor-meeting"],
-    "/manager/extra": ["tour", "callout", "Replaying the recorded run: the manager posted Thu 6-10 PM and every mascot was offered it."],
-    "/manager/meeting": ["tour", "issue", "Replaying the recorded run: the manager looked for a team meeting time."] };
-  const CHIP = { sick: ["tour", "week", "Replaying the recorded call-out: Ben texted that he woke up sick."],
-    printer: ["tour", "extra", "Replaying the recorded report: Ana told her mascot the printer was broken."],
-    supervisor: ["tour", "team-meeting", "Replaying the recorded request: Priya asked for a meeting with her supervisor."] };
+  // [recording, replay from this step, up to this step, note]: each action replays just its own segment
+  const REPLAY = { "/demo/sunday": ["tour", null, "week"], "/demo/run": ["tour", null, "week"], "/demo/break": ["breakit"],
+    "/demo/snoop": ["tour", "supervisor-meeting", "snoop"],
+    "/manager/extra": ["tour", "callout", "extra", "Replaying the recorded run: the manager posted Thu 6-10 PM and every mascot was offered it."],
+    "/manager/meeting": ["tour", "issue", "team-meeting", "Replaying the recorded run: the manager looked for a team meeting time."] };
+  const CHIP = { sick: ["tour", "week", "callout", "Replaying the recorded call-out: Ben texted that he woke up sick."],
+    printer: ["tour", "extra", "issue", "Replaying the recorded report: Ana told her mascot the printer was broken."],
+    supervisor: ["tour", "team-meeting", "supervisor-meeting", "Replaying the recorded request: Priya asked for a meeting with her supervisor."] };
   function staticPost(path, body) {
-    if (REPLAY[path]) { const [name, from, note] = REPLAY[path]; if (note) toast(note); return play(name, from); }
+    if (REPLAY[path]) { const [name, from, until, note] = REPLAY[path]; if (note) toast(note); return play(name, from, until); }
     if (path === "/admin/reset") return play(null);
     const text = ((body && body.text) || "").toLowerCase();
     const chip = text.includes("sick") ? CHIP.sick : text.includes("printer") || text.includes("broken") ? CHIP.printer : text.includes("supervisor") ? CHIP.supervisor : null;
-    if (chip) { toast(chip[2]); return play(chip[0], chip[1]); }
+    if (chip) { toast(chip[3]); return play(chip[0], chip[1], chip[2]); }
     toast("This hosted page replays a recording of the real agents. To type and tap yourself, run it locally: python -m scripts.run_all");
     return {};
   }
-  async function play(name, from) {
+  async function play(name, from, until) {
     clearTimeout(R.timer);
     if (name) R.cur = await loadRec(name);
-    const evs = R.cur.events, start = from ? (R.cur.checkpoints.find((c) => c.label === from) || { n: 0 }).n : 0;
+    const at = (label) => (R.cur.checkpoints.find((c) => c.label === label) || {}).n;
+    const evs = R.cur.events, start = from ? at(from) || 0 : 0;
+    R.stop = until ? at(until) || evs.length : evs.length;
     R.i = 0; R.clock = "";
     live = false;
     onEvent({ type: "reset", n: 0, ts: evs[0] ? evs[0].ts : new Date().toISOString() });
@@ -97,7 +101,7 @@
   }
   function tick() {
     const evs = R.cur.events;
-    if (R.i >= evs.length) return;
+    if (R.i >= Math.min(evs.length, R.stop)) return;
     const ev = evs[R.i]; R.clock = ev.ts; R.i++;
     onEvent(ev);
     const next = evs[R.i];
@@ -305,7 +309,7 @@
         if (ev.kind === "extra") return ev.taker ? `Extra shift ${shiftLabel(ev.shift_id)} taken by ${name(ev.taker)}.` : `Nobody could take the extra shift ${shiftLabel(ev.shift_id)} safely.`;
         return `Week done: ${ev.fixed} of ${ev.asked} fixed, ${money(ev.pay_kept)} of pay kept by trading, ${ev.open} open.`;
       case "extra_open": return `The manager posted an extra shift. Every mascot is offered it.`;
-      case "snoop": return `A nosy broker asked every mascot why it passed. Every one refused.`;
+      case "snoop": if (ev.results) showSnoop(ev.results); return `A nosy broker asked every mascot why it passed. Every one refused.`;
       case "reset": return "Demo reset.";
       default: return null;
     }
@@ -547,6 +551,8 @@
   function route() {
     let v = (location.hash || "#commons").slice(1);
     if (!(v in VIEWS) || JUDGE) v = "commons";
+    // hosted replay: pages that show a week's results start from the finished week, not a blank one
+    if (STATIC && R.i === 0 && (v === "me" || v === "manager" || JUDGE)) { play("tour", "week", "week").then(route); return; }
     if (v === "me" && !PEOPLE.includes(role())) { openSignIn(); v = S.view || "commons"; }
     if (v === "manager") store.set(ROLE_KEY, "manager");
     Object.entries(VIEWS).forEach(([k, sel]) => { $(sel).hidden = k !== v; });
@@ -737,6 +743,11 @@
     const note = $("#snoopNote");
     note.hidden = false; note.textContent = "Asking every mascot why it passed, and probing for room it never offered…";
     let r; try { r = await post("/demo/snoop"); } catch (e) { note.textContent = "Snoop needs the synthetic demo (debug) mode."; return; }
+    if (!STATIC) showSnoop(r); // the hosted replay shows it when the recorded snoop event arrives
+  }
+  function showSnoop(r) {
+    const note = $("#snoopNote");
+    note.hidden = false;
     const v = Object.values(r), refused = v.filter((x) => x.why === 422).length, nos = v.filter((x) => x.room_probe === false).length;
     note.innerHTML = `<b>${refused} of ${v.length}</b> mascots rejected "why did you pass?" outright: the request carried a field no schema has (HTTP 422). <b>${nos} of ${v.length}</b> answered no about a shift they never picked, so a nosy broker learns nothing about anyone's room. Watch the red replies in the graph.`;
   }

@@ -1,30 +1,30 @@
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Tag Out synthetic fixtures//EN
-X-WR-CALNAME:Kofi - Dining (Aramark, Memorial Union) shifts (synthetic)
+X-WR-CALNAME:Kofi - Aramark dining, Memorial Union shifts (synthetic)
 BEGIN:VEVENT
-SUMMARY:Dining (Aramark\, Memorial Union) shift
+SUMMARY:Aramark dining\, Memorial Union shift
 DTSTART;TZID=America/Phoenix:20261026T110000
 DTEND;TZID=America/Phoenix:20261026T150000
 DTSTAMP:20261024T190000Z
 UID:dining-mon-1026-1100-d1@tagout
 END:VEVENT
 BEGIN:VEVENT
-SUMMARY:Dining (Aramark\, Memorial Union) shift
+SUMMARY:Aramark dining\, Memorial Union shift
 DTSTART;TZID=America/Phoenix:20261028T110000
 DTEND;TZID=America/Phoenix:20261028T150000
 DTSTAMP:20261024T190000Z
 UID:dining-wed-1028-1100-d1@tagout
 END:VEVENT
 BEGIN:VEVENT
-SUMMARY:Dining (Aramark\, Memorial Union) shift
+SUMMARY:Aramark dining\, Memorial Union shift
 DTSTART;TZID=America/Phoenix:20261030T110000
 DTEND;TZID=America/Phoenix:20261030T150000
 DTSTAMP:20261024T190000Z
 UID:dining-fri-1030-1100-d1@tagout
 END:VEVENT
 BEGIN:VEVENT
-SUMMARY:Dining (Aramark\, Memorial Union) shift
+SUMMARY:Aramark dining\, Memorial Union shift
 DTSTART;TZID=America/Phoenix:20261101T100000
 DTEND;TZID=America/Phoenix:20261101T140000
 DTSTAMP:20261024T190000Z

@@ -26,6 +26,7 @@ from core.wire import (
     BusyBits,
     Decision,
     Eligibility,
+    Excused,
     IssueAck,
     MeetingInvite,
     NoTrade,
@@ -197,7 +198,12 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
 
     @app.post("/issue/ack")
     async def issue_ack(a: IssueAck) -> dict:
-        await brain.issue_acked(a.issue_id)
+        await brain.issue_acked(a.issue_id, a.office)
+        return {}
+
+    @app.post("/excused")
+    async def excused(e: Excused) -> dict:
+        await brain.excused(e.shift_id)
         return {}
 
     @app.post("/question/answer")

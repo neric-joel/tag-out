@@ -1,23 +1,23 @@
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Tag Out synthetic fixtures//EN
-X-WR-CALNAME:Lena - Dining (Aramark, Memorial Union) shifts (synthetic)
+X-WR-CALNAME:Lena - Aramark dining, Memorial Union shifts (synthetic)
 BEGIN:VEVENT
-SUMMARY:Dining (Aramark\, Memorial Union) shift
+SUMMARY:Aramark dining\, Memorial Union shift
 DTSTART;TZID=America/Phoenix:20261027T110000
 DTEND;TZID=America/Phoenix:20261027T150000
 DTSTAMP:20261024T190000Z
 UID:dining-tue-1027-1100-d1@tagout
 END:VEVENT
 BEGIN:VEVENT
-SUMMARY:Dining (Aramark\, Memorial Union) shift
+SUMMARY:Aramark dining\, Memorial Union shift
 DTSTART;TZID=America/Phoenix:20261029T110000
 DTEND;TZID=America/Phoenix:20261029T150000
 DTSTAMP:20261024T190000Z
 UID:dining-thu-1029-1100-d1@tagout
 END:VEVENT
 BEGIN:VEVENT
-SUMMARY:Dining (Aramark\, Memorial Union) shift
+SUMMARY:Aramark dining\, Memorial Union shift
 DTSTART;TZID=America/Phoenix:20261031T100000
 DTEND;TZID=America/Phoenix:20261031T140000
 DTSTAMP:20261024T190000Z

@@ -1,5 +1,6 @@
-"""The campus hierarchy above the mascots (seeds/org.py): shift leads, department managers, a backup manager,
-Student Employment and ISSC. Each role is its own agent with its own inbox and talks only in core.wire schemas.
+"""The campus hierarchy above the mascots (seeds/org.py): shift leads, department managers, each employer's backup
+manager, Environmental Health and Safety, Student Employment and ISSC. Each role is its own agent with its own inbox
+and talks only in core.wire schemas.
 
 A case starts at the lowest rung that can act and climbs one rung each time that rung's timer runs out. Silence
 counts as no: a timeout moves a case up and never approves anything. What climbs is the shift id and the rule
@@ -27,6 +28,7 @@ from core.wire import (
     CaseUpdate,
     Decision,
     Escalation,
+    Excused,
     IssueAck,
     IssueReport,
     Move,
@@ -41,7 +43,7 @@ from core.wire import (
     Vote,
 )
 from ingest.ics import read, shifts_from_ics
-from rulebook.quotes import quote_for
+from rulebook.quotes import quote_for, rules_text
 from seeds.org import CAMPUS_START, DEPARTMENTS, ORG_STUDENTS, ROLES, everyone, members, with_profile
 
 ICS = Path(__file__).resolve().parent.parent / "seeds" / "ics"
@@ -135,6 +137,16 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
     def case_of(cid: str) -> dict | None:
         return state["cases"].get(cid)
 
+    def due(minutes: float, shift_id: str | None = None) -> datetime:
+        """A rung's deadline: its usual wait, but never past the start of the shift (a cover after that is no use)."""
+        d = clock.now() + timedelta(minutes=minutes)
+        ref = state["roster"].get(shift_id or "")
+        return max(clock.now(), min(d, ref.start)) if ref else d
+
+    def offer_crew(dept: str) -> list[str]:
+        """People outside the department who already hold a job there with the same employer."""
+        return [a for a in with_profile(DEPARTMENTS[dept]["role"]) if a not in members(dept)]
+
     # ---------- asking mascots: one shift id out, a pick or a pass back ----------
     async def ask(case: dict, who: list[str], iteration: int) -> str | None:
         ref = state["roster"][case["shift_id"]]
@@ -207,7 +219,7 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
                       "list until someone closes it.", kind="info")
             await tell_owner(case)
             return
-        deadline = clock.now() + timedelta(minutes=ROLES[up]["minutes"])
+        deadline = due(ROLES[up]["minutes"], case.get("shift_id"))
         esc = Escalation(case_id=case["id"], kind=case["kind"], level=case["level"] + 1, rule=rule,
                          shift_id=case.get("shift_id"), deadline=deadline, token=case["token"])
         case["status"] = "moved up"
@@ -246,12 +258,21 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
     async def close(case: dict, outcome: str, taker: str | None = None) -> None:
         case["status"] = outcome
         event("org_done", case_id=case["id"], outcome=outcome, taker=taker)
+        dept = case.get("dept") or spec.get("dept")
+        if DEPARTMENTS.get(dept, {}).get("asu") and "se" in reg.get("org", {}):
+            # Student Employment keeps a weekly count of ASU cases: a department and an outcome, nothing else
+            spawn(net.post(f"{reg['org']['se']}/case", CaseUpdate(case_id=f"{dept}-weekly", outcome=outcome)))
         # every rung that held it stops its timer
         for holder in case.get("chain", []):
             if holder != role and holder in ROLES and holder != "steward":  # the Library Steward has its own flow
                 spawn(net.post(f"{reg['org'][holder]}/case", CaseUpdate(case_id=case["id"], outcome=outcome,
                                                                         token=case["token"])))
-        if outcome == "closed":
+        if outcome == "excused" and case.get("owner"):
+            try:
+                await net.post(f"{url(case['owner'])}/excused", Excused(shift_id=case["shift_id"]))
+            except Exception:
+                pass
+        elif outcome == "closed":
             await tell_owner(case)
 
     def open_case(cid: str, kind: str, level: int, deadline: datetime, chain: list[str], token: str = "",
@@ -276,9 +297,10 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
             raise HTTPException(404, "not a shift of yours that this shift lead runs")
         if case_of(f"case-{t.shift_id}"):
             return {}  # already on it: the same request twice opens one case
-        deadline = clock.now() + timedelta(minutes=spec["minutes"])
+        deadline = due(spec["minutes"], t.shift_id)
         case = open_case(f"case-{t.shift_id}", "uncovered_callout", 1, deadline, [], shift_id=t.shift_id,
                          owner=ref.owner, dept=spec["dept"])
+        spawn(net.post(f"{reg['org'][spec['up']]}/callout", CallOut(shift_id=t.shift_id)))  # the manager hears now
         phone_add(f"{names[ref.owner]} called out of {when(ref)}, no reason given. I'm asking everyone in "
                   f"{DEPARTMENTS[spec['dept']]['name']} now. If nobody can take it by {at(deadline)}, it goes to "
                   f"the {names[spec['up']].lower()}.")
@@ -287,21 +309,30 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
 
     async def lead_round(case: dict) -> None:
         crew = [a for a in members(spec["dept"]) if a != case["owner"]]
-        for i, wait in ((1, spec["minutes"] / 2), (2, None)):  # ask now, and again halfway (weeks change)
+        half = case["deadline"] - (case["deadline"] - clock.now()) / 2
+        for i in (1, 2):  # ask now, and again halfway to the deadline (weeks change)
             taker = await ask(case, crew, i)
             if case["status"] != "open":
                 return
             if taker and await cover(case, taker):
                 return
-            if wait is not None:
-                await clock.until(case["deadline"] - timedelta(minutes=wait))
+            if i == 1:
+                await clock.until(half)
         await wait_then_climb(case, "no_cover_2h")
 
     @app.post("/callout")
     async def callout(body: CallOut) -> dict:
-        """A copy of a call-out another agent is already handling (the Library's broker runs its own round)."""
-        event("org_note", text=f"Saw a same-day call-out for {body.shift_id}; the Library broker is running the "
-                               "cover round and the Library manager approves.")
+        """A copy of a call-out another agent is handling: the Library's broker runs its own round, and a
+        department's shift lead tells its manager the moment one comes in."""
+        ref = state["roster"].get(body.shift_id)
+        if spec["kind"] == "manager" and ref:
+            lead = DEPARTMENTS[spec["dept"]]["lead"]
+            phone_add(f"Same-day call-out: {names[ref.owner]} can't work {when(ref)}, no reason given. {names[lead]} "
+                      f"is asking the {DEPARTMENTS[spec['dept']]['name']} team now; if nobody can take it, it comes "
+                      "to you.", kind="info")
+        else:
+            event("org_note", text=f"Saw a same-day call-out for {body.shift_id}; the Library broker is running the "
+                                   "cover round and the Library manager approves.")
         return {}
 
     # ---------- managers, the backup manager and Student Employment: a case from the rung below ----------
@@ -316,14 +347,13 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
         why = {"no_cover_2h": "nobody could take it in 2 hours", "no_answer_30m": "the rung below didn't answer in "
                "30 minutes", "safety_first": "it's a safety report"}[e.rule]
         if e.kind == "uncovered_callout" and ref:
-            buttons = [("Offer it to other departments", f"offer:{e.case_id}"),
-                       ("Close the station", f"close:{e.case_id}")]
-            if spec["kind"] == "hr":
-                buttons = [("Follow up with the department", f"close:{e.case_id}")]
+            company = DEPARTMENTS[case["dept"]]["company"]
+            buttons = ([(f"Offer it to {company} student workers at other locations", f"offer:{e.case_id}")]
+                       if offer_crew(case["dept"]) else []) + [("Excuse them; staff covers it", f"excuse:{e.case_id}")]
+            nxt = f"it goes to the {names[spec['up']].lower()}" if spec["up"] else "it stays open on your list"
             phone_add(f"Moved up to you because {why}: {names[ref.owner]}'s same-day call-out, {when(ref)} at "
                       f"{DEPARTMENTS[case['dept']]['name']}. No reason was given and none is shared. Act by "
-                      f"{at(e.deadline)}, or it goes to {names[spec['up']] if spec['up'] else 'nobody above you'}.",
-                      buttons, kind="approve")
+                      f"{at(e.deadline)}, or {nxt}.", buttons, kind="approve")
         spawn(wait_then_climb(case, "no_answer_30m"))
         return {}
 
@@ -333,12 +363,18 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
         chain = []
         if dept in DEPARTMENTS:
             chain += [DEPARTMENTS[dept]["lead"], DEPARTMENTS[dept]["manager"]]
-        if spec["kind"] == "hr":
-            chain.append("backup")
         return [r for r in chain if r != role]
 
     @app.post("/case")
     async def case_update(u: CaseUpdate) -> dict:
+        if spec["kind"] == "se":  # Student Employment's weekly count: a department and an outcome, nothing else
+            dept = u.case_id.split("-")[0]
+            state.setdefault("weekly", {}).setdefault(dept, {}).setdefault(u.outcome, 0)
+            state["weekly"][dept][u.outcome] += 1
+            counts = ", ".join(f"{n} {o}" for o, n in state["weekly"][dept].items())
+            phone_add(f"Weekly report, {DEPARTMENTS.get(dept, {}).get('name', dept)}: {counts}. No names, shifts "
+                      "or reasons.", kind="info")
+            return {}
         case = case_of(u.case_id)
         # only a rung above that held it can close my copy: the rung holding a case closes it itself
         if case and case["status"] == "moved up" and u.token == case["token"]:
@@ -352,10 +388,9 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
         return {}
 
     async def offer(case: dict) -> str:
-        dept = case["dept"]
-        crew = [a for a in with_profile(DEPARTMENTS[dept]["role"]) if a not in members(dept)]
+        crew = offer_crew(case["dept"])
         if not crew:
-            return "Nobody outside the department is trained for that station."
+            return f"Nobody else works for {DEPARTMENTS[case['dept']]['company']} at another location."
         taker = await ask(case, crew, 3)
         if taker and await cover(case, taker):
             return f"{names[taker]} took it."
@@ -367,24 +402,21 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
     async def issue(r: IssueReport) -> dict:
         who = names.get(r.agent_id, "anonymous") if r.agent_id else "anonymous"
         cid = f"case-{r.issue_id}"
-        if spec["kind"] == "manager" and r.category == "safety" and "hr" in reg.get("org", {}):
-            # safety skips the ladder: straight to Student Employment, and the manager gets the same report
-            event("org_escalate", case_id=cid, frm=role, to="hr", level=4, rule="safety_first",
-                  deadline=(clock.now() + timedelta(minutes=ROLES["hr"]["minutes"])).isoformat(timespec="minutes"))
-            token = secrets.token_hex(8)
-            state["cases"][cid] = {"id": cid, "kind": "safety", "level": 2, "status": "moved up", "holder": "hr",
-                                   "deadline": clock.now(), "chain": [role], "token": token}
-            await net.post(f"{reg['org']['hr']}/issue", r.model_copy(update={"token": token}))
-            phone_add(f"Safety report from {who}, sent straight to Student Employment as well: \"{r.text}\"")
-            return {}
+        if spec["kind"] == "ehs":
+            cid = f"{cid}-ehs"  # EHS keeps its own case: its acknowledgment doesn't close the department's
+        elif spec["kind"] == "manager" and r.category == "safety" and "ehs" in reg.get("org", {}):
+            # safety doesn't wait for a ladder: ASU Environmental Health and Safety gets it at once, and the
+            # manager on duty keeps its own case for the department
+            event("org_escalate", case_id=f"{cid}-ehs", frm=role, to="ehs", level=2, rule="safety_first",
+                  deadline=(clock.now() + timedelta(minutes=ROLES["ehs"]["minutes"])).isoformat(timespec="minutes"))
+            await net.post(f"{reg['org']['ehs']}/issue", r)
         deadline = clock.now() + timedelta(minutes=spec["minutes"])
-        # a forwarded safety report keeps the manager's token, so Student Employment's close reaches them
-        case = open_case(cid, "safety" if r.category == "safety" else "issue", 4 if spec["kind"] == "hr" else 2,
-                         deadline, [], token=r.token if spec["kind"] == "hr" else "", dept=None)
+        case = open_case(cid, "safety" if r.category == "safety" else "issue", 2, deadline, [],
+                         dept=spec.get("dept"))
         case.update(issue_id=r.issue_id, reporter=r.agent_id)
-        if spec["kind"] == "hr":
-            case["chain"] = sorted({*case["chain"], *[DEPARTMENTS[d]["manager"] for d in DEPARTMENTS]})
-        phone_add(f"{r.category.title()} report from {who}: \"{r.text}\"\nAcknowledge by {at(deadline)}.",
+        also = "\nSafety reports go to Environmental Health and Safety at the same time." if (
+            r.category == "safety" and spec["kind"] == "manager") else ""
+        phone_add(f"{r.category.title()} report from {who}: \"{r.text}\"{also}\nAcknowledge by {at(deadline)}.",
                   [("Acknowledge", f"ack:{cid}")], kind="issue")
         spawn(wait_then_climb(case, "no_answer_30m"))
         return {}
@@ -395,7 +427,10 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
         if spec["kind"] != "issc":
             raise HTTPException(404)
         cid = f"case-{q.question_id}"
-        deadline = clock.now() + timedelta(minutes=spec["minutes"])
+        deadline, left = clock.now(), 2
+        while left:  # two business days, the way an office counts them
+            deadline += timedelta(days=1)
+            left -= deadline.weekday() < 5
         case = open_case(cid, "f1_question", 1, deadline, [], dept=None)
         case.update(question_id=q.question_id, asker=q.agent_id)
         phone_add(f"F-1 question from {names.get(q.agent_id, q.agent_id)}: \"{q.text}\"\nNo hours or calendar "
@@ -403,13 +438,16 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
                   [("Send the rule and book an advisor", f"answer:{cid}")], kind="issue")
         return {}
 
-    def issc_answer() -> str:
+    def issc_answer(case: dict) -> str:
         quote, link = quote_for("f1_break_40")
-        rule = f" The rule ASU publishes: \"{quote}\" ({link})." if quote else ""
-        return ("ISSC here (synthetic demo). Thanks for asking before working the hours. An advisor (DSO) will "
-                "check your record and reply within 2 business days." + rule + " Whether the break limit applies "
-                "to you depends on your enrollment and program dates, so keep to 20 hours a week until the advisor "
-                "confirms. Not legal or immigration advice.")
+        rule = f" The break limit ASU publishes: \"{quote}\" ({link})." if quote else ""
+        last = ("If fall 2025 is your last semester, however, you won\u2019t be able to work on campus after your "
+                "program completion date.")
+        end = f" ISSC's note on last year's break also said: \"{last}\"" if last in rules_text() else ""
+        return ("ISSC here (synthetic demo). Thanks for asking before scheduling the hours. Break hours depend on "
+                "your enrollment for next term and on your program completion date." + rule + end + " So please "
+                "don't schedule any break hours until an advisor (DSO) has checked your dates; they'll reply by "
+                f"{at(case['deadline'])}. Not legal or immigration advice.")
 
     # ---------- the inbox ----------
     async def handle_tap(data: str) -> str:
@@ -425,17 +463,22 @@ def create_app(role: str, net: Net, reg: dict, emit: Callable[..., dict] | None 
             reply = await offer(case)
             if case["status"] == "acting":
                 case["status"] = was  # open: this rung's timer moves it up at the deadline; overdue stays overdue
+        elif verb == "excuse":
+            await close(case, "excused")
+            reply = (f"Excused: {names.get(case.get('owner'), 'the student')} doesn't need to find cover, and staff "
+                     "covers the shift. Their mascot lets them know; nobody is told why.")
         elif verb == "close":
             await close(case, "closed")
-            reply = "Closed. The student stays excused under your call-out policy; the shift is marked open."
+            reply = "Closed. The shift is marked open."
         elif verb == "ack":
             await close(case, "acknowledged")
             if case.get("reporter"):
-                await net.post(f"{url(case['reporter'])}/issue/ack", IssueAck(issue_id=case["issue_id"]))
+                await net.post(f"{url(case['reporter'])}/issue/ack", IssueAck(
+                    issue_id=case["issue_id"], office="ehs" if spec["kind"] == "ehs" else "manager"))
             reply = "Acknowledged." + (" Their mascot lets them know." if case.get("reporter") else "")
         elif verb == "answer":
             await net.post(f"{url(case['asker'])}/question/answer",
-                           Answer(question_id=case["question_id"], text=issc_answer()))
+                           Answer(question_id=case["question_id"], text=issc_answer(case)))
             await close(case, "answered")
             reply = "Sent the rule and booked an advisor reply."
         else:

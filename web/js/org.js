@@ -5,8 +5,10 @@
   const W = 1200, H = 720;
   const TIERS = { top: 22, backup: 128, manager: 236, lead: 344, students: 462 };
   const RULE = { no_cover_2h: "2 h without a cover", no_answer_30m: "no answer in 30 min (silence counts as no)",
-    safety_first: "a safety report skips the ladder" };
-  const OUTCOME = { covered: "Covered", acknowledged: "Acknowledged", answered: "Answered", closed: "Closed" };
+    safety_first: "a safety report goes to Environmental Health and Safety at once" };
+  const SUB = { dining_gm: "Aramark, both dining halls", rec_ad: "Sun Devil Fitness", ehs: "ASU EHS · safety reports",
+    se: "weekly count of ASU cases", issc: "F-1 questions only" };
+  const OUTCOME = { covered: "Covered", acknowledged: "Acknowledged", answered: "Answered", closed: "Closed", excused: "Excused" };
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const clockText = (d) => `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, "0")} ${d.getHours() >= 12 ? "PM" : "AM"}`;
   const dayText = (d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
@@ -21,7 +23,7 @@
         <div class="org-tools"><button class="btn small-btn" type="button" data-act="reset-layout">Reset layout</button></div>
       </div>
       <div class="org-body">
-        <div class="org-viewport"><div class="org-stage" role="group" aria-label="Org chart: students, shift leads, managers, backup manager, Student Employment and ISSC">
+        <div class="org-viewport"><div class="org-stage" role="group" aria-label="Org chart: students, shift leads, managers, backup managers, Environmental Health and Safety, Student Employment and ISSC">
           <svg class="org-wires" viewBox="0 0 ${W} ${H}" aria-hidden="true"></svg></div></div>
         <aside class="org-side">
           <section class="org-cases" aria-live="polite"><h3>Cases</h3><div id="orgCases"><p class="muted small">No cases yet. Play the morning to watch one climb.</p></div></section>
@@ -91,23 +93,23 @@
     function build(data) {
       const roles = data.roles, depts = ["library", "dining", "rec"];
       const span = W / 3;
-      node("issc", "issc", roles.issc.name, "F-1 questions only", roles.issc.pet_id, 120, TIERS.top);
-      node("hr", "hr", roles.hr.name, "HR, top of the ladder", roles.hr.pet_id, W - 300, TIERS.top);
-      node("backup", "backup", roles.backup.name, "backup manager, all three", roles.backup.pet_id, W / 2 - 98, TIERS.backup);
+      // the offices above every department; each employer's own chain sits under them
+      ["issc", "se", "ehs"].forEach((r, k) => node(r, r, roles[r].name, SUB[r], roles[r].pet_id, [60, W / 2 - 98, W - 256][k], TIERS.top));
       depts.forEach((d, i) => {
         const dep = data.departments[d], lead = dep.lead, mgr = dep.manager, x0 = i * span;
-        node(mgr, "manager", roles[mgr].name, dep.name.replace(" (Aramark, Memorial Union)", ", Aramark"), roles[mgr].pet_id, x0 + span / 2 - 98, TIERS.manager);
-        node(lead, "lead", roles[lead].name, "shift lead", roles[lead].pet_id, x0 + span / 2 - 98, TIERS.lead);
-        edge(mgr, "backup"); edge(lead, mgr);
+        node(mgr, "manager", roles[mgr].name, dep.name, roles[mgr].pet_id, x0 + span / 2 - 98, TIERS.manager);
+        node(lead, "lead", roles[lead].name, d === "dining" ? "Aramark shift lead" : "shift lead", roles[lead].pet_id, x0 + span / 2 - 98, TIERS.lead);
+        if (dep.backup) { node(dep.backup, "backup", roles[dep.backup].name, SUB[dep.backup], roles[dep.backup].pet_id, x0 + span / 2 - 98, TIERS.backup); edge(mgr, dep.backup); }
+        edge(lead, mgr);
+        if (dep.asu) { edge(mgr, "ehs", true); edge(mgr, "se", true); }
         const mine = data.students.filter((s) => s.dept === d);
         mine.forEach((s, k) => {
           const col = k % 3, row = Math.floor(k / 3);
-          node(s.id, "student", s.name, s.also && s.also.length ? `also ${s.also.map((a) => ({ dining: "Dining", rec: "Rec" }[a] || a)).join(", ")}` : "student worker",
+          node(s.id, "student", s.name, s.also && s.also.length ? `also ${s.also.map((a) => ({ dining: "Dining", rec: "Rec" }[a] || a)).join(", ")}` : s.elsewhere ? "also Aramark, Barrett" : "student worker",
             s.pet_id, x0 + 14 + col * (span - 28) / 3, TIERS.students + row * 92);
           edge(s.id, lead);
         });
       });
-      edge("backup", "hr");
       data.students.forEach((s) => (s.also || []).forEach((d) => edge(s.id, data.departments[d].lead, true)));
       route(); fit();
       root.querySelector('[data-act="reset-layout"]').addEventListener("click", () => { nodes.forEach((n) => { n.x = n.home.x; n.y = n.home.y; place(n); }); route(); store.set("tagout.org.layout", {}); });
@@ -171,12 +173,13 @@
             status(ev.owner, "called out", "bad"); face(ev.owner, "failed");
           }
           if (ev.kind === "f1_question") step(c, ev, `A question reached ISSC from a student who chose to send it. Only their words came.`);
-          if (ev.kind === "safety" && ev.holder === "hr") step(c, ev, `Student Employment opened it. Acknowledge by ${clockText(new Date(ev.deadline))}.`);
+          if (ev.kind === "safety") step(c, ev, ev.holder === "ehs" ? `Environmental Health and Safety opened its own case. Acknowledge by ${clockText(new Date(ev.deadline))}.`
+            : `The ${name(ev.holder).toLowerCase()} on duty has the report. Acknowledge by ${clockText(new Date(ev.deadline))}.`);
           nodes.forEach((n) => holder(n.id, false)); holder(ev.holder, true);
           status(ev.holder, "holding a case", "wait"); face(ev.holder, "review");
           break;
         case "org_ask":
-          step(c, ev, ev.iteration === 3 ? `${name(ev.by)} offered it to people trained for it in other departments: ${ev.asked.map(name).join(", ")}.`
+          step(c, ev, ev.iteration === 3 ? `${name(ev.by)} offered it to people who already work for the same employer elsewhere: ${ev.asked.map(name).join(", ")}.`
             : `${name(ev.by)} asked ${ev.asked.length} coworkers who work there${ev.iteration === 2 ? " again, halfway to the deadline" : ""}.`);
           if (animate) ev.asked.forEach((a, i) => setTimeout(() => packet(ev.by, a, "ask"), i * 60));
           ev.asked.forEach((a) => { status(a, "asked", "wait"); face(a, "review"); });
@@ -215,6 +218,7 @@
         case "org_done":
           Object.assign(c, { status: ev.outcome });
           step(c, ev, ev.outcome === "covered" ? `Covered: ${name(ev.taker)} takes it. Every rung below is told, so their timers stop.`
+            : ev.outcome === "excused" ? `Excused by ${name(ev.by)}: staff covers it, and the student doesn't have to find anyone.`
             : `${OUTCOME[ev.outcome] || ev.outcome} by ${name(ev.by)}.`);
           holder(ev.by, false); status(ev.by, OUTCOME[ev.outcome] ? OUTCOME[ev.outcome].toLowerCase() : ev.outcome, "ok"); face(ev.by, "waving");
           if (ev.taker) { status(ev.taker, "covering it", "ok"); face(ev.taker, "waving"); }
@@ -236,7 +240,8 @@
       const el = root.querySelector("#orgCases");
       if (!cases.size) { el.innerHTML = '<p class="muted small">No cases yet. Play the morning to watch one climb.</p>'; return; }
       const title = (c) => c.kind === "uncovered_callout" ? `${name(c.owner)}'s ${c.label || c.shift_id}: same-day call-out`
-        : c.kind === "safety" ? "Safety report: fire exit blocked" : c.kind === "f1_question" ? "F-1 question for ISSC" : "Report";
+        : c.kind === "safety" ? (c.id.endsWith("-ehs") ? "Safety report, Environmental Health and Safety" : "Safety report, the manager on duty")
+        : c.kind === "f1_question" ? "F-1 question for ISSC" : "Report";
       el.innerHTML = [...cases.values()].reverse().map((c) => `<article class="org-case ${c.status}">
         <header><b>${esc(title(c))}</b><span class="pill ${c.status === "open" ? "wait" : c.status === "overdue" ? "bad" : "ok"}">${esc(c.status === "open" ? "with " + name(c.holder) : OUTCOME[c.status] || c.status)}</span></header>
         <ol>${c.steps.map((s) => `<li><time>${clockText(s.t)}</time><span>${esc(s.text)}</span></li>`).join("")}</ol></article>`).join("");

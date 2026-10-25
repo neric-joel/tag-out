@@ -4,10 +4,13 @@ Everything here is invented and labelled synthetic, like seeds/scenario.py. The 
 manager (the Steward) stay as they are; Ben also works at Dining and Dev at the Rec center, so they show up in
 those departments too. `scripts/make_fixtures.py` writes the ICS files the new mascots import.
 
-The chain of command follows a Workday supervisory org: student mascot -> shift lead -> department manager ->
-backup manager -> Student Employment. ISSC (the international students office) takes F-1 questions only, and
-only when the student says to send one. Every rung has a timer; silence counts as no, so a timeout moves a case
-up one rung and never approves anything.
+Each employer keeps its own chain of command. At ASU (Library, Rec center) it follows a Workday supervisory org:
+student mascot -> shift lead -> department manager -> the unit's assistant director. Dining is Aramark, a separate
+employer on campus, so its call-outs climb Aramark's own chain: shift lead -> unit manager -> general manager.
+Safety reports go to the manager on duty and to ASU Environmental Health and Safety at once. Student Employment
+gets a weekly count of ASU cases, not live cases. ISSC (the international students office) takes F-1 questions only,
+and only when the student says to send one. Every rung has a timer that never runs past the shift's start;
+silence counts as no, so a timeout moves a case up one rung and never approves anything.
 """
 
 from __future__ import annotations
@@ -18,15 +21,18 @@ from core.timeutil import PHX
 
 DEPARTMENTS = {
     "library": {"name": "Library front desk", "employer": "library", "role": "desk", "lead": "jordan",
-                "manager": "steward"},
-    "dining": {"name": "Dining (Aramark, Memorial Union)", "employer": "dining", "role": "dining", "lead": "nia",
-               "manager": "dining_mgr"},
+                "manager": "steward", "backup": None, "company": "ASU", "asu": True},
+    "dining": {"name": "Aramark dining, Memorial Union", "employer": "dining", "role": "dining", "lead": "nia",
+               "manager": "dining_mgr", "backup": "dining_gm", "company": "Aramark", "asu": False},
     "rec": {"name": "Rec center front desk", "employer": "rec center", "role": "rec", "lead": "theo",
-            "manager": "rec_mgr"},
+            "manager": "rec_mgr", "backup": "rec_ad", "company": "ASU", "asu": True},
 }
 
-# Library students who also work in another department (their one mascot answers for both jobs)
+# students who also work in another department here (their one mascot answers for both jobs)
 ALSO = {"ben": ["dining"], "dev": ["rec"], "raj": ["dining"]}
+# students who also hold a job with the same employer somewhere else (Aramark runs the Barrett dining hall too):
+# the only people outside a department a manager may offer its shift to
+ELSEWHERE = {"omar": "Aramark, Barrett dining hall", "ivy": "Aramark, Barrett dining hall"}
 JOB_PROFILES = {"ben": ["desk", "dining"], "dev": ["desk", "rec"]}
 
 # weekday index: 0=Mon .. 6=Sun; times are 24h Phoenix. Same shape as seeds/scenario.py, plus a department.
@@ -54,8 +60,11 @@ ORG_STUDENTS: list[dict] = [
      "limits": {"hours_history": [8, 8, 8, 8, 8, 8, 8, 8], "hire_date": "2026-05-18"},
      "prefs": {"wants_more_hours": True, "never_weekdays": [5]}, "shifts": [(2, 16, 20), (6, 14, 18)]},
     {"id": "omar", "name": "Omar", "pet_id": "ember-dragon", "dept": "rec", "job_profiles": ["rec", "dining"],
-     "limits": {"hours_history": [10, 10, 10, 10, 10, 10, 10, 10], "hire_date": "2024-08-19"},
-     "prefs": {"wants_more_hours": True}, "shifts": [(1, 17, 21), (3, 17, 21)]},
+     "limits": {"other_employer_hours": {"Aramark (Barrett)": 4.0}, "non_asu_employers": ["Aramark (Barrett)"],
+                "hours_history": [10, 10, 10, 10, 10, 10, 10, 10], "hire_date": "2024-08-19"},
+     "prefs": {"wants_more_hours": True}, "shifts": [(1, 17, 21), (3, 17, 21)],
+     "jobs": [("Aramark shift, Barrett dining hall", 2, (11, 0), (13, 0)),
+              ("Aramark shift, Barrett dining hall", 4, (11, 0), (13, 0))]},
     {"id": "tess", "name": "Tess", "pet_id": "red-fox-cub", "dept": "rec", "job_profiles": ["rec"],
      "limits": {"fws": True, "fws_award_remaining": 260.0, "hours_history": [12, 12, 12, 12, 12, 12, 12, 12],
                 "hire_date": "2025-08-18"},
@@ -68,7 +77,8 @@ ORG_STUDENTS: list[dict] = [
      "prefs": {"wants_more_hours": True}, "shifts": [(0, 17, 21), (2, 17, 21), (4, 17, 21)],
      "jobs": [("Dining shift (Aramark)", 1, (11, 0), (14, 0)), ("Dining shift (Aramark)", 3, (11, 0), (14, 0))]},
     {"id": "ivy", "name": "Ivy", "pet_id": "kite", "dept": "rec", "job_profiles": ["rec", "dining"],
-     "limits": {"hours_history": [8, 8, 8, 8, 8, 8, 8, 8], "hire_date": "2026-08-17"},
+     "limits": {"other_employer_hours": {"Aramark (Barrett)": 3.0}, "non_asu_employers": ["Aramark (Barrett)"],
+                "hours_history": [8, 8, 8, 8, 8, 8, 8, 8], "hire_date": "2026-08-17"},
      "prefs": {"wants_more_hours": True}, "shifts": [(1, 6, 10), (4, 6, 10)],
      "calendar": [("Hiking trip, Sedona", 5, (6, 0), (18, 0), "other")]},
     {"id": "sam", "name": "Sam", "pet_id": "raccoon", "dept": "rec", "job_profiles": ["rec"],
@@ -82,20 +92,24 @@ ORG_STUDENTS: list[dict] = [
 ROLES: dict[str, dict] = {
     "jordan": {"name": "Jordan", "title": "Library shift lead", "kind": "lead", "dept": "library",
                "pet_id": "folio", "up": "steward", "minutes": 120},
-    "nia": {"name": "Nia", "title": "Dining shift lead", "kind": "lead", "dept": "dining", "pet_id": "rusty",
-            "up": "dining_mgr", "minutes": 120},
+    "nia": {"name": "Nia", "title": "Aramark shift lead, Memorial Union", "kind": "lead", "dept": "dining",
+            "pet_id": "rusty", "up": "dining_mgr", "minutes": 120},
     "theo": {"name": "Theo", "title": "Rec center shift lead", "kind": "lead", "dept": "rec", "pet_id": "rook",
              "up": "rec_mgr", "minutes": 120},
     "steward": {"name": "Library manager", "title": "Library front desk manager", "kind": "manager",
-                "dept": "library", "pet_id": "rivet", "up": "backup", "minutes": 30},
+                "dept": "library", "pet_id": "rivet", "up": None, "minutes": 30},
     "dining_mgr": {"name": "Dining manager", "title": "Aramark unit manager, Memorial Union", "kind": "manager",
-                   "dept": "dining", "pet_id": "biscuit", "up": "backup", "minutes": 30, "answers": False},
+                   "dept": "dining", "pet_id": "biscuit", "up": "dining_gm", "minutes": 30, "answers": False},
     "rec_mgr": {"name": "Rec manager", "title": "Rec center operations manager", "kind": "manager", "dept": "rec",
-                "pet_id": "bruno", "up": "backup", "minutes": 30},
-    "backup": {"name": "Assistant director", "title": "On-call backup manager, all three departments",
-               "kind": "backup", "dept": None, "pet_id": "goldie", "up": "hr", "minutes": 30},
-    "hr": {"name": "Student Employment", "title": "ASU Student Employment (HR)", "kind": "hr", "dept": None,
-           "pet_id": "ali", "up": None, "minutes": 60},
+                "pet_id": "bruno", "up": "rec_ad", "minutes": 30},
+    "dining_gm": {"name": "Aramark general manager", "title": "Aramark campus dining, both dining halls",
+                  "kind": "backup", "dept": "dining", "pet_id": "goldie", "up": None, "minutes": 30},
+    "rec_ad": {"name": "Rec assistant director", "title": "Sun Devil Fitness, backup for the Rec manager",
+               "kind": "backup", "dept": "rec", "pet_id": "moss", "up": None, "minutes": 30},
+    "ehs": {"name": "Environmental Health and Safety", "title": "ASU EHS: safety reports from campus workplaces",
+            "kind": "ehs", "dept": None, "pet_id": "ali", "up": None, "minutes": 60},
+    "se": {"name": "Student Employment", "title": "ASU Student Employment: a weekly count of ASU cases",
+           "kind": "se", "dept": None, "pet_id": "aurelia", "up": None, "minutes": 7 * 24 * 60},
     "issc": {"name": "ISSC", "title": "International Students and Scholars Center (F-1 questions only)",
              "kind": "issc", "dept": None, "pet_id": "owl", "up": None, "minutes": 2 * 24 * 60},
 }
@@ -129,7 +143,8 @@ def members(dept: str) -> list[str]:
 
 
 def with_profile(role: str) -> list[str]:
-    """Everyone trained for a job profile, in any department (the backup manager's campus-wide offer)."""
+    """Everyone who holds a job with that profile anywhere: a manager's offer goes only to people who already work
+    that job for the same employer (Aramark at Barrett, say), never to someone just trained for it."""
     from seeds.scenario import STUDENTS
 
     lib = [s["id"] for s in STUDENTS if role in JOB_PROFILES.get(s["id"], ["desk"])]

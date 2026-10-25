@@ -154,6 +154,7 @@ class IssueReport(Wire):
 
 class IssueAck(Wire):
     issue_id: str
+    office: Literal["manager", "ehs"] = "manager"  # who saw it: the manager on duty, or Environmental Health and Safety
 
 
 class CallOut(Wire):
@@ -181,7 +182,7 @@ class Escalation(Wire):
 
     case_id: str
     kind: Literal["uncovered_callout", "safety", "issue", "f1_question"]
-    level: int  # 1 shift lead, 2 department manager, 3 backup manager, 4 Student Employment
+    level: int  # 1 shift lead, 2 department manager, 3 backup manager
     rule: Literal["no_cover_2h", "no_answer_30m", "safety_first"]
     shift_id: str | None = None
     deadline: datetime
@@ -192,8 +193,14 @@ class CaseUpdate(Wire):
     """Sent to every rung that held a case once it closes, so their timers stop."""
 
     case_id: str
-    outcome: Literal["covered", "acknowledged", "answered", "closed"]
+    outcome: Literal["covered", "acknowledged", "answered", "closed", "excused"]
     token: str = ""
+
+
+class Excused(Wire):
+    """Sent to a student's mascot when a manager excuses them from a call-out shift: staff covers it."""
+
+    shift_id: str
 
 
 class Question(Wire):

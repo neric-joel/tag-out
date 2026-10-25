@@ -12,10 +12,10 @@
     "set up a meeting with my supervisor", "the printer at the desk is broken"];
   // every field name the closed schemas in core/wire.py allow; anything else crossing would be a leak
   const ALLOWED = new Set(["agent_id", "badges", "ballot", "case_id", "category", "deadline", "employer", "end", "from_agent",
-    "going", "issue_id", "items", "iteration", "kind", "level", "meeting_id", "minutes", "monday", "moves", "name", "ok",
+    "going", "issue_id", "items", "iteration", "kind", "level", "meeting_id", "minutes", "monday", "moves", "name", "office", "ok",
     "outcome", "owner", "pet_id", "phase", "question_id", "request_id", "ring_id", "role", "round_id", "rule",
     "seen_version", "shift_id", "slots", "start", "state", "text", "title", "to_agent", "trades_made", "txn_id", "urgent",
-    "version", "vote", "you_give", "agent_id"]);
+    "version", "vote", "you_give", "agent_id", "token"]);
   const leak = { msgs: 0, fields: 0, hits: 0, labels: null };
   const wireLog = []; // recent wire events, so the graph can list what crossed before it was opened
   let flow = null;

@@ -1,18 +1,18 @@
 date,start,end,position,worker,changed_by_trade,checked_at,checked,shift_id
-2026-10-26,10:00,14:00,Library front desk,Zoe,yes,2026-10-25T04:20-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-mon-1026-1000-d1
+2026-10-26,10:00,14:00,Library front desk,Zoe,yes,2026-10-25T04:49-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-mon-1026-1000-d1
 2026-10-26,14:00,18:00,Library front desk,Priya,,,,library-mon-1026-1400-d1
 2026-10-27,10:00,14:00,Library front desk,Zoe,,,,library-tue-1027-1000-d1
-2026-10-27,18:00,22:00,Library front desk,Ben,yes,2026-10-25T04:20-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-tue-1027-1800-d1
+2026-10-27,18:00,22:00,Library front desk,Ben,yes,2026-10-25T04:49-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-tue-1027-1800-d1
 2026-10-28,10:00,14:00,Library front desk,Dev,,,,library-wed-1028-1000-d1
 2026-10-28,14:00,18:00,Library front desk,Priya,,,,library-wed-1028-1400-d1
 2026-10-28,14:00,18:00,Library front desk,Marco,,,,library-wed-1028-1400-d2
 2026-10-29,10:00,14:00,Library front desk,Marco,,,,library-thu-1029-1000-d1
-2026-10-29,14:00,18:00,Library front desk,Dev,yes,2026-10-25T04:20-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-thu-1029-1400-d1
-2026-10-29,18:00,22:00,Library front desk,Zoe,yes,2026-10-25T04:20-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-extra-1029-1800
-2026-10-30,10:00,14:00,Library front desk,Ana,yes,2026-10-25T04:20-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-fri-1030-1000-d1
+2026-10-29,14:00,18:00,Library front desk,Dev,yes,2026-10-25T04:49-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-thu-1029-1400-d1
+2026-10-29,18:00,22:00,Library front desk,Zoe,yes,2026-10-25T04:50-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-extra-1029-1800
+2026-10-30,10:00,14:00,Library front desk,Ana,yes,2026-10-25T04:49-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-fri-1030-1000-d1
 2026-10-30,14:00,18:00,Library front desk,Priya,,,,library-fri-1030-1400-d1
 2026-10-31,10:00,14:00,Library front desk,Ana,,,,library-sat-1031-1000-d1
-2026-10-31,10:00,14:00,Library front desk,Priya,yes,2026-10-25T04:20-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-sat-1031-1000-d2
+2026-10-31,10:00,14:00,Library front desk,Priya,yes,2026-10-25T04:49-07:00,"class time, the 40-hour week, any weekly cap on hours across all jobs (as each student reported their other jobs), the 25-hour average and any award limit",library-sat-1031-1000-d2
 2026-10-31,14:00,18:00,Library front desk,Marco,,,,library-sat-1031-1400-d1
 2026-11-01,10:00,14:00,Library front desk,Zoe,,,,library-sun-1101-1000-d1
 2026-11-01,14:00,18:00,Library front desk,Dev,,,,library-sun-1101-1400-d1

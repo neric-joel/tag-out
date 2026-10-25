@@ -62,7 +62,7 @@ async def test_the_same_trade_request_twice_opens_one_case(system):
     evs = org_events(system)
     assert len([e for e in evs if e["type"] == "org_case" and e["by"] == "nia"]) == 1
     climbs = [(e["frm"], e["to"]) for e in evs if e["type"] == "org_escalate"]
-    assert climbs == [("nia", "dining_mgr"), ("dining_mgr", "backup")]
+    assert climbs == [("nia", "dining_mgr"), ("dining_mgr", "dining_gm")]
     assert len([e for e in evs if e["type"] == "org_done"]) == 1
     assert holders(system, shift.id) == ["omar"]
 
@@ -98,8 +98,8 @@ async def test_a_taker_whose_mascot_fails_on_prepare_does_not_stall_the_case(sys
     await text(system, "lena", "I woke up sick, can't make my Saturday shift")
     end = await until(system, lambda e: e["type"] in ("org_done", "org_overdue"))
     climbs = [e["to"] for e in org_events(system) if e["type"] == "org_escalate"]
-    assert climbs == ["dining_mgr", "backup", "hr"], "the backup's cover failed, so it moved up"
-    assert end["by"] == "hr"
+    assert climbs == ["dining_mgr", "dining_gm"], "the backup's cover failed, so it stays at the top"
+    assert end["by"] == "dining_gm"
     assert holders(system, shift.id) == ["lena"]
     assert system.store("lena").get("hold") is None, "the failed cover released Lena's hold"
 
@@ -109,8 +109,8 @@ async def test_an_issue_nobody_acknowledges_climbs_instead_of_dying(system):
     await until(system, lambda e: e["type"] == "org_case" and e["by"] == "dining_mgr")
     over = await until(system, lambda e: e["type"] == "org_overdue")
     climbs = [(e["frm"], e["to"], e["rule"]) for e in org_events(system) if e["type"] == "org_escalate"]
-    assert climbs == [("dining_mgr", "backup", "no_answer_30m"), ("backup", "hr", "no_answer_30m")]
-    assert over["by"] == "hr"
+    assert climbs == [("dining_mgr", "dining_gm", "no_answer_30m")]
+    assert over["by"] == "dining_gm"
 
 
 # ---------- silence, closed cases and resets ----------
@@ -123,8 +123,8 @@ async def test_silence_ends_once_at_the_top_and_nothing_climbs_after(system):
     await asyncio.sleep(0.6)  # several times every remaining deadline
     assert not org_events(system, after=n)
     assert holders(system, shift.id) == ["lena"]
-    hr = (await system.net.get(f"{system.reg['org']['hr']}/state"))["cases"]
-    assert [c["status"] for c in hr] == ["overdue"]
+    top = (await system.net.get(f"{system.reg['org']['dining_gm']}/state"))["cases"]
+    assert [c["status"] for c in top] == ["overdue"]
 
 
 async def test_timers_stop_when_a_case_closes(system):
@@ -133,7 +133,7 @@ async def test_timers_stop_when_a_case_closes(system):
     n = len(system.bus.history)
     await asyncio.sleep(0.6)
     assert not [e for e in org_events(system, after=n) if e["type"] in ("org_escalate", "org_overdue", "org_done")]
-    for r in ("nia", "dining_mgr", "backup"):
+    for r in ("nia", "dining_mgr", "dining_gm"):
         cases = (await system.net.get(f"{system.reg['org'][r]}/state"))["cases"]
         assert [c["status"] for c in cases] == [done["outcome"]], r
 
@@ -160,7 +160,7 @@ async def test_two_call_outs_at_once_in_one_department_end_consistent(system):
             await asyncio.sleep(0.05)
     await asyncio.wait_for(both(), 15)
     await asyncio.sleep(0.3)
-    roster = system.org["backup"].state.s["roster"]
+    roster = system.org["dining_gm"].state.s["roster"]
     for shift in (lena, mei):
         got = holders(system, shift.id)
         assert len(got) == 1, f"{shift.id} held by {got}"
@@ -173,11 +173,14 @@ async def test_an_overdue_case_can_still_be_closed_at_the_top(system):
     await all_quiet(system)
     await text(system, "lena", "I woke up sick, can't make my Saturday shift")
     await until(system, lambda e: e["type"] == "org_overdue")
-    card = next(m for m in reversed(system.org["hr"].state.s["phone"]) if m["buttons"])
-    r = await system.net.post(f"{system.reg['org']['hr']}/tap", {"data": card["buttons"][0]["data"]})
+    card = next(m for m in reversed(system.org["dining_gm"].state.s["phone"]) if m["buttons"])
+    excuse = next(b["data"] for b in card["buttons"] if b["data"].startswith("excuse:"))
+    r = await system.net.post(f"{system.reg['org']['dining_gm']}/tap", {"data": excuse})
     assert "already" not in r["reply"], "the card says it stays open until someone closes it"
     done = await until(system, lambda e: e["type"] == "org_done")
-    assert done["by"] == "hr" and done["outcome"] == "closed"
+    assert done["by"] == "dining_gm" and done["outcome"] == "excused"
+    await asyncio.sleep(0.2)
+    assert any("excused you" in m["text"] for m in system.phone("lena")), "she hears she's excused, not 'still on'"
 
 
 async def test_a_failed_hand_off_keeps_the_case_on_the_list(system):
@@ -272,7 +275,7 @@ async def test_a_forged_case_update_does_not_stop_the_ladder(system):
     await system.net.post(f"{nia}/case", CaseUpdate(case_id=case["case_id"], outcome="covered"))
     await until(system, lambda e: e["type"] == "org_overdue")
     climbs = [e["to"] for e in org_events(system) if e["type"] == "org_escalate"]
-    assert climbs == ["dining_mgr", "backup", "hr"]
+    assert climbs == ["dining_mgr", "dining_gm"]
     assert [c["status"] for c in (await system.net.get(f"{nia}/state"))["cases"]] == ["moved up"]
 
 
@@ -287,9 +290,9 @@ async def test_a_mascot_never_vouches_for_giving_away_a_shift_it_no_longer_has(s
 
 async def test_the_org_chart_shows_no_inbox_without_debug(system, monkeypatch):
     await text(system, "tess", "The fire exit by the weight room is blocked with boxes again, it's unsafe")
-    await until(system, lambda e: e["type"] == "org_done")
+    await until(system, lambda e: e["type"] == "org_done" and e["by"] == "ehs")
     full = await system.net.get(f"{system.reg['broker']}/org")
-    assert full["roles"]["hr"]["phone"] and full["roles"]["hr"]["cases"]
+    assert full["roles"]["ehs"]["phone"] and full["roles"]["ehs"]["cases"]
     monkeypatch.delenv("TAGOUT_DEBUG")
     bare = await system.net.get(f"{system.reg['broker']}/org")
     assert set(bare["roles"]) == set(full["roles"]) and bare["students"] == full["students"]

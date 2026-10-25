@@ -283,12 +283,12 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         state["issues"][r.issue_id] = {"category": r.category, "text": r.text, "agent_id": r.agent_id,
                                        "status": "new"}
         who = names[r.agent_id] if r.agent_id else "anonymous"
-        hr = reg.get("org", {}).get("hr")
-        if r.category == "safety" and hr:  # safety skips the ladder: Student Employment gets it at once too
-            asyncio.create_task(app.state.net.post(f"{hr}/issue", r))
+        ehs = reg.get("org", {}).get("ehs")
+        if r.category == "safety" and ehs:  # safety: Environmental Health and Safety gets it at once too
+            asyncio.create_task(app.state.net.post(f"{ehs}/issue", r))
         await to_manager(f"Issue reported ({r.category}): \"{r.text}\"\nFrom: {who}."
-                         + ("\nSafety reports also go straight to Student Employment." if r.category == "safety" and hr
-                            else ""), [("Acknowledge", f"ack:{r.issue_id}")], kind="issue")
+                         + ("\nSafety reports also go straight to Environmental Health and Safety."
+                            if r.category == "safety" and ehs else ""), [("Acknowledge", f"ack:{r.issue_id}")], kind="issue")
         return {}
 
     @app.get("/manager/state")

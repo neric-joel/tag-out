@@ -87,7 +87,7 @@ def ask_limit(shift_label: str, hours: float, cap: float, other: dict[str, float
 
 
 def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move], names: dict[str, str],
-            shifts: list[Shift], busy: list[BusyBlock]) -> str:
+            shifts: list[Shift], busy: list[BusyBlock], approver: str | None = None) -> str:
     who = {m.shift_id: names.get(m.to_agent, m.to_agent) for m in moves}
     owner = {m.shift_id: "an extra shift your manager posted" if m.from_agent == "open"
              else f"from {names.get(m.from_agent, m.from_agent)}" for m in moves}
@@ -109,14 +109,18 @@ def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move
         other = ", ".join(f"{h:g} h at {k}" for k, h in st.limits.other_employer_hours.items())
         lines.append(f"Hours: you'd be at {week_hours(st, after, monday):g} of your {f1_cap_for(st, monday):g} hours "
                      "across all on-campus jobs" + (f", counting the {other} you told me about." if other else "."))
+    rest = (f"The {approver.lower()} arranged it, so it goes through as soon as both of you confirm."
+            if approver else "It goes through only if everyone in it confirms and your manager approves it (swaps "
+            "can also pass on their standing rule for swaps).")
     lines += ["I checked it against your limits privately. Nobody else sees your numbers.", "",
-              "It goes through only if everyone in it confirms and your manager approves it (swaps can also pass on "
-              "their standing rule for swaps). Confirm, or Decline (nobody is told why)."]
+              rest + " Confirm, or Decline (nobody is told why)."]
     return "\n".join(lines)
 
 
-def committed(adds: list[Shift], drops: list[Shift], week: list[Shift] | None = None) -> str:
-    lines = ["Done. The trade went through: everyone in it confirmed, and your manager approved it (or their "
+def committed(adds: list[Shift], drops: list[Shift], week: list[Shift] | None = None,
+              approver: str | None = None) -> str:
+    lines = [f"Done. The cover went through: both of you confirmed, and the {approver.lower()} arranged it." if approver
+             else "Done. The trade went through: everyone in it confirmed, and your manager approved it (or their "
              "standing rule for swaps did).", ""]
     lines += [f"You gave: {d.label}" for d in drops] + [f"You took: {a.label}" for a in adds]
     if week:
@@ -125,7 +129,9 @@ def committed(adds: list[Shift], drops: list[Shift], week: list[Shift] | None = 
             if len(jobs) == 1 else ""
         lines.append(f"Your {employer}week now: "
                      + ", ".join(s.label for s in sorted(week, key=lambda s: s.start)) + ".")
-    lines += ["", "Enter your time in Workday as usual for the shifts you work."]
+    aramark = any(s.employer == "dining" for s in adds + drops)  # Aramark keeps its own time records, not Workday
+    lines += ["", "Record your time the way Aramark has you do it for that shift." if aramark
+              else "Enter your time in Workday as usual for the shifts you work."]
     return "\n".join(lines)
 
 
@@ -135,8 +141,8 @@ def aborted() -> str:
 
 
 def issue_draft(text: str, category: str) -> str:
-    safety = ("Safety reports also go straight to Student Employment, so someone above your department sees it at "
-              "once.\n") if category == "safety" else ""
+    safety = ("Safety reports also go straight to ASU Environmental Health and Safety, so someone outside your "
+              "department sees it at once.\n") if category == "safety" else ""
     return (f"Here's the report I'd send your manager ({category}):\n\n\"{text}\"\n\n"
             "Send with my name: they can reply and follow up with you.\n"
             "Send anonymously: they see the report, not who sent it.\n" + safety +

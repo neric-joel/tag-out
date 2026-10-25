@@ -300,6 +300,30 @@
   "page": "https://codex-pets.net/#/pets/rivet"
  },
  {
+  "id": "moss",
+  "name": "Moss",
+  "creator": "lama-bird",
+  "spriteVersion": 2,
+  "atlas": "1536x2288",
+  "description": "A strong and majestic chibi moose companion in 16-bit retro pixel art, with sturdy antlers, warm brown fur, and a gentle heroic spirit.",
+  "spritesheetUrl": "https://codex-pets.net/assets/pets/v/1792587486970/moss/spritesheet.webp",
+  "posterUrl": "https://codex-pets.net/assets/pets/v/1792587486970/moss/poster.webp",
+  "downloadUrl": "https://codex-pets.net/api/pets/moss/download?v=1792587486970",
+  "page": "https://codex-pets.net/#/pets/moss"
+ },
+ {
+  "id": "aurelia",
+  "name": "Aurelia",
+  "creator": "lama-bird",
+  "spriteVersion": 2,
+  "atlas": "1536x2288",
+  "description": "A super cute and majestic chibi eagle-owl companion in 16-bit pixel-art style, with cream-and-caramel plumage, bright amber eyes, and a tiny crown-like feather tuft.",
+  "spritesheetUrl": "https://codex-pets.net/assets/pets/v/1792587141026/aurelia/spritesheet.webp",
+  "posterUrl": "https://codex-pets.net/assets/pets/v/1792587141026/aurelia/poster.webp",
+  "downloadUrl": "https://codex-pets.net/api/pets/aurelia/download?v=1792587141026",
+  "page": "https://codex-pets.net/#/pets/aurelia"
+ },
+ {
   "id": "debug-duck-v2",
   "name": "Debug Duck v2",
   "creator": "mbs",

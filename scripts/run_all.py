@@ -112,7 +112,7 @@ def main() -> None:
         except SystemExit:
             print("Telegram bot did not start (see runtime/logs/bot.log); continuing with on-screen phones.")
     print(f"Tag Out is up ({args.mode} mode). 6 Library mascots on :8711-8716, steward :8701, broker :8700, "
-          "campus hierarchy :8721-8738"
+          "campus hierarchy :8721-8740"
           + (", Telegram bot on" if bot_on else ", no Telegram bot"))
     print("Commons: http://127.0.0.1:8700        Judge view: http://127.0.0.1:8700/judge")
     if bot_on:

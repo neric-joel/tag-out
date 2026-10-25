@@ -2,4 +2,18 @@ BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Tag Out synthetic fixtures//EN
 X-WR-CALNAME:Omar - personal (synthetic)
+BEGIN:VEVENT
+SUMMARY:Aramark shift\, Barrett dining hall
+DTSTART;TZID=America/Phoenix:20261028T110000
+DTEND;TZID=America/Phoenix:20261028T130000
+DTSTAMP:20261024T190000Z
+UID:omar-job0@tagout
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Aramark shift\, Barrett dining hall
+DTSTART;TZID=America/Phoenix:20261030T110000
+DTEND;TZID=America/Phoenix:20261030T130000
+DTSTAMP:20261024T190000Z
+UID:omar-job1@tagout
+END:VEVENT
 END:VCALENDAR

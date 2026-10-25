@@ -32,6 +32,7 @@ SCHEMAS = {
     # the campus hierarchy (org/app.py)
     "/escalate": ("Escalation", None),
     "/case": ("CaseUpdate", None),
+    "/excused": ("Excused", None),
     "/question": ("Question", None),
     "/question/answer": ("Answer", None),
 }

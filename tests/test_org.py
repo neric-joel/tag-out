@@ -43,8 +43,14 @@ async def test_uncovered_callout_climbs_two_rungs_then_the_backup_finds_a_cover(
     evs = org_events(system)
 
     climbs = [(e["frm"], e["to"], e["rule"]) for e in evs if e["type"] == "org_escalate"]
-    assert climbs == [("nia", "dining_mgr", "no_cover_2h"), ("dining_mgr", "backup", "no_answer_30m")]
-    assert done["outcome"] == "covered" and done["taker"] == "omar" and done["by"] == "backup"
+    assert climbs == [("nia", "dining_mgr", "no_cover_2h"), ("dining_mgr", "dining_gm", "no_answer_30m")]
+    assert done["outcome"] == "covered" and done["taker"] == "omar" and done["by"] == "dining_gm"
+    # Dining is Aramark: the general manager offered it only to people who already work for Aramark elsewhere
+    offer = next(e for e in evs if e["type"] == "org_ask" and e["by"] == "dining_gm")
+    assert set(offer["asked"]) == {"omar", "ivy"}
+    # the manager heard about the call-out the moment it came in, and every deadline ended before the shift
+    assert any("Same-day call-out" in m["text"] for m in system.org["dining_mgr"].state.s["phone"])
+    assert all(e["deadline"] <= shift.start.isoformat(timespec="minutes") for e in evs if e.get("deadline"))
 
     # the shift lead asked every Dining coworker twice (Ben and Raj work there too); all of them passed
     lead = [e for e in evs if e["type"] == "org_picks" and e["by"] == "nia"]
@@ -73,19 +79,28 @@ async def test_silence_never_approves(system):
     await text(system, "lena", "I woke up sick, can't make my Saturday shift")
     await until(system, lambda e: e["type"] == "org_overdue")
     climbs = [e["to"] for e in org_events(system) if e["type"] == "org_escalate"]
-    assert climbs == ["dining_mgr", "backup", "hr"]
+    assert climbs == ["dining_mgr", "dining_gm"], "Aramark's chain ends at its general manager"
     assert not any(e["type"] == "org_done" for e in org_events(system))
     assert shift.id in {s.id for s in system.store("lena").shifts()}, "a timeout never moves a shift"
 
 
-async def test_safety_report_skips_the_ladder(system):
+async def test_safety_report_goes_to_the_manager_on_duty_and_ehs_at_once(system):
     await text(system, "tess", "The fire exit by the weight room is blocked with boxes again, it's unsafe")
-    done = await until(system, lambda e: e["type"] == "org_done")
+
+    async def both():
+        while len([e for e in org_events(system) if e["type"] == "org_done"]) < 2:
+            await asyncio.sleep(0.02)
+    await asyncio.wait_for(both(), 15)
     climbs = [(e["frm"], e["to"], e["rule"]) for e in org_events(system) if e["type"] == "org_escalate"]
-    assert climbs == [("rec_mgr", "hr", "safety_first")], "straight to Student Employment, no shift lead"
-    assert done["by"] == "hr" and done["outcome"] == "acknowledged"
+    assert climbs == [("rec_mgr", "ehs", "safety_first")], "no shift lead, no waiting"
+    assert {e["by"] for e in org_events(system) if e["type"] == "org_done"} == {"rec_mgr", "ehs"}
     await asyncio.sleep(0.2)
-    assert any("saw your report" in m["text"] for m in system.phone("tess"))
+    acks = [m["text"] for m in system.phone("tess") if "saw your report" in m["text"]]
+    assert any(a.startswith("Environmental Health and Safety") for a in acks)
+    assert any(a.startswith("Your manager") for a in acks), "each office is named for what it did"
+    # Student Employment gets a count for the week, never the report
+    se = system.org["se"].state.s["phone"]
+    assert se and all("fire exit" not in m["text"] and "Tess" not in m["text"] for m in se)
 
 
 async def test_f1_question_goes_to_issc_only_after_the_student_says_send(system):
@@ -102,6 +117,7 @@ async def test_f1_question_goes_to_issc_only_after_the_student_says_send(system)
     await asyncio.sleep(0.2)
     reply = system.phone("kofi")[-1]["text"]
     assert "ISSC" in reply and "Not legal or immigration advice" in reply
+    assert "keep to 20 hours" not in reply and "program completion date" in reply, "Kofi graduates in December"
     sent = [e for e in system.bus.history if e["type"] == "wire" and e["path"] == "/question"]
     assert len(sent) == 1 and set(sent[0]["payload"]) == {"question_id", "agent_id", "text"}
 

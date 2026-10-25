@@ -34,18 +34,19 @@ Ben in the demo shows the difference. His mascot knows he is on an F-1, works 9 
 
 ## The campus hierarchy (`org/app.py`)
 
-The rungs above the mascots (shift leads, department managers, the backup manager, Student Employment, ISSC) talk in the same closed schemas, plus four more: `Escalation` (case id, kind, level, the rule that moved it, the shift id, a deadline), `CaseUpdate` (case id, outcome), `Question` and `Answer`.
+The rungs above the mascots (shift leads, department managers, each employer's backup manager, Environmental Health and Safety, Student Employment, ISSC) talk in the same closed schemas, plus five more: `Escalation` (case id, kind, level, the rule that moved it, the shift id, a deadline, a case secret), `CaseUpdate` (case id, outcome, the secret), `Excused` (a shift id), `Question` and `Answer`.
 
 | Party | Can see | Cannot see |
 |---|---|---|
 | Shift lead | that a student in their department called out of a shift, with no reason; each coworker's pick or pass | why anyone called out or passed; hours, limits, other jobs |
 | Department manager, backup manager | the same case once it reaches them, the rule that moved it ("2 h without a cover", "no answer in 30 min"), who took the shift | the same as above |
-| Student Employment | safety reports in the student's own words (the mascot's draft says before sending that safety reports go there too), and cases that reach the top of the ladder | anything not in the report |
+| Environmental Health and Safety | safety reports from ASU workplaces in the student's own words (the mascot's draft says before sending that they go there too) | anything not in the report |
+| Student Employment | a weekly count of ASU cases by department and outcome | names, shifts, reasons, reports |
 | ISSC | an F-1 question in the student's own words, sent only after the student taps Send on the exact text | the student's hours, jobs, calendar or limits |
 
 A cover that a rung arranges is the same two-phase commit as a Library trade: each student's mascot checks the exact move against every private limit, and both students confirm. In the recorded morning Raj passes on Lena's Dining shift because Rec plus Dining hours would put him at 22 of his 20 F-1 hours; the Dining shift lead and manager see a pass and nothing else. `tests/test_org.py` checks that "sick" is in no message between agents during the call-out, that ISSC receives only `question_id`, `agent_id` and `text`, and that nothing reaches ISSC before the student taps Send.
 
-What the hierarchy adds to the leaks below: each rung learns who called out of which shift (as the Library manager already does), and the backup manager's campus-wide offer goes to everyone trained for that station in other departments, so they learn a shift is open.
+What the hierarchy adds to the leaks below: each rung learns who called out of which shift (as the Library manager already does), and a backup manager's offer goes to students who already work that job for the same employer elsewhere (for Dining, Aramark's other dining hall), so they learn a shift is open.
 
 ## How it is tested
 

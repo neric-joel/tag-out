@@ -214,10 +214,22 @@ class Brain:
         if a.question_id in self.store.get("questions", {}):
             await self.notify(a.text, kind="info")
 
-    async def issue_acked(self, iid: str) -> None:
+    async def issue_acked(self, iid: str, office: str = "manager") -> None:
         it = self.store.get("issues", {}).get(iid)
         if it:
-            await self.notify(f"Your manager saw your report: \"{it['text']}\"", kind="info")
+            who = "Environmental Health and Safety" if office == "ehs" else "Your manager"
+            await self.notify(f"{who} saw your report: \"{it['text']}\"", kind="info")
+
+    async def excused(self, shift_id: str) -> None:
+        """A manager excused the student from a shift they called out of: staff covers it, nothing more to do."""
+        s = self.store.shift(shift_id)
+        if s is None or shift_id not in self.store.get("called_out", []):
+            return
+        self.store.set_shifts([], [shift_id])
+        self.store.bump()
+        self.store.note(f"Your manager excused you from {s.label}; staff covers it.")
+        await self.notify(f"Your manager excused you from your {s.label} shift. You don't need to find cover: "
+                          "staff covers it, and nobody was told why. Feel better.", kind="info")
 
     def free_slots(self, monday: date, minutes: int) -> list[tuple]:
         """Times this student is free on weekdays 9-5 (no class, no shift, nothing on the calendar)."""
@@ -430,7 +442,8 @@ class Brain:
                                 "moves": [m.model_dump() for m in p.moves], "ballot": p.ballot})
         adds, drops = self.my_moves(p.moves)
         st = self.store.student()
-        text = explain.confirm(st, adds, drops, p.moves, self.names(), self.store.shifts(), self.store.busy())
+        text = explain.confirm(st, adds, drops, p.moves, self.names(), self.store.shifts(), self.store.busy(),
+                               approver=self.arranged_by(p.txn_id))
         self.store.note(f"Holding {p.ring_id}: {text}")
         await self.notify(text, [("Confirm", f"confirm:{p.txn_id}"), ("Decline", f"decline:{p.txn_id}")],
                           kind="confirm")
@@ -507,7 +520,7 @@ class Brain:
         self.store.note(f"{hold['ring_id']} committed.")
         monday = week_start((adds or drops)[0].start.date()) if adds or drops else None
         week = [s for s in self.store.shifts() if week_start(s.start.date()) == monday]
-        await self.notify(explain.committed(adds, drops, week), kind="commit")
+        await self.notify(explain.committed(adds, drops, week, approver=self.arranged_by(d.txn_id)), kind="commit")
 
     async def schedule_changed(self) -> None:
         """Called after any edit to this student's week. A held trade with an old version must not commit."""
@@ -517,6 +530,12 @@ class Brain:
             await self.send_vote(Vote(txn_id=hold["txn_id"], agent_id=self.me, vote="stale",
                                       ballot=hold.get("ballot", "")))
             self.store.note(f"Your week changed while {hold['ring_id']} was pending. Pulled out (stale).")
+
+    def arranged_by(self, txn_id: str) -> str | None:
+        """Who set up a cover in the campus hierarchy (txn ids "org-<rung>-<n>"); None for a Library trade."""
+        if not txn_id.startswith("org-"):
+            return None
+        return self.names().get(txn_id.split("-")[1])
 
     # ---------- views ----------
     def public_face(self) -> PublicFace:

@@ -189,7 +189,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
     @app.get("/org")
     async def org() -> dict:
         """The campus hierarchy (seeds/org.py) for the org chart: people, rungs, open cases and each inbox."""
-        from seeds.org import ALSO, DEPARTMENTS, ORG_STUDENTS, ROLES
+        from seeds.org import ALSO, DEPARTMENTS, ELSEWHERE, ORG_STUDENTS, ROLES
 
         urls = reg.get("org", {})
         roles = {}
@@ -218,7 +218,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         people = []
         for p in lib + new:
             f = await face(p["id"], reg["agents"].get(p["id"]) or urls[p["id"]])
-            people.append({**p, "name": f["name"], "pet_id": f["pet_id"]})
+            people.append({**p, "name": f["name"], "pet_id": f["pet_id"], "elsewhere": ELSEWHERE.get(p["id"])})
         return {"departments": DEPARTMENTS, "students": people, "roles": roles}
 
     # ----- demo controls (synthetic roster) -----

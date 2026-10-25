@@ -115,15 +115,15 @@ def test_how_it_works_counts_messages_and_finds_no_leak(page, base_url):
 def test_org_chart_plays_the_morning_up_the_ladder(page, base_url):
     page.goto(base_url + "/#org", wait_until="domcontentloaded")
     ready(page)
-    expect(page.locator(".org-node")).to_have_count(25, timeout=30_000)  # 16 students, 3 leads, 6 people above
+    expect(page.locator(".org-node")).to_have_count(27, timeout=30_000)  # 16 students, 3 leads, 8 people above
     page.get_by_role("button", name="Play the morning").click()
     case = page.locator(".org-case").last
     expect(case).to_contain_text("up to Dining manager", timeout=30_000)
     expect(case).to_contain_text("silence counts as no", timeout=30_000)
     expect(case).to_contain_text("Covered: Omar takes it", timeout=30_000)
-    expect(page.locator(".org-case")).to_have_count(3, timeout=30_000)
-    expect(page.locator("#orgCases")).to_contain_text("safety report skips the ladder")
-    page.locator(".org-node[data-id='backup']").click()
+    expect(page.locator(".org-case")).to_have_count(4, timeout=60_000)  # the call-out, safety twice, the question
+    expect(page.locator("#orgCases")).to_contain_text("Environmental Health and Safety")
+    page.locator(".org-node[data-id='dining_gm']").click()
     expect(page.locator("#orgInbox")).to_contain_text("didn't answer in 30 minutes")
     assert page.errors == []
 

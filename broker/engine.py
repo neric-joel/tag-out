@@ -20,6 +20,7 @@ from core.wire import (
     Decision,
     Eligibility,
     Move,
+    NoTrade,
     OpenShift,
     Pick,
     PickRequest,
@@ -322,6 +323,7 @@ class Engine:
         for s in open_:
             try:
                 await self.net.post(f"{self.reg['steward']}/open", OpenShift(shift_id=s))
+                await self.net.post(f"{self.reg['agents'][self.requests[s]]}/round/none", NoTrade(shift_id=s))
             except Exception:
                 pass
         by_kind = {"ring": 0, "chain": 0}

@@ -50,7 +50,7 @@
   // ---------- the world ----------
   const on = () => world && live;
   const W = {
-    say: (a, t, ms) => on() && world.say(a, t, ms), status: (a, t) => on() && world.status(a, t),
+    say: (a, t, ms) => on() && world.say(a, `${name(a)}: ${t}`, ms), status: (a, t) => on() && world.status(a, t),
     play: (a, st, o) => on() && world.play(a, st, o), face: (a, b) => on() && world.face(a, b),
     link: (f, t, o) => on() && world.link(f, t, o), clear: (st) => world && world.clearLinks(st),
     badge: (a, v) => world && (live || v === null) && world.badge(a, v),

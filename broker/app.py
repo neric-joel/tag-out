@@ -311,8 +311,8 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         if debug() and app.state.baseline is None and engine.requests:
             try:
                 app.state.baseline = await compute_baseline()
-            except Exception:
-                pass
+            except Exception as e:  # the comparison is judge-view only; never block the real rounds on it
+                bus.emit("baseline_error", error=type(e).__name__)
         await engine.run()
 
     @app.get("/sim")

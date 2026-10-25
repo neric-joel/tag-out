@@ -87,10 +87,14 @@ def asu_week_hours(student: Student, shifts: list[Shift], monday: date) -> float
 
 
 def measurement_window(student: Student, monday: date) -> tuple[date, date, str]:
-    """The 25 h average's measurement period: the first 12 months after the hire date, then Oct 1 - Sep 30."""
+    """The 25 h average's measurement period: 12 months starting the first of the month after the hire date
+    (ASU's ACA FAQ), then the standard Oct 1 - Sep 30 period."""
     hire = student.limits.hire_date
-    if hire and monday < date(hire.year + 1, hire.month, min(hire.day, 28)):
-        return hire, date(hire.year + 1, hire.month, min(hire.day, 28)), "initial"
+    if hire:
+        start = date(hire.year + (hire.month == 12), hire.month % 12 + 1, 1)
+        end = date(start.year + 1, start.month, 1)
+        if monday < end:
+            return start, end, "initial"
     start_year = monday.year if monday.month >= 10 else monday.year - 1
     return date(start_year, 10, 1), date(start_year + 1, 9, 30), "standard"
 

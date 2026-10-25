@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
 import subprocess
 import sys
 import time
@@ -33,6 +34,17 @@ def write_registry() -> dict:
     RUNTIME.mkdir(parents=True, exist_ok=True)
     (RUNTIME / "registry.json").write_text(json.dumps(reg, indent=1))
     return reg
+
+
+def join_codes() -> dict[str, str]:
+    """One code per student and the manager, so a Telegram chat can't join as someone else by typing a name.
+    Kept across restarts so phones stay linked; delete runtime/join_codes.json to issue new ones."""
+    path = RUNTIME / "join_codes.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    codes = {who: secrets.token_hex(3).upper() for who in [s["id"] for s in STUDENTS] + ["manager"]}
+    path.write_text(json.dumps(codes, indent=1))
+    return codes
 
 
 def uvicorn(module: str, port: int, env: dict, log: Path) -> subprocess.Popen:
@@ -65,6 +77,7 @@ def main() -> None:
     args = ap.parse_args()
 
     reg = write_registry()
+    join_codes()  # before the bot starts, so /join always needs a code
     logs = RUNTIME / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     if args.fresh:
@@ -91,7 +104,11 @@ def main() -> None:
             print("Telegram bot did not start (see runtime/logs/bot.log); continuing with on-screen phones.")
     print(f"Tag Out is up ({args.mode} mode). 6 mascots on :8711-8716, steward :8701, broker :8700"
           + (", Telegram bot on" if bot_on else ", no Telegram bot"))
-    print("Arena:  http://127.0.0.1:8700        Judge view: http://127.0.0.1:8700/judge")
+    print("Commons: http://127.0.0.1:8700        Judge view: http://127.0.0.1:8700/judge")
+    if bot_on:
+        codes = join_codes()
+        print("Telegram join codes (send /join <name> <code> to the bot): "
+              + ", ".join(f"{who} {code}" for who, code in codes.items()))
     try:
         while all(p.poll() is None for p in procs):
             time.sleep(1)

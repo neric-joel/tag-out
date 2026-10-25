@@ -178,8 +178,10 @@ class Brain:
             hours, cap = week_hours(st, after, monday), f1_cap(monday)
             self.store.note(f"Passed for now: {label} would put you at {hours:g} of {cap:g} on-campus hours. Asked you.")
             text, keep = explain.ask_limit(label, hours, cap), "Leave room"
-        await self.notify(text, [("Take it", f"ask:yes:{ref.shift_id}"), (keep, f"ask:no:{ref.shift_id}")],
-                          kind="ask")
+        buttons = [("Take it", f"ask:yes:{ref.shift_id}"), (keep, f"ask:no:{ref.shift_id}")]
+        if keep == "Leave room":
+            buttons.reverse()  # near a limit, the safe answer comes first
+        await self.notify(text, buttons, kind="ask")
 
     # ---------- validation of the exact final ring ----------
     def my_moves(self, moves: list[Move]) -> tuple[list[Shift], list[Shift]]:

@@ -57,7 +57,7 @@ Library-only scheduler would have put Ben at 21 of 20 F-1 hours and Dev over the
 ## Your to-do list this morning
 
 1. **8:30** Start it: the command above. Click through the commons and the judge view once. Drag a mascot, move the size slider, click a mascot to open its chat.
-2. **Telegram with friends (optional but strong for the video):** each friend opens @Naazhi_bot, presses Start, sends `/join ben` / `/join dev` (you are `/join ana`; a fourth phone can be `/join manager`). Run with `--mode live`, then press Run Sunday check and Start trade rounds on the site. All phones buzz on the confirm step.
+2. **Telegram with friends (optional but strong for the video):** each friend opens @Naazhi_bot, presses Start, sends `/join ben <code>` / `/join dev <code>` with the codes `run_all` prints at startup (you are already linked as Ana; a fourth phone can be `/join manager`). Run with `--mode live`, then press Run Sunday check and Start trade rounds on the site. All phones buzz on the confirm step.
 3. **Survey:** if you have answers, tell me the numbers and the best quote; I'll put them in the README and pitch. Until then the README says survey results are pending.
 4. **Video (3 min):** follow the demo week above. A silent draft can be recorded headless: `.venv\Scripts\python -m scripts.capture video --all` (saves `recordings/demo.webm`, git-ignored). Upload it (YouTube unlisted) and put the link in the README.
 5. **Make the repo public** (it's private now, as you asked): `gh repo edit neric-joel/tag-out --visibility public --accept-visibility-change-consequences`.

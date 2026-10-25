@@ -59,3 +59,15 @@ What the test does not cover: numbers are not in the list of private strings, be
 ---
 
 Not legal or immigration advice. Your DSO and ASU Student Employment decide. Rules are cited; limits are configurable.
+
+
+## Owner tokens and joining (added after review)
+
+- Each mascot has an owner token: a bearer credential for its owner channel (phone, diary, intake, taps). The demo
+  runs with `TAGOUT_DEBUG=1`, which skips the token so the judge view and the on-screen phones work; real use runs
+  without it.
+- `/cubbie` in the Telegram bot sends a student's own mascot address and owner token to the chat that joined as that
+  student, so they can paste it into Cubbie's secure input. Anyone who can read that chat can act as the student;
+  the message says to delete it afterwards.
+- `/join` needs the one-time join code that `scripts/run_all.py` prints for each student, so nobody can join as Ben or
+  as the manager by typing a name.

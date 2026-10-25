@@ -25,6 +25,7 @@ from core.wire import (
     BusyBits,
     Decision,
     Eligibility,
+    NoTrade,
     Pick,
     PickRequest,
     Prepare,
@@ -96,7 +97,9 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
         except Exception:
             pass  # no bot running: the message is still on this mascot's own phone view
         if app.state.auto["enabled"] and msg.get("buttons"):
-            task = asyncio.create_task(auto_tap(msg["buttons"][0]["data"]))
+            yes = next((b["data"] for b in msg["buttons"]
+                        if b["data"].startswith(("ask:yes", "confirm:", "trade:yes"))), msg["buttons"][0]["data"])
+            task = asyncio.create_task(auto_tap(yes))
             brain.auto_tasks.add(task)
             task.add_done_callback(brain.auto_tasks.discard)
 
@@ -146,6 +149,16 @@ def create_app(sid: str, db_path: str | None = None, net: Net | None = None, reg
     async def sunday(body: SundayCheck) -> dict:
         await brain.sunday_check(body.monday)
         return {}  # the broker learns nothing about how many collisions there were
+
+    @app.post("/round/none")
+    async def no_trade(body: NoTrade) -> dict:
+        s = store.shift(body.shift_id)
+        if s:
+            store.note(f"No safe trade for {s.label} this week; it stays on your schedule.")
+            await brain.notify(f"No trade worked for your {s.label} shift this week, so it's still yours. If you "
+                               "can't work it, ask your manager for the time off; I've told them it's open for a "
+                               "trade, with no reason.", kind="info")
+        return {}
 
     @app.get("/public", response_model=PublicFace)
     async def public() -> PublicFace:

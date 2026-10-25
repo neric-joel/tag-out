@@ -35,6 +35,6 @@ def test_aramark_counts_for_f1_but_not_the_asu_average():
 
 def test_measurement_window_starts_at_hire_then_runs_oct_to_sep():
     new = Student(id="n", name="N", limits=Limits(hire_date=date(2026, 5, 18)))
-    assert measurement_window(new, MON) == (date(2026, 5, 18), date(2027, 5, 18), "initial")
+    assert measurement_window(new, MON) == (date(2026, 6, 1), date(2027, 6, 1), "initial")
     old = Student(id="o", name="O", limits=Limits(hire_date=date(2024, 8, 19)))
     assert measurement_window(old, MON) == (date(2026, 10, 1), date(2027, 9, 30), "standard")

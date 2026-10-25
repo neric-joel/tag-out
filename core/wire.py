@@ -103,6 +103,12 @@ class OpenShift(Wire):
     shift_id: str
 
 
+class NoTrade(Wire):
+    """Sent to the owner's mascot when a requested shift found no safe trade this week."""
+
+    shift_id: str
+
+
 class BusyBits(Wire):
     """For the manager's crunch forecast: one bit per roster slot, no labels."""
 

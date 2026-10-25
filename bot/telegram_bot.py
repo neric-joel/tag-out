@@ -31,6 +31,7 @@ from seeds.scenario import STUDENTS
 ROOT = Path(__file__).resolve().parent.parent
 PETS_DIR = ROOT / "web" / "pets"
 LINKS = RUNTIME / "bot_links.json"
+JOIN_CODES = RUNTIME / "join_codes.json"
 FOOTER = "Not legal or immigration advice. Your DSO and ASU Student Employment decide."
 log = logging.getLogger("tagout.bot")
 
@@ -81,13 +82,19 @@ class TagOutBot:
         hello = (f"You're linked to {self.names[who]}'s mascot." if who else
                  "Hi, I'm Tag Out. I read your calendar and your shifts, warn you on Sundays when they collide, "
                  "and trade shifts with your coworkers' mascots so nobody loses pay. I never tell anyone why "
-                 "you said no.\n\nDemo: link this chat with /join ana (or ben, dev, priya, zoe, marco, manager).")
+                 "you said no.\n\nDemo: link this chat with /join <name> <code> (ana, ben, dev, priya, zoe, marco or manager; "
+                 "the codes are printed when Tag Out starts).")
         await update.message.reply_text(hello + "\n\n" + FOOTER)
 
     async def join(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         who = (ctx.args[0].lower() if ctx.args else "")
+        code = (ctx.args[1].upper() if len(ctx.args or []) > 1 else "")
         if who not in self.names:
-            await update.message.reply_text("Usage: /join ana | ben | dev | priya | zoe | marco | manager")
+            await update.message.reply_text("Usage: /join <name> <code>, for example /join ana 3F9A1C")
+            return
+        codes = json.loads(JOIN_CODES.read_text()) if JOIN_CODES.exists() else {}
+        if codes and code != codes.get(who):
+            await update.message.reply_text("That code doesn't match. Ask whoever runs Tag Out for your join code.")
             return
         self.links.link(update.effective_chat.id, who)
         msg = f"This chat is now {self.names[who]}'s phone."

@@ -46,8 +46,9 @@ def ask(shift_label: str, avoid_label: str) -> str:
 
 
 def ask_limit(shift_label: str, hours: float, cap: float) -> str:
-    return polish(f"A {shift_label} Library shift could come to you in a trade, but it would put you at {hours:g} of "
-                  f"your {cap:g} on-campus hours this week, with no room for a late relief. Take it anyway?")
+    return (f"A {shift_label} Library shift could come to you, but it would put you at {hours:g} of your {cap:g} "
+            f"on-campus hours this week, with no room to stay late or cover a call-out. Only take it if you're sure "
+            f"your week won't run over.")
 
 
 def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move], names: dict[str, str],
@@ -69,8 +70,9 @@ def confirm(st: Student, adds: list[Shift], drops: list[Shift], moves: list[Move
     if st.limits.f1_or_j1 and (adds or drops):
         monday = week_start((adds or drops)[0].start.date())
         after = [s for s in shifts if s.id not in {d.id for d in drops}] + adds
+        other = ", ".join(f"{h:g} h at {k}" for k, h in st.limits.other_employer_hours.items())
         parts.append(f"You'd be at {week_hours(st, after, monday):g} of your {f1_cap(monday):g} hours across all "
-                     f"on-campus jobs.")
+                     f"on-campus jobs" + (f", counting the {other} you told me about." if other else "."))
     return polish(" ".join(parts) + " Confirm?")
 
 

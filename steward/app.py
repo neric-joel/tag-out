@@ -162,8 +162,9 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         if sid in state["roster"] and sid not in state["open"]:
             state["open"].append(sid)
             ref = state["roster"][sid]
-            await to_manager(f"Open shift: {fmt_span(ref.start, ref.end)} (was {names[ref.owner]}'s). "
-                             "No safe trade this week. Post it or cover it?", [])
+            await to_manager(f"No safe trade for {names[ref.owner]}'s {fmt_span(ref.start, ref.end)} this week. "
+                             f"{names[ref.owner]} is still scheduled and asked for a trade, with no reason given. "
+                             "Approve time off and post the shift, or keep them on.", [])
         return {}
 
     @app.post("/tap")

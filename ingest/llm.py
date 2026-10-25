@@ -14,7 +14,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 SEED_CACHE = ROOT / "seeds" / "llm_cache"
-RUN_CACHE = ROOT / "cache" / "llm"
+RUN_CACHE = Path(os.environ.get("TAGOUT_CACHE_DIR", ROOT / "cache" / "llm"))
 SPEND = Path(os.environ.get("TAGOUT_SPEND_FILE", ROOT / "cache" / "spend.json"))
 ENV_FILE = Path(os.environ.get("TAGOUT_ENV_FILE", ROOT.parent.parent / "api.env"))
 # Hard stop: no call is made once this much has been spent (TAGOUT_SPEND_CAP overrides). The key has about $99:
@@ -64,8 +64,11 @@ def cache_get(key: str) -> dict | None:
 
 def cache_put(key: str, value: dict, seed: bool = False) -> None:
     d = SEED_CACHE if seed else RUN_CACHE
-    d.mkdir(parents=True, exist_ok=True)
-    (d / f"{key}.json").write_text(json.dumps(value, indent=1, sort_keys=True), encoding="utf-8")
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{key}.json").write_text(json.dumps(value, indent=1, sort_keys=True), encoding="utf-8")
+    except OSError:
+        pass  # a read-only disk (the hosted function) only loses the cache, never the answer
 
 
 def spent() -> float:

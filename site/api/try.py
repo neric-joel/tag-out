@@ -19,6 +19,7 @@ os.environ.setdefault("TAGOUT_OFFLINE", "0" if os.environ.get("ANTHROPIC_API_KEY
 os.environ.setdefault("TAGOUT_SPEND_CAP", "1.0")  # per warm instance; the hard cap is the key's own spend limit
 os.environ.setdefault("TAGOUT_SPEND_FILE", str(Path(tempfile.gettempdir()) / "tagout-spend.json"))
 os.environ.setdefault("TAGOUT_RUNTIME", str(Path(tempfile.gettempdir()) / "tagout-runtime"))
+os.environ.setdefault("TAGOUT_CACHE_DIR", str(Path(tempfile.gettempdir()) / "tagout-llm"))  # the app folder is read-only
 
 import time  # noqa: E402
 from collections import defaultdict, deque  # noqa: E402

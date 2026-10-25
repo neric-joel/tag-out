@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tag Out — Pet world</title>
+  <link rel="icon" href="data:,">
+  <style>
+    /* Google Fonts' IBM Plex Sans, when installed locally; no remote font request. */
+    @font-face { font-family: "IBM Plex Sans"; src: local("IBM Plex Sans"); font-weight: 100 900; font-display: swap; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f2ef; color: #121212; font-family: "IBM Plex Sans", sans-serif; }
+    main { max-width: 1440px; margin: 0 auto; padding: 40px 32px; }
+    header { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; margin-bottom: 24px; }
+    h1 { font-size: 32px; letter-spacing: -1px; margin: 0; font-weight: 600; }
+    header p { margin: 0; color: #5d5b57; font-size: 16px; }
+    .world { background: #fff; border: 1px solid #e4e2dd; border-radius: 20px; overflow: hidden; height: 522px; }
+    canvas { width: 100%; height: 100%; display: block; }
+    .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .size { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border: 1px solid #e4e2dd; border-radius: 12px; background: #fff; }
+    label, output { font-size: 14px; white-space: nowrap; }
+    output { min-width: 42px; color: #5d5b57; font-variant-numeric: tabular-nums; }
+    input { width: 140px; accent-color: #1d5fbf; }
+    button { font: 500 14px "IBM Plex Sans", sans-serif; padding: 12px 16px; color: #121212; background: #fff; border: 1px solid #e4e2dd; border-radius: 12px; cursor: pointer; }
+    button:hover { background: #efece6; }
+    button:active { transform: translateY(1px); }
+    button:focus-visible, input:focus-visible, canvas:focus-visible { outline: 3px solid #1d5fbf; outline-offset: 3px; }
+    #ring { background: #1d5fbf; color: #fff; border-color: #1d5fbf; }
+    #ring:hover { background: #174c99; }
+    .note { color: #5d5b57; font-size: 13px; line-height: 1.6; margin-top: 16px; max-width: 75ch; }
+    #selection { color: #121212; }
+    @media (max-width: 600px) { main { padding: 24px 12px; } header { gap: 8px; } h1 { font-size: 28px; } .size { width: 100%; } input { flex: 1; } button { flex: 1 1 auto; } }
+    @media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>Tag Out</h1><p>A little town square for your scheduling agents.</p></header>
+    <div class="world"><canvas id="world" aria-label="Ana, Ben, Dev, Priya, Zoe and Marco's pet world. Drag a pet to move it.">Six scheduling pets live here. Use the buttons below to gather them, wave, or show a shift ring.</canvas></div>
+    <div class="controls" aria-label="Pet world controls">
+      <div class="size"><label for="size">Pet size</label><input id="size" type="range" min="48" max="220" value="96"><output id="size-value" for="size">96 px</output></div>
+      <button id="gather" type="button">Gather Ana Ben Dev</button>
+      <button id="ring" type="button">Ring</button>
+      <button id="wave" type="button">Wave all</button>
+      <button id="release" type="button">Release</button>
+      <button id="hi" type="button">Say hi</button>
+    </div>
+    <p class="note">Drag a pet to give it a new spot. Gather brings three agents to the table; Ring shows their shift exchange. <span id="selection" role="status" aria-live="polite"></span></p>
+  </main>
+  <script src="/web/js/world.js"></script>
+  <script>
+    const roster = [
+      { id: "ana", name: "Ana", petId: "kitsune-spirit" },
+      { id: "ben", name: "Ben", petId: "tide-kraken" },
+      { id: "dev", name: "Dev", petId: "crystal-kirin" },
+      { id: "priya", name: "Priya", petId: "moon-phoenix" },
+      { id: "zoe", name: "Zoe", petId: "storm-griffin" },
+      { id: "marco", name: "Marco", petId: "frost-yeti" }
+    ];
+    const world = PetWorld.create(document.getElementById("world"), {
+      petHeight: 96,
+      onSelect(id) { document.getElementById("selection").textContent = roster.find(p => p.id === id).name + " selected."; }
+    });
+    world.setPets(roster);
+    document.getElementById("size").addEventListener("input", event => {
+      world.setPetHeight(Number(event.target.value));
+      document.getElementById("size-value").value = event.target.value + " px";
+    });
+    document.getElementById("gather").onclick = () => world.gather(["ana", "ben", "dev"]);
+    document.getElementById("ring").onclick = () => {
+      world.gather(["ana", "ben", "dev"]); world.clearLinks();
+      [["ana", "dev", "Fri 10-2"], ["dev", "ben", "Thu 2-6"], ["ben", "ana", "Tue 6-10"]].forEach(([from, to, label]) => {
+        world.link(from, to, { style: "ring", label }); world.badge(from, "yes");
+      });
+    };
+    document.getElementById("wave").onclick = () => roster.forEach(p => world.play(p.id, "waving"));
+    document.getElementById("release").onclick = () => {
+      world.release(); world.clearLinks(); roster.forEach(p => world.badge(p.id, null));
+    };
+    document.getElementById("hi").onclick = () => world.say("ana", "Your Tue shift hits your exam prep.");
+    window.addEventListener("pagehide", event => { if (!event.persisted) world.destroy(); });
+  </script>
+</body>
+</html>

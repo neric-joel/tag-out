@@ -79,6 +79,22 @@ def week_hours(student: Student, shifts: list[Shift], monday: date) -> float:
     return own + sum(student.limits.other_employer_hours.values())
 
 
+def asu_week_hours(student: Student, shifts: list[Shift], monday: date) -> float:
+    """Hours that count toward ASU's 25 h average: ASU jobs and stipends only (Aramark, Follett excluded)."""
+    own = sum(s.hours for s in shifts if week_start(s.start.date()) == monday)
+    lim = student.limits
+    return own + sum(h for k, h in lim.other_employer_hours.items() if k not in lim.non_asu_employers)
+
+
+def measurement_window(student: Student, monday: date) -> tuple[date, date, str]:
+    """The 25 h average's measurement period: the first 12 months after the hire date, then Oct 1 - Sep 30."""
+    hire = student.limits.hire_date
+    if hire and monday < date(hire.year + 1, hire.month, min(hire.day, 28)):
+        return hire, date(hire.year + 1, hire.month, min(hire.day, 28)), "initial"
+    start_year = monday.year if monday.month >= 10 else monday.year - 1
+    return date(start_year, 10, 1), date(start_year + 1, 9, 30), "standard"
+
+
 def f1_cap(monday: date) -> float:
     if in_break_week(monday):
         return float(config()["f1_break_40"]["weekly_hours"])
@@ -97,8 +113,9 @@ def rooms(student: Student, shifts: list[Shift], monday: date) -> list[Room]:
     if lim.hours_history:
         avg_cap = float(config()["aca_25_avg"]["average_hours"])
         n = len(lim.hours_history)
+        asu = asu_week_hours(student, shifts, monday)
         allowed = avg_cap * (n + 1) - sum(lim.hours_history)
-        out.append(Room("aca_25_avg", total, allowed, allowed - total))
+        out.append(Room("aca_25_avg", asu, allowed, allowed - asu))
     if lim.fws and lim.fws_award_remaining is not None:
         out.append(Room("fws_award", 0.0, lim.fws_award_remaining, lim.fws_award_remaining, unit="$"))
     return out
@@ -142,7 +159,7 @@ def evaluate(
     avg_cap = config()["aca_25_avg"]["average_hours"]
     if lim.hours_history:
         n = len(lim.hours_history)
-        projected = (sum(lim.hours_history) + total) / (n + 1)
+        projected = (sum(lim.hours_history) + asu_week_hours(student, week, monday)) / (n + 1)
         findings.append(Finding("aca_25_avg", "blocked" if projected > avg_cap else "eligible",
                                 f"projected average {projected:.1f} h of {avg_cap} h over {n + 1} weeks"))
     else:

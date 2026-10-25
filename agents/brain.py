@@ -95,6 +95,8 @@ class Brain:
     # ---------- availability (private) ----------
     def availability(self, ref: ShiftRef, giving: str | None = None) -> Avail:
         st = self.store.student()
+        if ref.role not in st.job_profiles:
+            return "no"  # Workday job profile: an instructional assistant can't cover a grader's shift
         if ref.start.weekday() in st.prefs.never_weekdays:
             return "no"
         if any(overlaps(ref.start, ref.end, b.start, b.end) for b in self.store.busy()):

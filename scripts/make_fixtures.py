@@ -11,9 +11,10 @@ from pathlib import Path
 import icalendar
 
 from core.timeutil import PHX
-from seeds.scenario import DEMO_MONDAY, EMPLOYER, STUDENTS
+from seeds.scenario import DEMO_MONDAY, EMPLOYER, POSITIONS, STUDENTS
 
 ICS = Path(__file__).resolve().parent.parent / "seeds" / "ics"
+WORKDAY = ICS.parent / "workday"
 TERM_START, TERM_END = date(2026, 8, 20), date(2026, 12, 12)
 
 
@@ -90,6 +91,30 @@ def build() -> None:
             (ICS / f"{sid}_canvas.ics").write_bytes(canvas.to_ical())
     (ICS / "library_roster.ics").write_bytes(roster.to_ical())
     trim_asu()
+    workday_time()
+
+
+def workday_time() -> None:
+    """Synthetic Workday time entries for the 8 weeks before the demo week, one CSV per student."""
+    WORKDAY.mkdir(parents=True, exist_ok=True)
+    for s in STUDENTS:
+        lim = s.get("limits", {})
+        asu_other = {k: v for k, v in lim.get("other_employer_hours", {}).items()
+                     if k not in lim.get("non_asu_employers", [])}
+        rows = ["Date,Position,Time Type,Hours,Status"]
+        for k, total in enumerate(lim.get("hours_history", [])):
+            monday = DEMO_MONDAY - timedelta(days=7 * (len(lim["hours_history"]) - k))
+            parts = {POSITIONS["library"]: total - sum(asu_other.values())}
+            parts |= {POSITIONS[name]: h for name, h in asu_other.items()}
+            for d, (position, hours) in enumerate(parts.items()):
+                day, left = d, hours
+                while left > 0:  # one entry per working day, 4 h blocks, as students enter elapsed time
+                    block = min(4.0, left)
+                    rows.append(f"{monday + timedelta(days=day % 6):%Y-%m-%d},{position},Regular Hours Worked - "
+                                f"Elapsed,{block:g},Approved")
+                    left -= block
+                    day += 2
+        (WORKDAY / f"{s['id']}_time.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
 def trim_asu() -> None:

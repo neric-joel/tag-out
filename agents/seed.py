@@ -8,6 +8,7 @@ from pathlib import Path
 from agents.store import Store
 from core.models import Limits, Preferences, SoftAvoid, Student
 from ingest import text as text_intake
+from ingest import workday
 from ingest.ics import busy_from_ics, exam_eves, read, shifts_from_ics
 from seeds.scenario import DEMO_MONDAY, EMPLOYER, STUDENTS, WAGE
 
@@ -23,8 +24,12 @@ def seed(store: Store, sid: str) -> Student:
     store.reset()
     prefs = dict(spec.get("prefs", {}))
     prefs["soft_avoid"] = [SoftAvoid(**a) for a in prefs.get("soft_avoid", [])]
-    st = Student(id=sid, name=spec["name"], pet_id=spec["pet_id"], limits=Limits(**spec.get("limits", {})),
-                 prefs=Preferences(**prefs))
+    limits = Limits(**spec.get("limits", {}))
+    time_csv = ICS.parent / "workday" / f"{sid}_time.csv"
+    if time_csv.exists():  # hours history comes from Workday time entries, summed across positions
+        limits = limits.model_copy(update={"hours_history": workday.history(
+            workday.parse_time_csv(time_csv.read_text(encoding="utf-8")), DEMO_MONDAY)})
+    st = Student(id=sid, name=spec["name"], pet_id=spec["pet_id"], limits=limits, prefs=Preferences(**prefs))
     start, end = DEMO_MONDAY - timedelta(days=7), DEMO_MONDAY + timedelta(days=14)
     store.set_shifts(shifts_from_ics(read(ICS / f"{sid}_library.ics"), EMPLOYER, start, end, WAGE), [])
     busy = busy_from_ics(read(ICS / f"{sid}_personal.ics"), "calendar", start, end)

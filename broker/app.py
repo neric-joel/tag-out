@@ -9,8 +9,10 @@ import asyncio
 import json
 import mimetypes
 import os
+import re
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +25,7 @@ from core.wire import SundayCheck, TradeRequest, Vote
 from seeds.scenario import BREAK_IT_EDIT, DEMO_MONDAY, STUDENTS
 
 WEB = Path(__file__).resolve().parent.parent / "web"
+PETS = WEB / "pets"
 mimetypes.add_type("image/webp", ".webp")  # Windows has no default type for it
 
 
@@ -186,6 +189,48 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         if not debug():
             raise HTTPException(403)
         return await net.post(f"{reg['agents'][who]}/intake", {"text": body["text"]})
+
+    # ----- pet gallery (Codex Pets): search, download on demand, assign to a student -----
+    gallery = "https://codex-pets.net"
+
+    @app.get("/pets/search")
+    async def pets_search(q: str = "", page: int = 1) -> dict:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get(f"{gallery}/api/pets", params={"page": max(1, page), "pageSize": 12, "q": q[:60]})
+            r.raise_for_status()
+            d = r.json()
+        local = {p.name for p in PETS.iterdir() if (p / "spritesheet.webp").exists()} if PETS.exists() else set()
+        return {"total": d.get("total", 0), "page": d.get("page", page), "pets": [{
+            "id": p["id"], "name": p.get("displayName") or p["id"], "creator": p.get("ownerName") or "",
+            "version": p.get("spriteVersionNumber", 1), "poster": p.get("posterUrl"), "sheet": p.get("spritesheetUrl"),
+            "page": f"{gallery}/#/pets/{p['id']}", "downloaded": p["id"] in local} for p in d.get("pets", [])]}
+
+    @app.post("/pets/use")
+    async def pets_use(body: dict) -> dict:
+        """Give a student a pet: download its sprite sheet if needed, then set it on their mascot."""
+        if not debug():
+            raise HTTPException(403)
+        agent, pet_id, sheet = body.get("agent"), str(body.get("pet_id", "")), body.get("sheet") or ""
+        if agent not in reg["agents"] or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,80}", pet_id):
+            raise HTTPException(400, "unknown student or pet")
+        faces = {a: (await net.get(f"{u}/public"))["pet_id"] for a, u in reg["agents"].items()}
+        taken = next((a for a, pid in faces.items() if pid == pet_id and a != agent), None)
+        if taken:
+            raise HTTPException(409, f"{taken.title()} already has that pet; no two people on a roster share one")
+        target = PETS / pet_id / "spritesheet.webp"
+        if not target.exists():
+            if not sheet.startswith(f"{gallery}/assets/"):
+                raise HTTPException(400, "sprite sheets only come from codex-pets.net")
+            async with httpx.AsyncClient(timeout=30, follow_redirects=False) as c:
+                r = await c.get(sheet)
+                r.raise_for_status()
+            if len(r.content) > 12_000_000:
+                raise HTTPException(413, "sprite sheet too large")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(r.content)
+        await net.post(f"{reg['agents'][agent]}/pet", {"pet_id": pet_id})
+        bus.emit("pet_changed", agent=agent, pet_id=pet_id)
+        return {"ok": True, "agent": agent, "pet_id": pet_id}
 
     @app.get("/sim")
     async def sim() -> JSONResponse:

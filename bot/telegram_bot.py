@@ -14,7 +14,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -32,7 +32,6 @@ ROOT = Path(__file__).resolve().parent.parent
 PETS_DIR = ROOT / "web" / "pets"
 LINKS = RUNTIME / "bot_links.json"
 FOOTER = "Not legal or immigration advice. Your DSO and ASU Student Employment decide."
-STATE_FRAME = {"collision": "review", "ask": "review", "confirm": "jumping", "commit": "waving", "abort": "failed"}
 log = logging.getLogger("tagout.bot")
 
 
@@ -97,23 +96,8 @@ class TagOutBot:
         await update.message.reply_text(msg)
 
     async def pet(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-        who = self.links.who(update.effective_chat.id)
-        if not who or who == "manager":
-            await update.message.reply_text("Link a student first: /join ana")
-            return
-        pets = json.loads((ROOT / "seeds" / "pets.json").read_text(encoding="utf-8"))
-        state = await self.net.get(f"{self.reg['broker']}/state")
-        taken = {a["pet_id"] for aid, a in state["agents"].items() if aid != who}
-        free = [p for p in pets if p["id"] not in taken and (PETS_DIR / p["id"] / "poster.png").exists()][:10]
-        if not free:
-            await update.message.reply_text("No pets downloaded yet. Run: python -m scripts.fetch_pets")
-            return
-        media = [InputMediaPhoto((PETS_DIR / p["id"] / "poster.png").read_bytes(),
-                                 caption=f"{p['name']} by {p['creator']}") for p in free]
-        await update.message.reply_media_group(media)
-        rows = [[InlineKeyboardButton(p["name"], callback_data=f"pet:{p['id']}")] for p in free]
-        await update.message.reply_text("Pick your mascot (no two people on a roster share one):",
-                                        reply_markup=InlineKeyboardMarkup(rows))
+        await update.message.reply_text("Mascots live on the Tag Out website: open it, click \"Pets\" and pick "
+                                        "yours. No two people on a roster share one.")
 
     async def week(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         who = self.links.who(update.effective_chat.id)
@@ -195,22 +179,9 @@ class TagOutBot:
             return False
         markup = InlineKeyboardMarkup([[InlineKeyboardButton(b["label"], callback_data=b["data"])
                                         for b in buttons]]) if buttons else None
-        frame = STATE_FRAME.get(kind)
-        pet = await self.pet_of(who)
-        img = PETS_DIR / pet / f"{frame}.png" if frame and pet else None
-        if img and img.exists() and len(text) < 1000:
-            await self.app.bot.send_photo(chat, img.read_bytes(), caption=text, reply_markup=markup)
-        else:
-            await self.app.bot.send_message(chat, text, reply_markup=markup)
+        # Plain text only: the mascots live on the website, the phone just carries the message.
+        await self.app.bot.send_message(chat, text, reply_markup=markup)
         return True
-
-    async def pet_of(self, who: str) -> str | None:
-        if who == "manager":
-            return None
-        try:
-            return (await self.net.get(f"{self.reg['agents'][who]}/public"))["pet_id"]
-        except Exception:
-            return None
 
 
 def internal_api(bot: TagOutBot) -> FastAPI:

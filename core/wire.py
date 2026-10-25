@@ -24,6 +24,7 @@ class ShiftRef(Wire):
     start: datetime
     end: datetime
     owner: str
+    role: str = "desk"  # the job profile the shift needs; only people with that profile can take it
 
 
 class TradeRequest(Wire):

@@ -18,7 +18,7 @@ STUDENTS: list[dict] = [
     {
         "id": "ana", "name": "Ana", "pet_id": "kitsune-spirit", "port": 8711,
         "limits": {"fws": True, "fws_award_remaining": 300.0,
-                   "hours_history": [12, 14, 16, 12, 14, 12, 16, 14]},
+                   "hours_history": [12, 14, 16, 12, 14, 12, 16, 14], "hire_date": "2025-08-18"},
         "prefs": {"protect_exam_eves": True,
                   "soft_avoid": [{"weekday": 4, "start_hour": 10, "end_hour": 12, "label": "gym with your roommate"}]},
         "library_shifts": [(1, 18, 22), (5, 10, 14)],
@@ -29,8 +29,8 @@ STUDENTS: list[dict] = [
     },
     {
         "id": "ben", "name": "Ben", "pet_id": "tide-kraken", "port": 8712,
-        "limits": {"f1_or_j1": True, "other_employer_hours": {"dining": 9.0},
-                   "hours_history": [17, 16, 17, 18, 17, 16, 17, 17]},
+        "limits": {"f1_or_j1": True, "other_employer_hours": {"dining": 9.0}, "non_asu_employers": ["dining"],
+                   "hours_history": [8, 8, 8, 9, 8, 8, 8, 8], "hire_date": "2026-01-12"},
         "prefs": {},
         "library_shifts": [(0, 10, 14), (3, 14, 18)],
         "classes": [("CSE 330", [1, 3], (9, 0), (10, 15)), ("CSE 340 lab", [2], (13, 30), (16, 15)),
@@ -41,7 +41,7 @@ STUDENTS: list[dict] = [
     {
         "id": "dev", "name": "Dev", "pet_id": "crystal-kirin", "port": 8713,
         "limits": {"other_employer_hours": {"rec center": 12.0},
-                   "hours_history": [25, 26, 24, 25, 25, 26, 24, 25]},
+                   "hours_history": [25, 26, 24, 25, 25, 26, 24, 25], "hire_date": "2024-08-19"},
         "prefs": {},
         "library_shifts": [(2, 10, 14), (4, 10, 14), (6, 14, 18)],
         "classes": [("IEE 380", [0, 2, 4], (15, 0), (15, 50))],
@@ -51,7 +51,7 @@ STUDENTS: list[dict] = [
     },
     {
         "id": "priya", "name": "Priya", "pet_id": "moon-phoenix", "port": 8714,
-        "limits": {"f1_or_j1": True, "hours_history": [12, 12, 12, 12, 12, 12, 12, 12]},
+        "limits": {"f1_or_j1": True, "hours_history": [12, 12, 12, 12, 12, 12, 12, 12], "hire_date": "2026-05-18"},
         "prefs": {"wants_more_hours": True},
         "library_shifts": [(0, 14, 18), (2, 14, 18), (4, 14, 18)],
         "classes": [("BME 300", [1, 3], (10, 30), (11, 45)), ("ENG 301", [1], (18, 0), (20, 45)),
@@ -59,7 +59,7 @@ STUDENTS: list[dict] = [
     },
     {
         "id": "zoe", "name": "Zoe", "pet_id": "storm-griffin", "port": 8715,
-        "limits": {"hours_history": [14, 12, 12, 14, 12, 12, 14, 12]},
+        "limits": {"hours_history": [14, 12, 12, 14, 12, 12, 14, 12], "hire_date": "2025-01-13"},
         "prefs": {"wants_more_hours": True, "never_weekdays": [4]},
         "library_shifts": [(1, 10, 14), (5, 10, 14), (6, 10, 14)],
         "classes": [("PSY 290 lab", [2], (13, 30), (16, 20)), ("PSY 230", [3], (13, 30), (16, 15))],
@@ -70,7 +70,7 @@ STUDENTS: list[dict] = [
     {
         "id": "marco", "name": "Marco", "pet_id": "frost-yeti", "port": 8716,
         "limits": {"fws": True, "fws_award_remaining": 40.0,
-                   "hours_history": [12, 12, 12, 12, 12, 12, 12, 12]},
+                   "hours_history": [12, 12, 12, 12, 12, 12, 12, 12], "hire_date": "2025-08-18"},
         "prefs": {},
         "library_shifts": [(2, 14, 18), (3, 10, 14), (5, 14, 18)],
         "classes": [("ECN 211", [1], (18, 0), (20, 45)), ("ACC 231", [3], (15, 0), (16, 15))],
@@ -84,6 +84,12 @@ STUDENTS: list[dict] = [
 # proposed, so Dev can no longer take Ben's Thu 2-6. The freshness check must abort the ring.
 BREAK_IT_EDIT = {"student": "dev", "text": "physical therapy thu 3pm", "weekday": 3, "start": (15, 0),
                  "end": (16, 0), "kind": "appointment", "label": "Physical therapy"}
+
+# Workday positions (synthetic numbers). Dev's rec center job is a second ASU position, so it shows in Workday;
+# Ben's Dining job is Aramark, so it doesn't (his mascot knows it from his own calendar).
+POSITIONS = {"library": "P900101 Student Worker II - Library front desk",
+             "rec center": "P900233 Student Worker II - Rec center front desk"}
+SUPERVISORY_ORG = "University Libraries >> Library Front Desk Student Workers (synthetic)"
 
 # Who confirms on behalf of the employer.
 MANAGER = {"id": "manager", "name": "Library manager"}

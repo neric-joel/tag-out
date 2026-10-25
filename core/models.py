@@ -80,13 +80,16 @@ class Limits(_Private):
     fws: bool = False
     fws_award_remaining: float | None = None
     other_employer_hours: dict[str, float] = Field(default_factory=dict)  # per week, e.g. {"dining": 9}
-    hours_history: list[float] | None = None  # weekly totals in the current measurement period
+    non_asu_employers: list[str] = Field(default_factory=list)  # e.g. ["dining"]: Aramark counts for F-1, not the ASU 25 h
+    hours_history: list[float] | None = None  # ASU hours per Mon-Sun week in the measurement period (Workday time)
+    hire_date: date | None = None  # Workday hire date: starts the 25 h average's initial 12-month period
 
 
 class Student(_Private):
     id: str
     name: str
     pet_id: str = "debug-duck-v2"
+    job_profiles: list[str] = Field(default_factory=lambda: ["desk"])  # Workday job profile(s) they can work
     limits: Limits = Field(default_factory=Limits)
     prefs: Preferences = Field(default_factory=Preferences)
 

@@ -89,8 +89,8 @@ def create_app(net: Net | None = None, reg: dict | None = None) -> FastAPI:
         state["holds"][p.txn_id] = [m.model_dump() for m in p.moves]
         lines = [f"{names[m.from_agent]}'s {fmt_span(state['roster'][m.shift_id].start, state['roster'][m.shift_id].end)}"
                  f" -> {names[m.to_agent]}" for m in p.moves]
-        text = ("Trade request. Every student involved has confirmed and each one's mascot checked their own work "
-                "limits privately (eligible). " + "; ".join(lines) + ". Approve?")
+        text = ("Trade request: " + "; ".join(lines) + ". Each student's mascot checked its own student's work "
+                "limits privately and said eligible. It goes through only if every student confirms and you approve.")
         await to_manager(text, [("Approve", f"approve:{p.txn_id}"), ("Deny", f"deny:{p.txn_id}")])
         return {"vote": None}
 

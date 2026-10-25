@@ -32,6 +32,21 @@ A few other choices keep the allowed fields quiet:
 
 Ben in the demo shows the difference. His mascot knows he is on an F-1, works 9 hours a week in Dining and would reach 21 hours with a plain cover of Ana's Tuesday. The broker sees only that his mascot picked Ana's Tuesday as a swap and said ok to the ring. The manager's card says his mascot checked his limits privately. Outside the debug judge view, only Ben's own phone and diary show his hours: "You'd be at 17 of your 20 hours across all on-campus jobs."
 
+## The campus hierarchy (`org/app.py`)
+
+The rungs above the mascots (shift leads, department managers, the backup manager, Student Employment, ISSC) talk in the same closed schemas, plus four more: `Escalation` (case id, kind, level, the rule that moved it, the shift id, a deadline), `CaseUpdate` (case id, outcome), `Question` and `Answer`.
+
+| Party | Can see | Cannot see |
+|---|---|---|
+| Shift lead | that a student in their department called out of a shift, with no reason; each coworker's pick or pass | why anyone called out or passed; hours, limits, other jobs |
+| Department manager, backup manager | the same case once it reaches them, the rule that moved it ("2 h without a cover", "no answer in 30 min"), who took the shift | the same as above |
+| Student Employment | safety reports in the student's own words (the mascot's draft says before sending that safety reports go there too), and cases that reach the top of the ladder | anything not in the report |
+| ISSC | an F-1 question in the student's own words, sent only after the student taps Send on the exact text | the student's hours, jobs, calendar or limits |
+
+A cover that a rung arranges is the same two-phase commit as a Library trade: each student's mascot checks the exact move against every private limit, and both students confirm. In the recorded morning Raj passes on Lena's Dining shift because Rec plus Dining hours would put him at 22 of his 20 F-1 hours; the Dining shift lead and manager see a pass and nothing else. `tests/test_org.py` checks that "sick" is in no message between agents during the call-out, that ISSC receives only `question_id`, `agent_id` and `text`, and that nothing reaches ISSC before the student taps Send.
+
+What the hierarchy adds to the leaks below: each rung learns who called out of which shift (as the Library manager already does), and the backup manager's campus-wide offer goes to everyone trained for that station in other departments, so they learn a shift is open.
+
 ## How it is tested
 
 `tests/test_privacy.py::test_no_private_value_crosses_between_agents` runs the whole demo week in one process, including the break-it abort and the retry. A wiretap on the shared HTTP client records every request and response on the peer paths (`/round/pick`, `/ring/check`, `/version`, `/txn/prepare`, `/txn/decide`, `/txn/vote`, `/trade`, `/sunday`, `/public`, `/busybits`, `/roster`, `/people`, `/open`). The test requires more than 100 recorded messages and more than 25 private strings, then fails if:
@@ -55,7 +70,7 @@ What the test does not cover: numbers are not in the list of private strings, be
 - Debug mode opens the owner channel. `scripts/run_all.py` always sets `TAGOUT_DEBUG=1` because the demo data is synthetic. In that mode owner endpoints skip the token and the judge view (`/admin/debug`, `/admin/judge`) shows each student's private numbers under a red banner. A deployment with real students must leave `TAGOUT_DEBUG` unset. The Steward's manager channel (`/tap`, `/phone`) and its `/admin/auto` have no token in this build at all.
 - Anthropic sees what is sent to it. With an API key, each text a student sends their mascot goes to Claude Haiku with the reference week, unless the same text is already cached, for example "I got the Amazon interview Thu 3pm!!". With `TAGOUT_LLM_EXPLAIN=1`, each text a mascot sends its own student goes to Claude Sonnet to be rephrased; those carry the private label and, for F-1 students, their hours ("You'd be at 17 of your 20 hours across all on-campus jobs."). Answers are cached on disk: the synthetic demo texts in `seeds/llm_cache/` (committed) and everything else in `cache/llm/` (git-ignored). Tests and CI run with `TAGOUT_OFFLINE=1` and never call the API.
 - Telegram sees the owner channel. A student's collision texts, questions and confirm cards travel through Telegram's servers, reasons and hours included. The bot keeps httpx logging at WARNING so the bot token, which sits in request URLs, never reaches the log.
-- The demo data is synthetic. The six students, their calendars, their limits, and the simulated 40-person roster are invented. No real student's data was used.
+- The demo data is synthetic. The sixteen students, their calendars, their limits, and the simulated 40-person roster are invented. No real student's data was used.
 
 ---
 

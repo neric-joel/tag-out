@@ -6,7 +6,7 @@ There is no field for hours, reasons, rule names or labels, so a message carryin
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -84,6 +84,20 @@ class Decision(Wire):
 class VersionReport(Wire):
     agent_id: str
     version: int
+
+
+class SundayCheck(Wire):
+    """It's Sunday: check next week. The reply is empty, so the broker never learns how many collisions."""
+
+    monday: date
+
+
+class SlotQuery(Wire):
+    slots: dict[str, tuple[datetime, datetime]]
+
+
+class OpenShift(Wire):
+    shift_id: str
 
 
 class BusyBits(Wire):

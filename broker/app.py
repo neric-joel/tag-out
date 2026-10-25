@@ -1,0 +1,196 @@
+"""Broker process: trade rounds, two-phase commit, the public event stream and the arena.
+
+Run: TAGOUT_ROLE=broker uvicorn broker.app:app --port 8700
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from sse_starlette.sse import EventSourceResponse
+
+from broker.engine import Engine, Timing
+from core.events import Bus
+from core.net import RUNTIME, Net, registry
+from core.wire import SundayCheck, TradeRequest, Vote
+from seeds.scenario import BREAK_IT_EDIT, DEMO_MONDAY, STUDENTS
+
+WEB = Path(__file__).resolve().parent.parent / "web"
+
+
+def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing | None = None,
+               log: Path | None = None) -> FastAPI:
+    app = FastAPI(title="Tag Out broker")
+    reg = reg or registry()
+    net = net or Net()
+    bus = Bus(log if log is not None else RUNTIME / "events.jsonl")
+    engine = Engine(net, reg, bus, timing or Timing())
+    app.state.engine, app.state.bus, app.state.net = engine, bus, net
+    tasks: set[asyncio.Task] = set()
+
+    def spawn(coro) -> None:
+        t = asyncio.create_task(coro)
+        tasks.add(t)
+        t.add_done_callback(tasks.discard)
+
+    def debug() -> bool:
+        return os.environ.get("TAGOUT_DEBUG") == "1"
+
+    # ----- agent-facing -----
+    @app.post("/trade")
+    async def trade(t: TradeRequest) -> dict:
+        engine.request(t.agent_id, t.shift_id)
+        return {}
+
+    @app.post("/txn/vote")
+    async def vote(v: Vote) -> dict:
+        await engine.vote(v)
+        return {}
+
+    # ----- public -----
+    @app.get("/events")
+    async def events():
+        q = bus.subscribe()
+
+        async def gen():
+            try:
+                for ev in list(bus.history):
+                    yield {"data": json.dumps(ev, default=str)}
+                while True:
+                    ev = await q.get()
+                    yield {"data": json.dumps(ev, default=str)}
+            finally:
+                bus.unsubscribe(q)
+
+        return EventSourceResponse(gen(), ping=15)
+
+    @app.get("/state")
+    async def state() -> dict:
+        faces = {}
+        for aid, url in reg["agents"].items():
+            try:
+                faces[aid] = await net.get(f"{url}/public")
+            except Exception:
+                faces[aid] = {"agent_id": aid, "name": aid.title(), "pet_id": "debug-duck-v2", "state": "idle",
+                              "trades_made": 0, "badges": []}
+        try:
+            roster = await net.get(f"{reg['steward']}/roster")
+        except Exception:
+            roster = []
+        return {"agents": faces, "roster": roster, "summary": engine.summary, "running": engine.running,
+                "monday": DEMO_MONDAY.isoformat(), "debug": debug(),
+                "pets": json.loads((WEB.parent / "seeds" / "pets.json").read_text(encoding="utf-8"))}
+
+    @app.get("/agents")
+    async def agents() -> dict:
+        return {"agents": reg["agents"], "steward": reg["steward"], "names": {s["id"]: s["name"] for s in STUDENTS}}
+
+    # ----- demo controls (synthetic roster) -----
+    @app.post("/demo/sunday")
+    async def sunday() -> dict:
+        await asyncio.gather(*(net.post(f"{u}/sunday", SundayCheck(monday=DEMO_MONDAY))
+                               for u in reg["agents"].values()), return_exceptions=True)
+        bus.emit("sunday_check", monday=DEMO_MONDAY.isoformat(), agents=sorted(reg["agents"]))
+        return {}
+
+    @app.post("/demo/run")
+    async def run(body: dict | None = None) -> dict:
+        wait = float((body or {}).get("wait", 0))
+
+        async def go() -> None:
+            if wait:
+                await asyncio.sleep(wait)
+            await engine.run()
+
+        spawn(go())
+        return {"started": True}
+
+    @app.post("/demo/break")
+    async def break_it() -> dict:
+        """The judge edits Dev's week while the ring waits for confirmations."""
+        if not debug():
+            raise HTTPException(403)
+        e = BREAK_IT_EDIT
+        r = await net.post(f"{reg['agents'][e['student']]}/intake", {"text": e["text"]})
+        bus.emit("schedule_edited", agent=e["student"])
+        return {"ok": True, "engine": r.get("engine")}
+
+    @app.post("/admin/reset")
+    async def reset() -> dict:
+        if not debug():
+            raise HTTPException(403)
+        engine.reset()
+        bus.clear()
+        await asyncio.gather(*(net.post(f"{u}/admin/reset") for u in list(reg["agents"].values())
+                               + [reg["steward"]]), return_exceptions=True)
+        bus.emit("reset")
+        return {"ok": True}
+
+    @app.post("/admin/auto")
+    async def auto(body: dict) -> dict:
+        if not debug():
+            raise HTTPException(403)
+        targets = body.get("agents") or list(reg["agents"])
+        await asyncio.gather(*(net.post(f"{reg['agents'][a]}/admin/auto", body) for a in targets),
+                             return_exceptions=True)
+        if body.get("steward", True) and not body.get("agents"):
+            await net.post(f"{reg['steward']}/admin/auto", body)
+        return {"ok": True}
+
+    @app.get("/admin/judge")
+    async def judge() -> dict:
+        if not debug():
+            raise HTTPException(403)
+        out = {}
+        for aid, url in reg["agents"].items():
+            try:
+                out[aid] = await net.get(f"{url}/admin/debug")
+            except Exception:
+                pass
+        return out
+
+    @app.get("/phone/{who}")
+    async def phone(who: str, since: int = 0) -> JSONResponse:
+        """Judge view relays each phone from its own mascot (synthetic demo only)."""
+        if not debug():
+            raise HTTPException(403)
+        url = reg["steward"] if who == "manager" else reg["agents"][who]
+        return JSONResponse(await net.get(f"{url}/phone?since={since}"))
+
+    @app.post("/phone/{who}/tap")
+    async def phone_tap(who: str, body: dict) -> dict:
+        if not debug():
+            raise HTTPException(403)
+        url = reg["steward"] if who == "manager" else reg["agents"][who]
+        return await net.post(f"{url}/tap", {"data": body["data"]})
+
+    @app.post("/phone/{who}/text")
+    async def phone_text(who: str, body: dict) -> dict:
+        if not debug():
+            raise HTTPException(403)
+        return await net.post(f"{reg['agents'][who]}/intake", {"text": body["text"]})
+
+    @app.get("/")
+    async def index() -> FileResponse:
+        return FileResponse(WEB / "index.html")
+
+    @app.get("/judge")
+    async def judge_page() -> FileResponse:
+        return FileResponse(WEB / "index.html")
+
+    if WEB.exists():
+        app.mount("/web", StaticFiles(directory=WEB), name="web")
+    return app
+
+
+def _timing_from_env() -> Timing:
+    return Timing.fast() if os.environ.get("TAGOUT_FAST") == "1" else Timing()
+
+
+app = create_app(timing=_timing_from_env()) if os.environ.get("TAGOUT_ROLE") == "broker" else None

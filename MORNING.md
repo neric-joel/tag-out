@@ -75,7 +75,7 @@ Library-only scheduler would have put Ben at 21 of 20 F-1 hours and Dev over the
 ## Cubbie
 
 `cubbie-skill/tag-out/SKILL.md` makes a student's Cubbie the front door to their mascot (Canvas and Calendar in,
-texts and taps relayed). To try it offline: `.venv\Scripts\python cubbie-skill	ag-out\scripts	agout.py --sample inbox`.
+texts and taps relayed). To try it offline: `.venv\Scripts\python cubbie-skill/tag-out/scripts/tagout.py --sample inbox`.
 If you want it on the Cubbie site later, it is a normal Skill folder in a public repo.
 
 ## Notes

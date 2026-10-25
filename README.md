@@ -217,6 +217,18 @@ Winter Break Handoff, per simulated break week (Dec 14 2026 to Jan 10 2027, when
 
 The survey of ASU student workers that would set the real conflict rate is pending, so the conflict rate is swept from 5% to 25% instead of measured. Reproduce with `python -m sim.simulate --weeks 1000 --seed 7`.
 
+## Questions we expect
+
+**Isn't this a central algorithm with extra steps?** The matching step (TTC) is central and sees every pick; we say so. The agent boundary is about custody: each student's calendar, other jobs and limits live in their own mascot process, and the inputs can't be pooled because no employer can see the others. The judge view shows what a Library-only scheduler does with the same week: it puts Ben at 21 of 20 F-1 hours (it sees 12 Library hours, not his 9 at Aramark) and pushes Dev over the 25-hour average (it can't see his rec center job). The mascots also do the part a solver can't: Ana's mascot asks her before trading into her gym slot, and Priya's asks before going within an hour of her F-1 limit.
+
+**Is the demo week rigged?** It is a tour: each of the five collisions exercises one path (ring after a counter-offer, a cover, an honest open shift, a stale abort). The same broker, TTC and Rulebook code runs on 1,000 random 40-person rosters in the simulator, and those are the numbers we quote.
+
+**Why not a group chat that swaps?** If everyone knew everyone's limits, a careful group chat would fix about as many collisions (83.5% vs 83.7%). Nobody knows them, so an unchecked group chat makes about 1.4 limit-breaking covers a week on that roster, everyone has to post why they need out, and someone has to organize it. Tag Out does it on Sunday without anyone asking or explaining.
+
+**Who adopts it first?** The manager, per roster: the Sunday check works for a single student, the crunch forecast and the export are for managers, and rings need most of a roster on board (only 1.9 points at 25% adoption). For students, Cubbie is the distribution: the Skill makes a student's existing Cubbie their mascot's front door.
+
+**Where does an approval land?** The Steward's roster updates and the manager downloads it as CSV or a calendar file for their scheduler or shared sheet. Students enter their time in Workday as they already do; nothing writes to Workday, which ASU controls.
+
 ## Privacy
 
 The model:

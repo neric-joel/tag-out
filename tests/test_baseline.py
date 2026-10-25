@@ -38,3 +38,14 @@ async def test_manager_export_marks_traded_shifts(system):
     assert changed["library-fri-1030-1000-d1"] == "Ana"
     ics = await system.net.client.get(f"{system.reg['broker']}/roster.ics")
     assert b"Changed by an approved Tag Out trade" in ics.content
+
+
+async def test_baseline_describes_the_week_before_any_trade(system):
+    await system.post("/demo/sunday")
+    await system.settle(0.4)
+    await system.post("/demo/run")
+    await system.wait_for("summary", timeout=30)
+    r = await system.net.client.get(f"{system.reg['broker']}/admin/baseline")
+    rows = {row["shift_id"]: row for row in r.json()["rows"]}
+    assert rows["library-tue-1027-1800-d1"]["to"] == "ben"  # still the pre-trade week, not the fixed roster
+    assert "f1_weekly_20" in rows["library-tue-1027-1800-d1"]["breaks"]

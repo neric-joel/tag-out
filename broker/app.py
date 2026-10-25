@@ -113,7 +113,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         async def go() -> None:
             if wait:
                 await asyncio.sleep(wait)
-            await engine.run()
+            await run_week()
 
         spawn(go())
         return {"started": True}
@@ -133,6 +133,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         if not debug():
             raise HTTPException(403)
         engine.reset()
+        app.state.baseline = None
         bus.clear()
         await asyncio.gather(*(net.post(f"{u}/admin/reset") for u in list(reg["agents"].values())
                                + [reg["steward"]]), return_exceptions=True)
@@ -246,6 +247,8 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         return Response(r.content, media_type="text/calendar",
                         headers={"Content-Disposition": "attachment; filename=library-roster.ics"})
 
+    app.state.baseline = None  # computed once, on the week as it stood before any trade
+
     @app.get("/admin/baseline")
     async def baseline() -> dict:
         """Judge view: the same week handled by a Library-only scheduler that sees availability and Library hours,
@@ -253,6 +256,11 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         numbers only to show what that scheduler would break."""
         if not debug():
             raise HTTPException(403)
+        if app.state.baseline is not None:
+            return app.state.baseline
+        return await compute_baseline()
+
+    async def compute_baseline() -> dict:
         roster = {r["shift_id"]: r for r in await net.get(f"{reg['steward']}/roster")}
         requested = engine.requests or {}
         if not requested:
@@ -265,7 +273,9 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
         rows, taken = [], set()
         for sid, owner in sorted(requested.items(), key=lambda kv: roster[kv[0]]["start"]):
             ref = roster[sid]
-            slots = {"s": (ref["start"], ref["end"])}
+            st, en = datetime.fromisoformat(ref["start"]), datetime.fromisoformat(ref["end"])
+            key = f"{st:%a} {st.hour}-{en.hour}"  # same slot naming as the manager's crunch forecast
+            slots = {key: (ref["start"], ref["end"])}
             free = []
             for a, u in reg["agents"].items():
                 if a == owner or a in taken:
@@ -273,7 +283,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
                 if any(o["owner"] == a and o["start"] < ref["end"] and ref["start"] < o["end"] for o in roster.values()):
                     continue
                 bits = await net.post(f"{u}/busybits", {"slots": slots})
-                if not bits["slots"]["s"]:
+                if not bits["slots"][key]:
                     lib_cap = 20 if private[a]["f1"] else 40  # the Library only knows its own hours
                     if library_hours[a] + 4 <= lib_cap:
                         free.append(a)
@@ -295,6 +305,14 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
             library_hours[pick] += 4
         return {"rows": rows, "pay_lost": 64 * sum(1 for r in rows if r["to"]),
                 "violations": sum(1 for r in rows if r["breaks"])}
+
+    async def run_week() -> None:
+        if debug() and app.state.baseline is None and engine.requests:
+            try:
+                app.state.baseline = await compute_baseline()
+            except Exception:
+                pass
+        await engine.run()
 
     @app.get("/sim")
     async def sim() -> JSONResponse:
@@ -333,7 +351,7 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
                     bus.emit("scheduled", what="sunday_check")
                     await sunday()
                     await asyncio.sleep(600)
-                    await engine.run()
+                    await run_week()
                 await asyncio.sleep(30)
 
         spawn(loop())

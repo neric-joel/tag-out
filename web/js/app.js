@@ -378,7 +378,7 @@
   async function renderJudge() {
     let d;
     try { d = await get("/admin/judge"); } catch (_) { return; }
-    const ruleName = { f1_weekly_20: "F-1 20 h a week, all jobs", f1_break_40: "F-1 40 h (break)", aca_25_avg: "ASU 25 h average", weekly_40: "40 h a week", fws_award: "Work-Study award" };
+    const ruleName = { f1_weekly_20: "F-1 20 h a week, on-campus jobs", f1_break_40: "F-1 40 h (break)", aca_25_avg: "ASU 25 h average", weekly_40: "40 h a week", fws_award: "Work-Study award" };
     const rows = Object.values(d).map((s) => {
       const hrs = (r) => (r.unit === "$" ? r.room / 16 : r.room);
       const bind = s.rooms.reduce((a, b) => (hrs(b) < hrs(a) ? b : a));

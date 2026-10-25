@@ -730,9 +730,10 @@ def report(p: Params, res: dict, weeks: int, seed: int, took: float, workers: in
                  "that interval, so the simulation neither clears it nor misses it with confidence. "
                  "Recommendation: lead with the Sunday check, plain covers and the pay that trades save (below), "
                  "and present rings as the reason that pay is saved rather than as a bigger fix rate.")
-        L += ["", f"What rings and chains clearly change is pay: in the same scenario pay lost per week falls from "
+        L += ["", f"What changes clearly is pay: in the same scenario pay lost per week falls from "
               f"${central['plain_pay'][0]:,.0f} to ${central['tag_pay'][0]:,.0f} ({pay_cut:.0f}% less), because a "
-              "swap fixes a conflict without anyone losing the shift. The points figure moves with the assumptions; "
+              "swap fixes a conflict without anyone losing the shift. Most of that comes from two-person swaps, which "
+              "a well-run group chat could also arrange (next paragraph). The points figure moves with the assumptions; "
               f"changed one at a time (see Sensitivity): {moves}."]
     else:
         L.append(f"**Go/no-go: no-go on rings as the headline.** At a {rate} conflict rate with {adopt} of the "

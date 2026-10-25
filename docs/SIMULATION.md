@@ -2,7 +2,7 @@
 
 **Go/no-go: borderline.** At a 15% conflict rate with 100% of the roster on Tag Out, rings and chains add 9.84 percentage points over plain covers (95% CI 9.3 to 10.3). The 10-point bar in docs/DESIGN.md section 7 sits inside that interval, so the simulation neither clears it nor misses it with confidence. Recommendation: lead with the Sunday check, plain covers and the pay that trades save (below), and present rings as the reason that pay is saved rather than as a bigger fix rate.
 
-What rings and chains clearly change is pay: in the same scenario pay lost per week falls from $671 to $285 (58% less), because a swap fixes a conflict without anyone losing the shift. The points figure moves with the assumptions; changed one at a time (see Sensitivity): helpers take at most 1 extra shift: 19.2; helpers take any number of shifts the rules allow: 8.1; no clustering (every conflict is an individual event): 4.2; heavy clustering (80% of conflicts are shared exam evenings): 11.2; single TTC pass (passers' shifts stay in the pool): 8.9.
+What changes clearly is pay: in the same scenario pay lost per week falls from $671 to $285 (58% less), because a swap fixes a conflict without anyone losing the shift. Most of that comes from two-person swaps, which a well-run group chat could also arrange (next paragraph). The points figure moves with the assumptions; changed one at a time (see Sensitivity): helpers take at most 1 extra shift: 19.2; helpers take any number of shifts the rules allow: 8.1; no clustering (every conflict is an individual event): 4.2; heavy clustering (80% of conflicts are shared exam evenings): 11.2; single TTC pass (passers' shifts stay in the pool): 8.9.
 
 **Against a stronger baseline** where the group chat also arranges two-person swaps before anyone covers (no app needed): it fixes 83.5% ± 0.8 of conflicts and loses $326 ± 8 of pay a week. Tag Out fixes 0.2 points ± 0.3 more than that and loses $285 ± 7. What a group chat can't do is the rest: rings of three or more, cover chains, and checking every move against limits it can't see.
 
@@ -158,7 +158,7 @@ Limits of this model:
 python -m sim.simulate --weeks 1000 --seed 7
 ```
 
-1,000 weeks per cell, seed 7, 6 worker processes, 120 s. Every week is seeded on its own, so the numbers do not depend on the worker count.
+1,000 weeks per cell, seed 7, 6 worker processes, 122 s. Every week is seeded on its own, so the numbers do not depend on the worker count.
 
 ---
 

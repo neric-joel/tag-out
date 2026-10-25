@@ -6,6 +6,16 @@ Why: about 10,000 students work at ASU each year ([ASU Work+](https://workplus.a
 
 Built for DevHacks S3 x Cubbie, Track 2 (agent-to-agent coordination). Every student, calendar and number in the demo is synthetic.
 
+## Try it in your browser: https://tag-out.vercel.app
+
+No install. The hosted page replays a recording of the real system (`scripts/record.py` runs every agent and saves what they sent), so every message you see really crossed between separate agents. To type and tap yourself, run it locally (Quick start).
+
+1. Press **Play the week**. The mascots check next week, trade in a three-way ring and a cover chain, and the manager approves. 4 of 5 collisions get fixed and $192 of pay is kept.
+2. **Sign in** as Ben (top right). You see his private week, his chat with his mascot ("You'd be at 17 of your 20 hours across all on-campus jobs") and what his coworkers can and can't see. Tap "I'm sick, can't make it today" to replay his same-day call-out.
+3. Open **Manager**. Approvals arrive in the inbox; post an extra shift or find a team meeting time to replay what the agents did with it.
+4. Open **How it works**. Every agent-to-agent message appears in a live graph; click one to read exactly what crossed. The counters show 0 fields outside the schemas and 0 private labels in any message. **Snoop** has a nosy broker ask every mascot why it passed, and every one refuses.
+5. Open **Judge view** for the private limits and what a Library-only scheduler would have done to the same week (Ben at 21 of 20 hours).
+
 ## What happens in the demo week
 
 The demo roster is six synthetic student workers at the Library for the week of Monday Oct 26 2026 (`seeds/scenario.py`). Each mascot loads its student's week through the real ingest path: a Canvas feed, a personal calendar and the Library's shift export as ICS files, plus texts parsed by Claude with a regex fallback.
@@ -48,6 +58,18 @@ The broker then runs a second attempt. Dev can't take Ben's Thursday any more, s
 
 Sunday doesn't catch everything. On Monday morning Ben texts his mascot "I woke up sick, can't make it Monday". The mascot finds his Mon 10 AM-2 PM shift, marks it busy, and sends the broker the shift id with `urgent`, nothing else, so the broker opens a cover round right away instead of waiting for Sunday. Priya would hit exactly 20 of her 20 F-1 hours, so her mascot asks her before picking it. Zoe, who gave up her Saturday for the wedding, has room and takes it, which gets her the $64 back. Ben confirms ("You'd be at 13 of your 20 hours across all on-campus jobs"), Zoe confirms, the manager approves, and the shift moves. The Sunday numbers don't change, Marco doesn't get a second "no trade" text, and the word "sick" never appears in any message between agents (`tests/test_callout.py`). If nobody can take a call-out safely, it goes to the manager as an open shift, the same as on Sunday. When the text names no day, the mascot replies with one button per shift that week.
 
+## Beyond trades: the rest of a student worker's week
+
+The same agents handle the other things that come up around shifts, with the same rule: only what the job needs leaves a mascot.
+
+- **Extra shifts.** The manager posts one ("Thu 6-10 PM"). The broker offers it to every mascot at once; each decides in private whether its student wants hours, is free and stays under every limit, and answers pick or pass. In the demo Zoe takes it; Ben (F-1 at 17 of 20) and Dev (25-hour average) pass without anyone learning why, and Priya's mascot asks her first because she'd hit 20 of 20.
+- **Team meetings.** The Steward asks every mascot for one busy-or-free bit per hour next week, never what's on a calendar, and offers the manager the three best hours. Each student gets an invite and answers yes or no, with no reason.
+- **A meeting with the supervisor.** "Set up a meeting with my supervisor": the mascot sends only the times its student is free, the Steward matches them against the manager's calendar, and the student picks one.
+- **Reporting a problem.** "The printer at the desk is broken": the mascot drafts the report and asks how to send it (with their name or anonymously) before anything leaves. The manager can acknowledge it, and named reporters hear back.
+- **Work-Study running out.** If a student's remaining Federal Work-Study award won't last until the next break at this week's pay, the mascot tells them once and suggests asking their supervisor or Financial Aid.
+
+`tests/test_worklife.py` checks each of these.
+
 ## Quick start
 
 Python 3.12.
@@ -66,13 +88,15 @@ Open http://127.0.0.1:8700 for the commons, where the mascots live (next section
 python -m scripts.demo --all     # the demo week, Ben's call-out, a reset, then the break-it beat
 ```
 
+To rebuild the hosted replay after a change: `python -m scripts.record` (runs the real system in one process and writes `site/data/`), then `python -m scripts.build_site`, then deploy `site/` (for example `vercel deploy site --prod`).
+
 By default the synthetic students tap their own buttons after a short delay. `python -m scripts.run_all --mode live` waits for real taps instead, and `--no-bot` skips Telegram. Logs go to `runtime/logs/`. Without an Anthropic key, text intake uses the committed cache in `seeds/llm_cache` and the regex parser, so the demo runs offline.
 
 ### Where the mascots live
 
-The home page is the commons: a small square where all six mascots live on a canvas (`web/js/world.js`). They walk around using every animation in the Codex Pets sprite sheet: idle, running left and right, waving when two of them meet, jumping, waiting, the review pose while they think, the failed pose on an abort, and the 16 look directions on version-2 pets, which they use to face a trade partner. When a trade round opens, the mascots whose students asked for a trade walk to the table; picks appear as grey arrows, a closed ring as blue arrows, and each confirm as a tick over the mascot. After the week they wander off again. You can drag a mascot anywhere, click one to open that student's chat with it, and change their size with the slider.
+The home page is the commons: a small square where all six mascots live on a canvas (`web/js/world.js`). They walk around using every animation in their pixel-art sprite sheet: idle, running left and right, waving when two of them meet, jumping, waiting, the review pose while they think, the failed pose on an abort, and the 16 look directions on version-2 pets, which they use to face a trade partner. When a trade round opens, the mascots whose students asked for a trade walk to the table; picks appear as grey arrows, a closed ring as blue arrows, and each confirm as a tick over the mascot. After the week they wander off again. You can drag a mascot anywhere, click one to open that student's chat with it, and change their size with the slider.
 
-The chat panel next to the commons is each student's private thread with their own mascot (the same messages arrive on Telegram). The Pets button opens a picker that searches the [Codex Pets](https://codex-pets.net) gallery (3,500+ pets), downloads the chosen sprite sheet into `web/pets/` and gives it to that student; no two students on a roster can share one. Fan art of copyrighted characters (for example the several Goku pets) works locally, but the default roster sticks to original art so a public demo video carries no third-party characters.
+The chat panel next to the commons is each student's private thread with their own mascot (the same messages arrive on Telegram). The Pets button opens a picker that searches a public pet gallery (3,500+ pets), downloads the chosen sprite sheet into `web/pets/` and gives it to that student; no two students on a roster can share one. Fan art of copyrighted characters (for example the several Goku pets) works locally, but the default roster sticks to original art so a public demo video carries no third-party characters.
 
 ### Telegram
 
@@ -277,7 +301,10 @@ pytest
 | `tests/test_privacy.py` | The schemas reject a pick with `hours` or `reason`, an eligibility answer with a rule, a vote with a reason, and badges that describe limits. The no-leak scan over a full run with the abort. The reason still reaches its owner's phone. |
 | `tests/test_baseline.py` | The same week through a Library-only scheduler (sees availability and Library hours, not other jobs) puts Ben at 21 of 20 F-1 hours and pushes Dev's 25-hour average over; the manager's CSV and calendar exports mark the traded shifts. |
 | `tests/test_workday.py` | Workday-shaped time rows sum across positions by Mon-Sun week and skip sent-back entries; Aramark hours count for F-1 but not the ASU average; the measurement window starts at the hire date, then runs October to September. |
-| `tests/test_cubbie_skill.py` | The Skill's sample mode runs offline, its description fits Cubbie's 200-character list, and items it imports become private busy time on the mascot (and count as a schedule change, so a held trade goes stale). |
+| `tests/test_cubbie_skill.py` | The Skill's sample mode runs offline, its description fits Cubbie's 200-character list, items it imports become private busy time on the mascot, and the real client (`tagout.py`, not `--sample`) works over HTTP against a running mascot with the owner token enforced. |
+| `tests/test_callout.py` | A same-day call-out opens its own round, tells the manager at once, never lets the student think they're already excused, doesn't disturb the Sunday numbers, and never puts the reason on the wire. |
+| `tests/test_worklife.py` | Extra shifts go to someone who wants hours and fits every limit; team meetings use busy bits only; a supervisor meeting sends free times, not the calendar; issue reports leave only after the student says so; wire events hide ballots; a nosy broker learns nothing. |
+| `tests/e2e/` | Opt-in browser tests (`TAGOUT_E2E=1`, Playwright): play the hosted week, sign in as Ben, the manager's inbox, the leak counters on How it works, and the live system's week. They pass against https://tag-out.vercel.app. |
 | `tests/test_simulate.py` | Tag Out never fixes fewer conflicts or loses more pay than plain covers, no accepted move breaks a limit, the recheck catches a move nobody checked, the same seed gives the same results whatever the worker count, and Winter Break Handoff breaks no rule. |
 
 ## Stack
@@ -296,31 +323,6 @@ From `pyproject.toml` (minimum versions):
 - SQLite from the Python standard library, one file per mascot
 - Development: pytest 9, pytest-asyncio 1.4, Hypothesis 6.170, ruff 0.17
 
-## Credits
-
-The mascots are pets from [Codex Pets](https://codex-pets.net), whose site code is MIT licensed ([portons/codex-pet-share](https://github.com/portons/codex-pet-share)). The pet art has no explicit reuse license, so `scripts/fetch_pets.py` downloads it at setup into `web/pets/`, which is git-ignored. The art is not in this repo. Creators, from `seeds/pets.json`:
-
-| Pet | Creator | In the demo |
-|---|---|---|
-| [Kitsune](https://codex-pets.net/#/pets/kitsune-spirit) | lama-bird | Ana |
-| [Tide](https://codex-pets.net/#/pets/tide-kraken) | lama-bird | Ben |
-| [Prism](https://codex-pets.net/#/pets/crystal-kirin) | lama-bird | Dev |
-| [Luma](https://codex-pets.net/#/pets/moon-phoenix) | lama-bird | Priya |
-| [Gale](https://codex-pets.net/#/pets/storm-griffin) | lama-bird | Zoe |
-| [Frost](https://codex-pets.net/#/pets/frost-yeti) | lama-bird | Marco |
-| [Cinder](https://codex-pets.net/#/pets/ember-dragon) | lama-bird | |
-| [Bolt](https://codex-pets.net/#/pets/thunder-roc) | lama-bird | |
-| [Bandit](https://codex-pets.net/#/pets/raccoon) | lama-bird | |
-| [Kumo](https://codex-pets.net/#/pets/kumo) | lama-bird | |
-| [Nori](https://codex-pets.net/#/pets/nori) | zhan | |
-| [Ali](https://codex-pets.net/#/pets/ali) | lillian | |
-| [✶✶ (biscuit)](https://codex-pets.net/#/pets/biscuit) | lillian | |
-| [white](https://codex-pets.net/#/pets/white) | jinsol | |
-| [Cappy](https://codex-pets.net/#/pets/cappy) | bruh | |
-| [Rook](https://codex-pets.net/#/pets/rook) | klubbyte | |
-| [Rusty](https://codex-pets.net/#/pets/rusty) | luoskrad | |
-| [Debug Duck v2](https://codex-pets.net/#/pets/debug-duck-v2) | mbs | default when a student hasn't picked |
-
 ---
 
-Not legal or immigration advice. Your DSO and ASU Student Employment decide. Rules are cited; limits are configurable.
+Not legal or immigration advice. Your DSO and ASU Student Employment decide.

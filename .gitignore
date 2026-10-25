@@ -13,3 +13,6 @@ recordings/
 cache/
 runtime/
 *.log
+
+# personal status notes for the builder, kept local
+MORNING.md

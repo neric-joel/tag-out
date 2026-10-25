@@ -10,6 +10,7 @@ chains from broker/ttc.py, and every final schedule is re-checked with rulebook.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import random
 import statistics
@@ -55,7 +56,7 @@ class Params:
     fri_evening_avoid_share: float = 0.40  # task brief: 40% never take Friday-evening shifts
     wants_hours_share: float = 0.30  # task brief: 30% want more hours; only they act as cover helpers
     helper_extra_shifts: int | None = 2  # assumption: someone who wants hours takes at most 2 extra shifts a week
-    release_passers: bool = False  # broker/ttc.py as it is: ttc() stops at the first round where no ring closes
+    release_passers: bool = True  # broker/ttc.py: a passer keeps their shift and leaves; the rest re-point (standard TTC)
     conflict_rates: tuple[float, ...] = (0.05, 0.10, 0.15, 0.20, 0.25)  # task brief sweep
     central_rate: float = 0.15  # task brief: central conflict rate
     adoption: tuple[float, ...] = (0.25, 0.50, 1.00)  # task brief: share of the roster on Tag Out
@@ -231,14 +232,14 @@ def swap_prefs(plan: Plan, agents: list[str], cap: int | None) -> dict[str, list
     return prefs
 
 
-def rings(plan: Plan, agents: list[str], cap: int | None, release_passers: bool = False) -> Plan:
-    """broker.ttc.ttc over the picks. With release_passers, a shift whose holder passes is withdrawn and TTC runs
-    again on the rest (standard TTC with outside options); without it, one ttc() call, as the broker does today."""
+def rings(plan: Plan, agents: list[str], cap: int | None, release_passers: bool = True) -> Plan:
+    """broker.ttc.ttc over the picks. With release_passers (the broker's behaviour), a shift whose holder passes is
+    withdrawn and TTC runs again on the rest (standard TTC with outside options); without it, a single pass."""
     prefs = swap_prefs(plan, agents, cap)
     remaining = list(agents)
     while remaining:
         cycles, history = ttc({a: [b for b in prefs[a] if b in remaining] for a in remaining},
-                              {a: a for a in remaining})
+                              {a: a for a in remaining}, release_passers=False)  # this loop does the release
         for cyc in cycles:  # [a, b, c]: a's holder takes b, b's holder takes c, c's holder takes a
             moves = merge([(plan.holder[x], cyc[(j + 1) % len(cyc)], x) for j, x in enumerate(cyc)])
             if commit(plan, moves, cap):
@@ -274,7 +275,7 @@ def cover_chains(plan: Plan, adopters: set[str], cap: int | None) -> Plan:
 
 
 def tag_out(week: Week, adopters: set[str], cap: int | None, plain: Plan,
-            release_passers: bool = False) -> tuple[Plan, bool]:
+            release_passers: bool = True) -> tuple[Plan, bool]:
     """Rings first (nobody loses pay), then chains, then plain covers for whatever is left.
 
     The broker never proposes a plan worse than plain covers: if rings-first fixes fewer conflicts or loses more pay
@@ -536,7 +537,7 @@ def variants(p: Params) -> dict[str, Params]:
             "helpers take any number of shifts the rules allow": replace(p, helper_extra_shifts=None),
             "no clustering (every conflict is an individual event)": replace(p, clustered_share=0.0),
             "heavy clustering (80% of conflicts are shared exam evenings)": replace(p, clustered_share=0.8),
-            "broker withdraws passers' shifts and re-runs TTC": replace(p, release_passers=True)}
+            "single TTC pass (passers' shifts stay in the pool)": replace(p, release_passers=False)}
 
 
 def run_all(p: Params, weeks: int, seed: int, workers: int = 1) -> dict:
@@ -697,6 +698,18 @@ def report(p: Params, res: dict, weeks: int, seed: int, took: float, workers: in
                     "margin is thin." if ci_low < p.go_points else "")
                  + (" The margin depends on assumptions: changed one at a time, these push it under "
                     f"{p.go_points:g} points: " + "; ".join(under) + " (see Sensitivity)." if under else ""))
+    elif central["extra"][0] + central["extra"][1] >= p.go_points:
+        lo, hi = central["extra"][0] - central["extra"][1], central["extra"][0] + central["extra"][1]
+        L.append(f"**Go/no-go: borderline.** At a {rate} conflict rate with {adopt} of the roster on Tag Out, "
+                 f"rings and chains add {central['extra'][0]:.2f} percentage points over plain covers (95% CI "
+                 f"{lo:.1f} to {hi:.1f}). The {p.go_points:g}-point bar in docs/DESIGN.md section 7 sits inside "
+                 "that interval, so the simulation neither clears it nor misses it with confidence. "
+                 "Recommendation: lead with the Sunday check, plain covers and the pay that trades save (below), "
+                 "and present rings as the reason that pay is saved rather than as a bigger fix rate.")
+        L += ["", f"What rings and chains clearly change is pay: in the same scenario pay lost per week falls from "
+              f"${central['plain_pay'][0]:,.0f} to ${central['tag_pay'][0]:,.0f} ({pay_cut:.0f}% less), because a "
+              "swap fixes a conflict without anyone losing the shift. The points figure moves with the assumptions; "
+              f"changed one at a time (see Sensitivity): {moves}."]
     else:
         L.append(f"**Go/no-go: no-go on rings as the headline.** At a {rate} conflict rate with {adopt} of the "
                  f"roster on Tag Out, rings and chains add {central['extra'][0]:.1f} percentage points over plain "
@@ -792,9 +805,9 @@ def report(p: Params, res: dict, weeks: int, seed: int, took: float, workers: in
           "everyone in them would accept, before any covers. It is exhaustive, so it runs only in weeks with at "
           f"most {ORACLE_MAX_AGENTS} conflicted shifts on Tag Out ({adopt} adoption). TTC can also close rings "
           "longer than 4, so in a few weeks it can beat this bound. TTC follows each person's ranked picks "
-          "instead of maximising the count, and `ttc()` stops at the first round where nothing closes, so it "
-          "fixes fewer than the bound; the sensitivity row \"broker withdraws passers' shifts and re-runs TTC\" "
-          "shows how much of that gap a multi-round broker closes.", "",
+          "instead of maximising the count, so it can fix fewer than the bound; passers leave with their own "
+          "shift and the rest re-point (standard TTC with outside options). The sensitivity row \"single TTC "
+          "pass\" shows what that release is worth.", "",
           "| Conflict rate | Weeks with the bound | TTC ring fixes / week | Best rings of <= 4 / week |",
           "|---|---|---|---|"]
     for r in p.conflict_rates:
@@ -876,6 +889,17 @@ def main() -> None:
     plot(p, res, args.weeks)
     DOC.write_text(report(p, res, args.weeks, args.seed, took, args.workers), encoding="utf-8")
     c = summary(res["cells"][p.central_rate], 1.0)
+    b = res["break"]
+    winter = {k: mean_ci([row[k] for row in b])[0] for k in ("wanted", "handed", "kept", "unchecked_breaks")}
+    (DOC.parent / "simulation.json").write_text(json.dumps({
+        "weeks": args.weeks, "seed": args.seed, "roster": 40, "conflict_rate": p.central_rate,
+        "plain_pct": round(c["plain"][0], 1), "tagout_pct": round(c["tag"][0], 1),
+        "extra_points": round(c["extra"][0], 1), "extra_ci": round(c["extra"][1], 1),
+        "plain_pay_lost": round(c["plain_pay"][0]), "tagout_pay_lost": round(c["tag_pay"][0]),
+        "winter": {"wanted": round(winter["wanted"], 1), "handed": round(winter["handed"], 1),
+                   "kept": round(winter["kept"]), "rule_breaks": sum(row["problems"] for row in b),
+                   "unchecked_breaks": round(winter["unchecked_breaks"], 2)},
+    }, indent=1), encoding="utf-8")
     print(f"plain covers {c['plain'][0]:.1f}%, Tag Out {c['tag'][0]:.1f}%, +{c['extra'][0]:.1f} points "
           f"({took:.0f} s) -> {DOC.relative_to(ROOT)}, {IMG.relative_to(ROOT)}")
 

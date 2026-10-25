@@ -42,6 +42,11 @@ class Timing:
     def fast(cls) -> Timing:
         return cls(0.0, 0.05, 5.0, 0.0)
 
+    @classmethod
+    def live(cls) -> Timing:
+        """Real people: a minute to answer their mascot's question, five minutes to confirm."""
+        return cls(2.0, 60.0, 300.0, 1.0)
+
 
 @dataclass
 class Txn:
@@ -130,7 +135,14 @@ class Engine:
             found = find_cycles(picks, items)
             it += 1
             if not found:
-                return cycles, it
+                # standard TTC: a passer keeps their own shift and leaves; whoever pointed at it re-points
+                passers = {a for a, i in picks.items() if i is None}
+                if not passers or passers == active:
+                    return cycles, it
+                self.bus.emit("released", round_id=round_id, agents=sorted(passers))
+                for a in passers:
+                    items.pop(item_of[a], None)
+                continue
             for c in found:
                 cycles.append(c)
                 self.bus.emit("cycle", round_id=round_id, members=c,

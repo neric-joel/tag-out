@@ -1,0 +1,19 @@
+{
+ "weeks": 1000,
+ "seed": 7,
+ "roster": 40,
+ "conflict_rate": 0.15,
+ "plain_pct": 73.7,
+ "tagout_pct": 83.7,
+ "extra_points": 10.0,
+ "extra_ci": 0.5,
+ "plain_pay_lost": 673,
+ "tagout_pay_lost": 284,
+ "winter": {
+  "wanted": 54.0,
+  "handed": 34.6,
+  "kept": 2215,
+  "rule_breaks": 0,
+  "unchecked_breaks": 3.05
+ }
+}

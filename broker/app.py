@@ -143,6 +143,15 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
             await net.post(f"{reg['steward']}/admin/auto", body)
         return {"ok": True}
 
+    @app.post("/admin/timing")
+    async def set_timing(body: dict) -> dict:
+        if not debug():
+            raise HTTPException(403)
+        for k in ("pick_deadline", "ask_window", "vote_timeout", "between"):
+            if k in body:
+                setattr(engine.timing, k, float(body[k]))
+        return engine.timing.__dict__
+
     @app.get("/admin/judge")
     async def judge() -> dict:
         if not debug():
@@ -190,7 +199,9 @@ def create_app(net: Net | None = None, reg: dict | None = None, timing: Timing |
 
 
 def _timing_from_env() -> Timing:
-    return Timing.fast() if os.environ.get("TAGOUT_FAST") == "1" else Timing()
+    if os.environ.get("TAGOUT_FAST") == "1":
+        return Timing.fast()
+    return Timing.live() if os.environ.get("TAGOUT_MODE") == "live" else Timing()
 
 
 app = create_app(timing=_timing_from_env()) if os.environ.get("TAGOUT_ROLE") == "broker" else None

@@ -44,8 +44,12 @@ async def test_week_ring_cover_and_honest_open_shift(system):
     assert "counter_window" in types, "round 1 found no cycle; the counter-offer round closed it"
     ask = [m for m in system.phone("ana") if m["kind"] == "ask"]
     assert ask and "gym" in ask[0]["text"]
-    picks = [e for e in system.bus.history if e["type"] == "picks" and e["phase"] == "swap"]
-    assert picks[0]["picks"]["ana"] is None and picks[1]["picks"]["ana"] == "library-fri-1030-1000"
+    picks = [e["picks"] for e in system.bus.history if e["type"] == "picks" and e["phase"] == "swap"]
+    ana = [pk["ana"] for pk in picks if "ana" in pk]
+    assert ana[0] is None and ana[-1] == "library-fri-1030-1000", "passed first, counter-offered after asking"
+    window = next(i for i, e in enumerate(system.bus.history) if e["type"] == "counter_window")
+    cycle = next(i for i, e in enumerate(system.bus.history) if e["type"] == "cycle")
+    assert window < cycle
 
     ben = next(m for m in system.phone("ben") if m["kind"] == "confirm")
     assert "17 of your 20 hours" in ben["text"]

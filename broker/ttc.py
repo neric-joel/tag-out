@@ -45,11 +45,14 @@ def ttc(
     prefs: Mapping[str, list[str]],
     owner_of: Mapping[str, str],
     picker: Callable[[str, set[str]], str | None] | None = None,
+    release_passers: bool = True,
 ) -> tuple[list[list[str]], list[dict[str, str | None]]]:
-    """Run TTC rounds until no new cycle closes.
+    """Run TTC rounds until nothing more can close.
 
     `prefs[a]` is a's ranked list of acceptable items (used when no `picker` is given). `picker(a, open_items)`
-    lets a live mascot answer each round itself. Returns (cycles, the picks of every round).
+    lets a live mascot answer each round itself. With `release_passers` (standard TTC with outside options), an
+    agent who passes keeps their own shift and leaves, so whoever pointed at it can re-point next round.
+    Returns (cycles, the picks of every round).
     """
     active = {a for a in prefs if any(o == a for o in owner_of.values())}
     open_items = {i for i, o in owner_of.items() if o in active}
@@ -66,7 +69,12 @@ def ttc(
         history.append(points)
         found = find_cycles(points, owner_of)
         if not found:
-            break
+            passers = {a for a, i in points.items() if i is None}
+            if not release_passers or not passers or passers == active:
+                break
+            active -= passers
+            open_items -= {i for i, o in owner_of.items() if o in passers}
+            continue
         for cyc in found:
             cycles.append(cyc)
             for a in cyc:

@@ -170,23 +170,34 @@ async def break_it(s: System) -> None:
 
 
 FAST = Timing(pick_deadline=0.05, ask_window=0.3, vote_timeout=8.0, between=0.05)
+ORG_IDS = [o["id"] for o in ORG_STUDENTS]  # Dining and Rec center students: their texts go up the hierarchy
+TRY_ORG_MINUTE = 0.02  # the hosted run: a two-hour timer plays in 2.4 s, so a whole climb fits the function's minute
 
 
 async def try_message(who: str, text: str, tmp: Path | None = None) -> dict:
     """The hosted page's own-message path: run the real system through the week, then send one student's mascot
-    the visitor's text and record what every agent did with it."""
-    s = System(timing=FAST, auto_delay=0.05, tmp=tmp or Path(tempfile.mkdtemp(prefix="tagout-try-")))
+    the visitor's text and record what every agent did with it. A Dining or Rec student's text skips the Library
+    week and runs the campus hierarchy instead: any case it opens climbs until someone closes it."""
+    org = who in ORG_IDS
+    s = System(timing=FAST, auto_delay=0.05, tmp=tmp or Path(tempfile.mkdtemp(prefix="tagout-try-")),
+               **({"org_minute": TRY_ORG_MINUTE} if org else {}))
     try:
         checkpoints = [{"label": "start", "n": 0, "snap": await snapshot(s)}]
-        await s.post("/demo/sunday")
-        await asyncio.sleep(0.4)
-        await week(s)
+        if not org:
+            await s.post("/demo/sunday")
+            await asyncio.sleep(0.4)
+            await week(s)
         checkpoints.append({"label": "week", "n": len(s.bus.history), "snap": await snapshot(s)})
         n, before = len(s.bus.history), len(s.phone(who))
-        r = await s.net.post(f"{s.reg['agents'][who]}/intake", {"text": text})
+        r = await s.net.post(f"{(s.reg['org'] if org else s.reg['agents'])[who]}/intake", {"text": text})
         kind = r.get("engine")
         try:
-            if kind == "callout" and "Which shift" not in r.get("reply", ""):
+            if org:
+                await asyncio.sleep(1.0)
+                if any(e["type"] == "org_case" for e in s.bus.history[n:]):
+                    await until(lambda: any(e["type"] in ("org_done", "org_pending", "org_overdue")
+                                            for e in s.bus.history[n:]), 40)
+            elif kind == "callout" and "Which shift" not in r.get("reply", ""):
                 await until(summary_after(s, n, "callout"), 20)
             elif kind == "issue":
                 await until(lambda: any("Your manager saw your report" in m["text"] for m in s.phone(who)), 10)
@@ -200,8 +211,9 @@ async def try_message(who: str, text: str, tmp: Path | None = None) -> dict:
             pass
         await asyncio.sleep(0.3)
         checkpoints.append({"label": "try", "n": len(s.bus.history), "snap": await snapshot(s)})
-        phones = {p: s.store(p).outbox() for p in PEOPLE}
+        phones = {p: s.store(p).outbox() for p in PEOPLE + ORG_IDS}
         phones["manager"] = [{"n": i + 1, **m} for i, m in enumerate(s.steward.state.s["phone"])]
+        phones |= {r: [{"n": i + 1, **m} for i, m in enumerate(a.state.s["phone"])] for r, a in s.org.items()}
         return {"name": "try", "who": who, "engine": kind, "new_messages": len(s.phone(who)) - before,
                 "events": s.bus.history, "phones": phones, "checkpoints": checkpoints}
     finally:

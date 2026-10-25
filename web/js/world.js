@@ -41,8 +41,7 @@
     let hover = null, pointer = null;
 
     function geometry() {
-      // a short commons (it fits the first screen) gets smaller pets, so all sixteen still have room to roam
-      const effective = Math.min(size, width * 0.34, height * 0.25);
+      const effective = Math.min(size, width * 0.34, height * 0.48);
       top = Math.min(height * 0.48, Math.max(100, effective * 1.08 + 30));
       band = Math.max(1, height - top - 58);
     }
@@ -79,7 +78,7 @@
     }
     function dimensions(p) {
       // Keep the world usable on narrow embeds; perspective is tied to ground depth.
-      const h = Math.min(size, width * 0.34, height * 0.25) * (0.88 + p.y * 0.18);
+      const h = Math.min(size, width * 0.34, height * 0.48) * (0.88 + p.y * 0.18);
       return { h, w: h * 192 / 208 };
     }
     function point(p) { return { x: p.x * width, y: top + p.y * band }; }
@@ -497,6 +496,8 @@
       },
       setPet(id, petId) { withPet(id, p => load(p, petId)); },
       setPetHeight(px) { if (!dead && Number.isFinite(Number(px))) desiredHeight = clamp(Number(px), 48, 220); },
+      // the tallest pet this commons can draw: a size slider should stop here, not keep going with no effect
+      maxPetHeight() { return Math.floor(Math.min(220, width * 0.34, height * 0.48)); },
       say(id, text, ms = 3500) { withPet(id, p => { p.bubble = text ? { text: String(text), until: clock + Math.max(0, Number(ms) || 0) / 1000 } : null; }); },
       status(id, text) { withPet(id, p => { p.status = String(text || ""); }); },
       play(id, value, options) { withPet(id, p => play(p, value, options)); },

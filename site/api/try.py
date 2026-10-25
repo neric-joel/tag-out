@@ -46,9 +46,9 @@ async def try_message(body: Try, request: Request) -> dict:
     if len(seen) >= PER_10_MIN:
         raise HTTPException(429, "That's a lot of messages; give the agents ten minutes.")
     seen.append(now)
-    from scripts.record import PEOPLE
+    from scripts.record import ORG_IDS, PEOPLE
     from scripts.record import try_message as run
 
-    if body.who not in PEOPLE:
+    if body.who not in PEOPLE and body.who not in ORG_IDS:
         raise HTTPException(400, "unknown student")
     return await run(body.who, body.text.strip(), Path(tempfile.mkdtemp(prefix="tagout-")))

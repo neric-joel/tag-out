@@ -130,6 +130,8 @@ The chat panel next to the commons is each student's private thread with their o
 
 Why Telegram: it is the student's private line to their own mascot. It reaches them when the site is closed (the Sunday "your shift collides" text, a same-day call-out), one tap is the human step (Confirm, Decline, Take it, Approve; nothing moves without it), reasons go only to their own mascot while other agents get a shift id and a yes or no, and there is no new app to install. The bot only messages chats that registered themselves with `/start`, and Cubbie users can use the included Cubbie Skill instead.
 
+No Telegram needed to judge it: every chat on the site (the commons chat, each student's page, the manager's page, the org chart inbox) is that same owner channel, with the exact messages and buttons the bot sends. The demo video shows the real Telegram chat next to the site. Trying the bot yourself needs the live system running and a join code, so the hosted page doesn't offer it.
+
 1. Create a bot with BotFather. Put its token in a file named `api.env` one folder above the repo's parent, which is `../../api.env` relative to the repo root. The Anthropic key can go in the same file and is optional. Environment variables with the same names also work, and `TAGOUT_ENV_FILE` points to a different file.
 
    ```

@@ -272,8 +272,9 @@
         ? "Their private chat with their own mascot (synthetic demo). Nobody else in the chart sees it."
         : "What landed on this person's phone. Reasons never arrive here; shift ids and rule names do.";
       const t = root.querySelector("#orgInbox");
-      t.innerHTML = msgs.length ? msgs.map((m) => `<div class="msg${m.kind === "student" ? " me" : m.kind === "reply" ? " reply" : ""}">${esc(m.text)}${(m.buttons || []).length ? `<div class="btns">${m.buttons.map((b) => `<button type="button" disabled>${esc(b.label)}</button>`).join("")}</div>` : ""}</div>`).join("")
-        : '<p class="empty">Nothing on this phone yet.</p>';
+      const extra = opts.pending ? opts.pending(id, msgs) : ""; // a typed message still on its way
+      t.innerHTML = (msgs.length || extra ? msgs.map((m) => `<div class="msg${m.kind === "student" ? " me" : m.kind === "reply" ? " reply" : ""}">${esc(m.text)}${(m.buttons || []).length ? `<div class="btns">${m.buttons.map((b) => `<button type="button" disabled>${esc(b.label)}</button>`).join("")}</div>` : ""}</div>`).join("")
+        : '<p class="empty">Nothing on this phone yet.</p>') + extra;
       if (!quiet) t.scrollTop = t.scrollHeight;
     }
     function reset() {

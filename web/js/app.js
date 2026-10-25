@@ -107,7 +107,7 @@
       const r = await fetch("/api/try", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ who, text }) });
       if (!r.ok) throw new Error(String(r.status));
       rec = await r.json();
-    } catch (e) { toast("Couldn't reach the live agents just now. The recorded replay still works."); return {}; }
+    } catch (e) { toast("Couldn't reach the live agents just now. The recorded replay still works."); throw e; }
     R.recs.try = rec;
     toast(`Done: the agents handled your message live (${rec.events.length} events this run). Replaying what happened.`);
     return play("try", "week", "try");
@@ -453,6 +453,34 @@
   }
 
   // ---------- chats (synthetic demo: the owner channel relayed by the broker) ----------
+  // a typed message on its way: it shows at once with a "thinking" bubble under it, whatever the poller redraws
+  const PENDING = new Map(); // thread selector -> { who, text }
+  function pendingHTML(sel, msgs) {
+    const p = PENDING.get(sel);
+    if (!p) return "";
+    const mine = msgs.slice(-3).some((m) => m.kind === "student" && m.text.trim() === p.text);
+    return (mine ? "" : `<div class="msg me">${esc(p.text)}</div>`)
+      + `<div class="msg typing" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>${esc(name(p.who))}'s mascot is thinking…</div>`;
+  }
+  async function sending(form, sel, who, text, send) {
+    const btn = form.querySelector('button[type="submit"]'), input = form.querySelector("input"), t = $(sel);
+    PENDING.set(sel, { who, text });
+    btn.disabled = input.disabled = true; btn.classList.add("busy"); btn.setAttribute("aria-busy", "true");
+    const empty = t.querySelector(".empty"); if (empty) empty.remove();
+    t.querySelectorAll(".msg.error").forEach((el) => el.remove());
+    t.insertAdjacentHTML("beforeend", pendingHTML(sel, []));
+    t.scrollTop = t.scrollHeight;
+    let ok = true;
+    try { await send(); } catch (_) { ok = false; }
+    PENDING.delete(sel);
+    btn.disabled = input.disabled = false; btn.classList.remove("busy"); btn.removeAttribute("aria-busy");
+    t.querySelectorAll(".msg.typing").forEach((el) => el.remove());
+    if (!ok) {
+      t.insertAdjacentHTML("beforeend", `<div class="msg error" role="alert">Couldn't reach ${esc(name(who))}'s mascot just now, so nothing was sent. Try again in a moment.</div>`);
+      t.scrollTop = t.scrollHeight;
+    }
+    return ok;
+  }
   function bubbles(msgs, fresh) {
     let lastButtons = -1;
     msgs.forEach((m, i) => { if (m.buttons && m.buttons.length) lastButtons = i; });
@@ -493,7 +521,7 @@
     const fresh = chat.count >= 0 && msgs.length > chat.count;
     chat.count = msgs.length;
     const thread = $("#thread");
-    thread.innerHTML = msgs.length ? bubbles(msgs, fresh) : `<p class="empty">${chat.who === "manager" ? "Trade requests land here." : "Nothing yet. The mascot only texts when something in the week collides."}</p>`;
+    thread.innerHTML = (msgs.length || PENDING.has("#thread") ? bubbles(msgs, fresh) : `<p class="empty">${chat.who === "manager" ? "Trade requests land here." : "Nothing yet. The mascot only texts when something in the week collides."}</p>`) + pendingHTML("#thread", msgs);
     wireButtons(thread, chat.who, pollChat);
     thread.scrollTop = thread.scrollHeight;
   }
@@ -666,7 +694,7 @@
       const msgs = d.messages || []; if (msgs.length === st.count) return;
       const fresh = st.count >= 0 && msgs.length > st.count; st.count = msgs.length;
       const t = $(sel);
-      t.innerHTML = msgs.length ? bubbles(msgs, fresh) : `<p class="empty">${typeof emptyText === "function" ? emptyText(st.who) : emptyText}</p>`;
+      t.innerHTML = (msgs.length || PENDING.has(sel) ? bubbles(msgs, fresh) : `<p class="empty">${typeof emptyText === "function" ? emptyText(st.who) : emptyText}</p>`) + pendingHTML(sel, msgs);
       wireButtons(t, st.who, st.poll); t.scrollTop = t.scrollHeight;
     };
     return st;
@@ -715,9 +743,9 @@
       <p class="muted small">${d.wants_more_hours ? "You asked for more hours: your mascot picks extra shifts that fit every limit, and you confirm each one." : "Want more hours? Tell your mascot, and it will pick extra shifts that fit every limit."}</p></div>`;
   }
   async function sendMe(text) {
-    const who = role(); if (!PEOPLE.includes(who) || !text) return;
-    await post(`/phone/${who}/text`, { text }).catch(() => {});
-    meChat.poll(); setTimeout(renderMe, 600);
+    const who = role(); if (!PEOPLE.includes(who) || !text || PENDING.has("#meThread")) return;
+    await sending($("#meCompose"), "#meThread", who, text, () => post(`/phone/${who}/text`, { text }));
+    meChat.count = -1; meChat.poll(); setTimeout(renderMe, 600);
   }
 
   async function renderMgr() {
@@ -767,8 +795,30 @@
         const jobs = Object.keys(me.other_jobs || {}).length ? " across his Rec and Dining jobs" : "";
         return `Only ${name(who)}'s own mascot knows why he passed: he's at ${r.used.toFixed(0)} of his ${r.cap.toFixed(0)} F-1 hours${jobs}, so 4 more would make ${(r.used + 4).toFixed(0)}. The shift lead saw a pass. (Synthetic demo: shown here so you can check it; in real use only he sees this.)`;
       },
-      phoneOf: async (id) => ((await get(`/phone/${id === "steward" ? "manager" : id}`)).messages || []) });
+      phoneOf: async (id) => ((await get(`/phone/${id === "steward" ? "manager" : id}`)).messages || []),
+      pending: (id, msgs) => ((PENDING.get("#orgInbox") || {}).who === id ? pendingHTML("#orgInbox", msgs) : "") });
     orgLog.forEach((ev) => org.event(ev, false));
+    // text as anyone on the chart: their own mascot takes it from there, and the hierarchy above it if it has to
+    const form = document.createElement("form");
+    form.className = "compose org-compose"; form.id = "orgCompose";
+    const pick = d.students.slice().sort((a, b) => PEOPLE.includes(a.id) - PEOPLE.includes(b.id));
+    form.innerHTML = `<select id="orgWho" aria-label="Text as">${pick.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("")}</select>
+      <input type="text" id="orgInput" maxlength="240" aria-label="Message to this student's mascot">
+      <button class="btn primary small-btn" type="submit">Send</button>`;
+    const head = $("#org .org-head");
+    head.insertBefore(form, head.querySelector(".org-tools"));
+    const hint = () => { $("#orgInput").placeholder = `Text ${name($("#orgWho").value)}'s mascot: I'm sick, can't make Saturday`; };
+    $("#orgWho").addEventListener("change", () => { hint(); org.inbox($("#orgWho").value); });
+    hint();
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const who = $("#orgWho").value, input = $("#orgInput"), text = input.value.trim();
+      if (!text || PENDING.has("#orgInbox")) return;
+      input.value = ""; await org.inbox(who);
+      reveal("#viewOrg .org-panel");
+      await sending(form, "#orgInbox", who, text, () => post(`/phone/${who}/text`, { text }));
+      org.inbox(who);
+    });
   }
 
   // the agent graph, fed by the broker's wire events
@@ -918,8 +968,10 @@
     $("#orgQuestion").addEventListener("click", () => { reveal("#viewOrg .org-panel"); post("/demo/org/question").catch(() => {}); });
     $("#compose").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const input = $("#composeInput"), text = input.value.trim(); if (!text) return;
-      input.value = ""; await post(`/phone/${chat.who}/text`, { text }).catch(() => {}); pollChat();
+      const input = $("#composeInput"), text = input.value.trim(); if (!text || PENDING.has("#thread")) return;
+      input.value = ""; const who = chat.who;
+      await sending($("#compose"), "#thread", who, text, () => post(`/phone/${who}/text`, { text }));
+      chat.count = -1; pollChat();
     });
   }
 
@@ -958,6 +1010,13 @@
     $("#tabMe").hidden = $("#tabMgr").hidden = $("#whoPill").hidden = !S.debug; // role pages need the synthetic demo
     world = PetWorld.create($("#world"), { petHeight: +store.get("tagout.size", 96), onSelect: (id) => { if (S.debug) openChat(id); } });
     window.tagOutWorld = world; // handy in the console during the demo
+    // the size slider ends at the tallest pet the commons can draw, so every step of it changes something
+    const fitSize = () => {
+      const s = $("#petSize"), max = Math.max(+s.min + 8, Math.min(200, world.maxPetHeight()));
+      s.max = max;
+      if (+s.value > max) { s.value = max; world.setPetHeight(max); }
+    };
+    new ResizeObserver(fitSize).observe($("#stage"));
     world.setPets(PEOPLE.filter((p) => p in S.names).map((p) => ({ id: p, name: S.names[p], petId: S.pets[p] || "debug-duck-v2" })));
     // the rest of campus wanders the commons too: Dining and Rec center student workers, each with their own pet
     get("/org").then((o) => {

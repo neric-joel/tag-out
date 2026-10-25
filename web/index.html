@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/web/css/app.css?v=19">
+<link rel="stylesheet" href="/web/css/app.css?v=21">
 <link rel="stylesheet" href="/web/css/flow.css?v=16">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23121212' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath fill='%23fff' d='M11.2 7.3C14.8 7.1 22.4 6.8 26.1 7.2C27.6 7.4 28.3 8.3 28.4 9.8C28.6 13.6 28.7 18.4 28.3 22.1C28.1 23.7 27.2 24.5 25.7 24.6C21.9 24.9 14.9 24.8 11.4 24.6C10.5 24.5 9.9 24.1 9.3 23.4L4.6 17.4C4 16.6 4 15.6 4.7 14.8L9.2 8.4C9.7 7.7 10.3 7.3 11.2 7.3Z'/%3E%3Ccircle cx='9.7' cy='16' r='1.6'/%3E%3Cpath d='M8.6 15.1C6.4 12.5 4.6 8.9 2.7 5.1'/%3E%3Cpath d='M14.4 12.2C17.3 11.9 20.6 11.9 23.5 12.3M19.1 12.1C18.9 14.9 19.1 17.9 19.3 20.7'/%3E%3C/svg%3E">
 </head>
@@ -19,7 +19,7 @@
     <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><path class="tag" d="M11.2 7.3C14.8 7.1 22.4 6.8 26.1 7.2C27.6 7.4 28.3 8.3 28.4 9.8C28.6 13.6 28.7 18.4 28.3 22.1C28.1 23.7 27.2 24.5 25.7 24.6C21.9 24.9 14.9 24.8 11.4 24.6C10.5 24.5 9.9 24.1 9.3 23.4L4.6 17.4C4 16.6 4 15.6 4.7 14.8L9.2 8.4C9.7 7.7 10.3 7.3 11.2 7.3Z"/><circle cx="9.7" cy="16" r="1.6"/><path d="M8.6 15.1C6.4 12.5 4.6 8.9 2.7 5.1"/><path d="M14.4 12.2C17.3 11.9 20.6 11.9 23.5 12.3M19.1 12.1C18.9 14.9 19.1 17.9 19.3 20.7"/></svg>
     <span class="wordmark">Tag Out</span>
   </a>
-  <span class="scope">Library front desk <span class="sep">/</span> week of Oct 26, 2026</span>
+  <span class="scope">Campus student jobs <span class="sep">/</span> week of Oct 26, 2026</span>
   <nav class="tabs" aria-label="Views">
     <a href="#commons" id="tabArena">Commons</a>
     <a href="#me" id="tabMe">Student</a>
@@ -46,6 +46,13 @@
     </div>
   </section>
 
+  <section class="hero-case" aria-label="Why it matters: Ben's week">
+    <div class="hc-who"><canvas id="heroBen" width="64" height="69" aria-hidden="true"></canvas>
+      <div><b>Ben, F-1 visa</b><span>8 h at the Library, plus 9 h at Aramark Dining that the Library can't see</span></div></div>
+    <div class="hc-col bad"><span class="hc-k">A Library-only scheduler</span><b>21 of 20 h</b><span>offers him a coworker's 4-hour shift: over his F-1 limit</span></div>
+    <div class="hc-col good"><span class="hc-k">Ben's mascot</span><b>17 of 20 h</b><span>passes on it and closes a 3-way swap instead; nobody learns why</span></div>
+    <a class="hc-src" href="#agents">sources and tests</a>
+  </section>
   <ol class="rail" id="rail" aria-label="Where the week is">
     <li data-step="1"><b>1</b>Sunday check<span>each mascot reads its own student's week</span></li>
     <li data-step="2"><b>2</b>Picks<span>a shift id or a pass, never why</span></li>
@@ -119,8 +126,8 @@
   </div>
 
   <section class="panel sim" aria-labelledby="simTitle">
-    <header class="panel-head"><h2 id="simTitle">On a 40-person roster</h2><span class="muted small" id="simMeta">simulation</span></header>
-    <div id="sim"></div>
+    <details class="sim-fold"><summary><h2 id="simTitle">On a 40-person roster</h2><span class="muted small" id="simMeta">simulation</span><span class="muted small sim-open">show the numbers</span></summary>
+    <div id="sim"></div></details>
   </section>
  </div>
 
@@ -182,7 +189,7 @@
       </div>
       <div class="act">
         <h3>Standing rule</h3>
-        <label class="toggle"><input type="checkbox" id="mgrSwapRule"> Swaps that keep every shift covered and nobody's hours the same go through without me</label>
+        <label class="toggle"><input type="checkbox" id="mgrSwapRule"> Swaps that keep every shift covered and everyone's hours the same go through without me</label>
       </div>
       <div class="act">
         <h3>Your scheduler</h3>
@@ -205,7 +212,7 @@
   <section class="titlerow">
     <div>
       <h1>When nobody can cover</h1>
-      <p class="finding">16 student workers in three departments, 3 shift leads, 3 managers, a backup manager, Student Employment and ISSC: 25 agents, each with its own pet. A case climbs one rung each time a timer runs out, and silence never approves anything. Only the shift and the rule that moved it climb; the reason stays with the student's mascot.</p>
+      <p class="finding">16 student workers in three departments, 3 shift leads, 3 managers, a backup manager, Student Employment and ISSC: 25 agents, each its own app with its own state and its own pet. A case climbs one rung each time a timer runs out, and silence never approves anything. Only the shift and the rule that moved it climb; the reason stays with the student's mascot.</p>
     </div>
     <div class="actions">
       <button class="btn" id="orgSafety" type="button">Safety report</button>
@@ -220,7 +227,7 @@
   <section class="titlerow">
     <div>
       <h1>How the agents talk</h1>
-      <p class="finding">Every line below is a real message between separate processes: six mascots, a broker and the Library's Steward. Click any message to read exactly what crossed. Reasons, hours and calendars have no field to travel in.</p>
+      <p class="finding">Every line below is a real message between agents: six Library mascots (each its own app and database), a broker and the Library's Steward; the campus hierarchy is on the Org chart. Live they run as separate processes; this replay was recorded with all of them in one. Click any message to read exactly what crossed. No message has a field for a reason, hours or a calendar; the only free text is what a student chooses to send, and every message is scanned for private labels.</p>
     </div>
     <div class="actions">
       <button class="btn" id="agSunday" type="button">Run Sunday check</button>
@@ -303,6 +310,6 @@
 <script src="/web/js/flow.js?v=22"></script>
 <script src="/web/js/org.js?v=3"></script>
 <script src="/web/js/sprites.js?v=15"></script>
-<script src="/web/js/app.js?v=26"></script>
+<script src="/web/js/app.js?v=27"></script>
 </body>
 </html>

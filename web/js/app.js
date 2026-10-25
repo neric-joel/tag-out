@@ -46,7 +46,10 @@
   const cap = (s) => s[0].toUpperCase() + s.slice(1);
   function listNames(ids) { const n = ids.map(name); return n.length < 2 ? n.join("") : n.slice(0, -1).join(", ") + " and " + n[n.length - 1]; }
   const money = (v) => "$" + Math.round(v).toLocaleString("en-US");
-  const clock = (iso) => { const d = new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+  // the replay shows story time (the demo week's Sunday evening) instead of when it was recorded
+  const STORY0 = Date.parse("2026-10-25T18:00:00-07:00");
+  const story = (iso) => (window.TAGOUT_STATIC && R.cur && R.cur.events[0] ? new Date(STORY0 + Date.parse(iso) - Date.parse(R.cur.events[0].ts)) : new Date(iso));
+  const clock = (iso, sim) => { const d = sim ? new Date(sim) : story(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (_) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) { /* private mode */ } } };
@@ -385,7 +388,7 @@
     const [who, status] = meta(ev);
     const tone = /Confirmed|Committed|Done|Refused/.test(status) ? "ok" : /Declined|Aborted|Stale|Timed/.test(status) ? "bad" : "";
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td class="t">${clock(ev.ts)}</td><td>${text}</td><td class="who">${esc(who)}</td><td class="st ${tone}">${esc(status)}</td>`;
+    tr.innerHTML = `<td class="t">${clock(ev.ts, ev.sim)}</td><td>${text}</td><td class="who">${esc(who)}</td><td class="st ${tone}">${esc(status)}</td>`;
     $("#events").prepend(tr);
     $("#logCount").textContent = `${$("#events").children.length} items`;
   }
@@ -820,7 +823,7 @@
     const note = $("#snoopNote");
     note.hidden = false;
     const v = Object.values(r), refused = v.filter((x) => x.why === 422).length, nos = v.filter((x) => x.room_probe === false).length;
-    note.innerHTML = `<b>${refused} of ${v.length}</b> mascots never saw "why did you pass?": the closed schema rejected the request before any code ran (HTTP 422), because no message has a field for a reason. <b>${nos} of ${v.length}</b> mascots answered no about a shift they never picked, so a nosy broker learns nothing about anyone's room. Watch the red replies in the graph.`;
+    note.innerHTML = `<b>${nos} of ${v.length}</b> mascots answered a plain no when the broker probed for room on a shift they never picked, the same no as a real one, so a nosy broker learns nothing about anyone's hours. Asking outright "why did you pass?" gets nowhere either: <b>${refused} of ${v.length}</b> rejected the request before any code ran (HTTP 422), since no message has a field for a reason. Watch the red replies in the graph.`;
   }
 
   async function renderLedger() {
@@ -895,6 +898,8 @@
       R.cur = await loadRec("tour");
       $("#btnSunday").textContent = $("#agSunday").textContent = "Play the week";
       $("#btnRun").textContent = $("#agRun").textContent = "Break it";
+      // on the hosted replay the first thing to press is the week, so it gets the primary style
+      $("#btnSunday").classList.add("primary"); $("#btnRun").classList.remove("primary");
       $("#btnReset").textContent = "Restart";
       $("#btnPets").remove();
       const note = document.createElement("div");
@@ -903,6 +908,7 @@
       document.body.prepend(note);
     }
     const [st, ag] = await Promise.all([get("/state"), get("/agents")]);
+    if ($("#heroBen")) { const ben = Object.values(st.agents).find((a) => a.agent_id === "ben"); Sprites.badge($("#heroBen"), ben ? ben.pet_id : "tide-kraken", "waving"); }
     S.debug = !!st.debug; S.names = ag.names; S.petMeta = st.pets;
     Object.values(st.agents).forEach((a) => { S.pets[a.agent_id] = a.pet_id; });
     st.roster.forEach((r) => { S.roster[r.shift_id] = r; });
